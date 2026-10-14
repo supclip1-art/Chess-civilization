@@ -292,7 +292,7 @@ SPAWNS = [  # нация, город, долгота, широта
     ('spain', 'Madrid', -3.7, 40.4),
 ]
 # выравнивание стартов по замерам темпа: у Мадрида меньше всего леса рядом
-HOME_EXTRA = {'spain': {'forest': 4}}
+HOME_EXTRA = {'Madrid': {'forest': 4}, 'Rome': {'forest': 4}, 'Paris': {'forest': 4}}
 NEUTRALS = [
     ('Lisbon', -9.1, 38.7), ('London', -0.1, 51.5), ('Amsterdam', 4.9, 52.4), ('Copenhagen', 12.4, 55.7),
     ('Prague', 14.4, 50.1), ('Vienna', 16.4, 48.2), ('Warsaw', 21.0, 52.2), ('Budapest', 19.0, 47.5),
@@ -364,7 +364,7 @@ for nation, name, c in spawns:
             if cur not in counts1 or counts1[cur] > 1:
                 terrain[x] = kind
                 break
-    need = {'field': 3, 'forest': 3, 'deposit': 2, **HOME_EXTRA.get(nation, {})}
+    need = {'field': 3, 'forest': 3, 'deposit': 2, **HOME_EXTRA.get(name, {})}
     have = {k: sum(1 for x in ring if terrain[x] == k) for k in need}
     for kind in ('deposit', 'forest', 'field'):
         for allow_edge_mountains in (False, True):

@@ -22,9 +22,14 @@ export const aiEconomyTurn = (s: GameState, pid: string): void => {
   const p = s.players[pid];
   const capital = playerHalls(s, pid).sort((a, b) => a.order - b.order)[0];
   if (!capital) return;
-  if (capital.level < 2 && count(s, pid, 'farm') + count(s, pid, 'fishery') >= 2) upgradeTownHall(s, pid, capital.id);
+  // без лесопилки дерево больше не появится: сначала лесопилка, на неё дерево не тратим
+  const sawmills = count(s, pid, 'sawmill') + p.jobs.filter((j) => j.kind === 'resource' && j.building === 'sawmill').length;
+  // но сначала две фермы: без еды армия разбежится, а ферму не на что будет строить
+  const farms = count(s, pid, 'farm') + count(s, pid, 'fishery') + p.jobs.filter((j) => j.kind === 'resource' && (j.building === 'farm' || j.building === 'fishery')).length;
+  const keepForSaw = sawmills || farms < 2 ? 0 : resourceCost(s, pid, 'sawmill', 1).wood;
+  if (sawmills && capital.level < 2 && count(s, pid, 'farm') + count(s, pid, 'fishery') >= 2) upgradeTownHall(s, pid, capital.id);
   while (hireBuilder(s, pid).ok);
-  const g = playerGenerals(s, pid).sort((a, b) => a.id.localeCompare(b.id))[0];
+  const g = playerGenerals(s, pid).sort((a, b) => Number(a.id.slice(1)) - Number(b.id.slice(1)))[0];
   // казарма — узкое место армии: если она нужна, но не хватило ресурсов, копим на неё и не тратим на стройку
   let reserve = { wood: 0, food: 0 };
   if (g) {
@@ -48,9 +53,10 @@ export const aiEconomyTurn = (s: GameState, pid: string): void => {
         const food = kind === 'farm' || kind === 'fishery';
         const hungry = food && foodNet < 10;
         if (!hungry && (p.res.wood - cost.wood < reserve.wood || p.res.food - cost.food < reserve.food)) continue;
+        if (kind !== 'sawmill' && p.res.wood - cost.wood < keepForSaw) continue;
         const gain = RESOURCE_OUTPUT[kind][level - 1] - (RESOURCE_OUTPUT[kind][level - 2] ?? 0);
         // золото в масштабе ×10 дороже еды; при большом избытке еды фермы не нужны
-        const weight = kind === 'mine' ? 6 : hungry ? 3 : food && foodNet > 40 ? 0.3 : 1;
+        const weight = kind === 'sawmill' && !sawmills && farms >= 2 ? 50 : kind === 'mine' ? 6 : hungry ? 3 : food && foodNet > 40 ? 0.3 : 1;
         const score = (gain * weight) / (cost.wood + cost.food);
         const hex = c.hex;
         if (!best || score > best.score) best = { score, run: () => { level === 1 ? build(s, pid, hex, kind) : upgrade(s, pid, hex); } };
@@ -69,9 +75,9 @@ export const aiEconomyTurn = (s: GameState, pid: string): void => {
   // вторая армия — гарнизон столицы: таверна после казармы 3, потом найм генерала и немного фигур ему
   // миролюбивый строит гарнизон раньше — ему важнее оборона
   if (p.barracks >= (p.ai?.aggression === 'peaceful' ? 2 : 3) && p.tavern < 1) upgradeTavern(s, pid);
-  const gens = playerGenerals(s, pid).sort((a, b) => a.id.localeCompare(b.id));
+  const gens = playerGenerals(s, pid).sort((a, b) => Number(a.id.slice(1)) - Number(b.id.slice(1)));
   if (p.tavern >= 1 && gens.length < 2 && p.res.gold >= 60) hireGeneral(s, pid);
-  for (const guard of playerGenerals(s, pid).sort((a, b) => a.id.localeCompare(b.id)).slice(1)) {
+  for (const guard of playerGenerals(s, pid).sort((a, b) => Number(a.id.slice(1)) - Number(b.id.slice(1))).slice(1)) {
     for (const piece of PIECES) {
       while (guard.army[piece] < GUARD_ARMY[piece] && income(s, pid).food >= upkeep(s, pid) + PIECE_PRICE[piece] * ARMY_UPKEEP_RATE) {
         if (!hirePiece(s, pid, guard.id, piece).ok) break;

@@ -163,7 +163,7 @@ export const aiMilitaryTurn = (s: GameState, pid: string): AiAttack[] => {
   const ch = CHARACTER[p.ai.aggression];
   const capital = playerHalls(s, pid).sort((a, b) => a.order - b.order)[0];
   const attacks: AiAttack[] = [];
-  const gens = playerGenerals(s, pid).sort((a, b) => a.id.localeCompare(b.id));
+  const gens = playerGenerals(s, pid).sort((a, b) => Number(a.id.slice(1)) - Number(b.id.slice(1)));
   const besieged = Object.values(s.halls).filter((h) => h.owner === pid && h.siege);
   for (const g of gens) {
     if (g.attacked) continue;
