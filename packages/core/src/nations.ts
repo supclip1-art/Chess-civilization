@@ -58,10 +58,10 @@ export const NATIONS: Record<NationId, Nation> = {
   },
   spain: {
     id: 'spain', name: 'Spain', bonus: 'New World Silver',
-    effect: 'Every gold mine produces +3 gold per turn at any level.',
+    effect: 'Every gold mine produces +2 gold per turn at any level.',
     rulers: { warlike: 'Philip II', moderate: 'Isabella I', peaceful: 'Charles III' },
     cities: ['Madrid', 'Toledo', 'Seville', 'Barcelona', 'Valencia', 'Granada', 'Córdoba', 'Zaragoza', 'Salamanca', 'Bilbao', 'Málaga', 'Burgos'],
-    mods: { mineLowLevelBonus: 3 },
+    mods: { mineLowLevelBonus: 2 },
   },
   italy: {
     id: 'italy', name: 'Italy', bonus: 'Renaissance',
