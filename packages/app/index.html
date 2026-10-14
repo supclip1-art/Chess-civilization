@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Chess Civilization</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    /* Цвета берутся из темы Telegram (переменные --tg-theme-*), вне Telegram — запасные значения. */
+    :root {
+      --bg: var(--tg-theme-bg-color, #f3f1ec);
+      --card: var(--tg-theme-secondary-bg-color, #ffffff);
+      --ink: var(--tg-theme-text-color, #1d1b18);
+      --muted: var(--tg-theme-hint-color, #6f6a62);
+      --accent: var(--tg-theme-button-color, #2f6f4f);
+      --accent-ink: var(--tg-theme-button-text-color, #ffffff);
+      --line: color-mix(in srgb, var(--muted) 30%, transparent);
+      --good: #2f8a57; --warn: #b4841c; --bad: #b5452f;
+      color-scheme: light dark;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root:not(.tg) { --bg: #151714; --card: #1f221e; --ink: #ecebe6; --muted: #9c9a92; --accent: #5fae84; --accent-ink: #0d1410; }
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; background: var(--bg); color: var(--ink); }
+    body { font: 15px/1.45 -apple-system, system-ui, "Segoe UI", Roboto, sans-serif; padding: 16px 16px calc(24px + env(safe-area-inset-bottom)); }
+    h1 { font-size: 22px; margin: 4px 0 2px; }
+    h2 { font-size: 16px; margin: 0 0 10px; }
+    p { margin: 0 0 10px; }
+    .muted { color: var(--muted); font-size: 13px; }
+    .stack { display: flex; flex-direction: column; gap: 12px; max-width: 560px; margin: 0 auto; }
+    .card { background: var(--card); border-radius: 12px; padding: 14px; }
+    button { font: inherit; border: 0; border-radius: 10px; padding: 12px 14px; background: var(--accent); color: var(--accent-ink); font-weight: 600; width: 100%; cursor: pointer; }
+    button.ghost { background: transparent; color: var(--accent); border: 1px solid var(--line); font-weight: 500; }
+    button:disabled { opacity: .5; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .nation { text-align: left; background: var(--card); color: var(--ink); border: 1.5px solid var(--line); font-weight: 400; }
+    .nation.on { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+    .nation b { display: block; font-size: 15px; }
+    .nation span { font-size: 12px; color: var(--muted); }
+    .row { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+    select { font: inherit; padding: 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums; }
+    td, th { padding: 6px 4px; border-bottom: 1px solid var(--line); text-align: left; }
+    td.n, th.n { text-align: right; }
+    th { color: var(--muted); font-weight: 500; }
+    .ok { color: var(--good); } .warn { color: var(--warn); } .bad { color: var(--bad); }
+    .big { font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .log { font: 12px/1.4 ui-monospace, Menlo, monospace; color: var(--muted); white-space: pre-wrap; word-break: break-word; max-height: 160px; overflow: auto; }
+  </style>
+</head>
+<body>
+  <main id="app" class="stack"><p class="muted">Loading…</p></main>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

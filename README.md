@@ -8,7 +8,7 @@
 | Пакет | Что внутри | Статус |
 |---|---|---|
 | `packages/core` | Ядро правил: экономика, армии, генералы, карта, ходы. Без интерфейса, без зависимостей, детерминированное | v0.1, 23 теста |
-| `packages/app` | Telegram Mini App: интерфейс, карта (PixiJS), доска, Stockfish | следующий этап |
+| `packages/app` | Telegram Mini App: главный экран, создание партии, замер Stockfish на телефоне | v0.1, этап 1 |
 
 ## Запуск ядра
 
@@ -52,3 +52,11 @@ npm run typecheck
 ## Темп (проверка `test/balance.test.ts`)
 
 Простой бот развивается дома 40 ходов на правилах ядра: половина армии к 25-му ходу, полная армия к 35-му, без голода. Совпадает с Python-моделью экономики (34–36-й ход).
+
+## Mini App
+
+Каждый пуш в `main` запускает `.github/workflows/pages.yml`: тесты ядра, сборка `packages/app` и публикация на GitHub Pages
+(`https://supclip1-art.github.io/Chess-civilization/`). Этот адрес привязан к боту в BotFather.
+
+Локальная сборка: `npm install`, затем `npm run build --workspace @chess-civ/app` — результат в `packages/app/dist`.
+Stockfish ставится из npm-пакета `stockfish@18.0.5` и копируется в `dist/engine/`.

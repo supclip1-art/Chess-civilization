@@ -7,3 +7,4 @@ export * from './economy.ts';
 export * from './army.ts';
 export * from './map.ts';
 export * from './turn.ts';
+export * from './maps/sandbox.ts';
