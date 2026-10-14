@@ -54,6 +54,7 @@ const AGGR: Aggression[] = ['warlike', 'moderate', 'peaceful'];
 const setup = () => {
   setBack(home);
   let nation: NationId = 'russia';
+  const ABC = [...NATION_ORDER].sort((a, b) => NATIONS[a].name.localeCompare(NATIONS[b].name, 'en'));
   let warmup = true;
   try {
     warmup = localStorage.getItem('chessciv.warmup') !== '0';
@@ -66,9 +67,10 @@ const setup = () => {
     <p class="muted">Map: Europe · up to ${spawns} nations · starting places are random</p>
     <h2 class="pick">Your nation <span class="muted" id="picked"></span></h2>
     <div class="nations" id="nations">
-      ${NATION_ORDER.map((id) => `<button class="nation ${id === nation ? 'on' : ''}" data-n="${id}">
-        ${flagSvg(id, 54)}<b>${esc(NATIONS[id].name)}</b><span>${esc(NATIONS[id].bonus)}</span><small>${esc(NATIONS[id].effect)}</small></button>`).join('')}
+      ${ABC.map((id) => `<button class="nation ${id === nation ? 'on' : ''}" data-n="${id}">
+        ${flagSvg(id, 72)}<b>${esc(NATIONS[id].name)}</b><span>${esc(NATIONS[id].bonus)}</span><small>${esc(NATIONS[id].effect)}</small></button>`).join('')}
     </div>
+    <div class="nav"><button class="ghost" id="prevN" aria-label="Previous nation">‹</button><span id="countN"></span><button class="ghost" id="nextN" aria-label="Next nation">›</button></div>
     <div class="card">
       <div class="row"><span>Players</span><select id="players">${Array.from({ length: spawns - 1 }, (_, i) => i + 2).map((n) => `<option ${n === spawns ? 'selected' : ''}>${n}</option>`).join('')}</select></div>
       <div class="row" style="margin-top:10px"><span>Generals' ELO</span><select id="elo">${[800, 1000, 1200, 1400, 1600, 1800, 2000].map((e) => `<option ${e === 1200 ? 'selected' : ''}>${e}</option>`).join('')}</select></div>
@@ -76,19 +78,31 @@ const setup = () => {
       <label class="row" style="margin-top:10px"><span>Warm-up puzzle before the game</span><input type="checkbox" id="warmup" ${warmup ? 'checked' : ''}></label>
     </div>
     <button id="start">Start</button>`);
-  const picked = () => { document.getElementById('picked')!.textContent = `· ${NATIONS[nation].name}`; };
-  picked();
   const strip = document.getElementById('nations')!;
-  strip.querySelector<HTMLElement>('.nation.on')?.scrollIntoView({ inline: 'center', block: 'nearest' });
-  strip.addEventListener('click', (e) => {
-    const b = (e.target as HTMLElement).closest<HTMLButtonElement>('[data-n]');
-    if (!b) return;
-    tap();
-    nation = b.dataset.n as NationId;
-    strip.querySelectorAll('.nation').forEach((x) => x.classList.toggle('on', x === b));
-    b.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
-    picked();
-  });
+  const cards = [...strip.querySelectorAll<HTMLButtonElement>('.nation')];
+  const select = (i: number) => {
+    nation = ABC[i];
+    cards.forEach((x, j) => x.classList.toggle('on', j === i));
+    document.getElementById('picked')!.textContent = `· ${NATIONS[nation].name}`;
+    document.getElementById('countN')!.textContent = `${i + 1} / ${ABC.length}`;
+  };
+  const goTo = (i: number, smooth = true) => {
+    i = (i + ABC.length) % ABC.length;
+    strip.scrollTo({ left: i * strip.clientWidth, behavior: smooth ? 'smooth' : 'auto' });
+    select(i);
+  };
+  goTo(ABC.indexOf(nation), false);
+  // выбранная нация — та, что сейчас в окне карусели
+  let t = 0;
+  strip.addEventListener('scroll', () => {
+    clearTimeout(t);
+    t = window.setTimeout(() => {
+      const i = Math.round(strip.scrollLeft / strip.clientWidth);
+      if (ABC[i] && ABC[i] !== nation) { tap(); select(i); }
+    }, 80);
+  }, { passive: true });
+  on('prevN', () => { goTo(ABC.indexOf(nation) - 1); });
+  on('nextN', () => { goTo(ABC.indexOf(nation) + 1); });
   on('start', async () => {
     const players = Number((document.getElementById('players') as HTMLSelectElement).value);
     const elo = Number((document.getElementById('elo') as HTMLSelectElement).value);
