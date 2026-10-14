@@ -68,6 +68,22 @@ export const visible = (s: GameState, pid: string): Set<string> => {
   return seen;
 };
 
+/** Запомнить, что игрок видит сейчас: владельцев клеток, здания и города. Под туманом карта показывает эту память. */
+export const remember = (s: GameState, pid: string, seen: Set<string> = visible(s, pid)): void => {
+  const mem = ((s.memory ??= {})[pid] ??= {});
+  const hallAt = new Map(Object.values(s.halls).map((h) => [key(h.hex), h]));
+  for (const k of seen) {
+    const c = s.cells[k];
+    const h = hallAt.get(k);
+    mem[k] = {
+      turn: s.turn,
+      owner: c.owner,
+      building: c.building ? { ...c.building } : undefined,
+      hall: h ? { name: h.name, owner: h.owner, level: h.level } : undefined,
+    };
+  }
+};
+
 // ---------- Атака и осада ----------
 
 export type AttackStart =

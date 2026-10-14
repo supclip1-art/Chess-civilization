@@ -90,6 +90,20 @@ export class MapView {
     const S = this.size;
     const cells = Object.values(s.cells);
     const visible = (k: string) => seen.has(k);
+    // что игрок знает о клетке: открытые — как есть, под туманом — как запомнил (s.memory), остальное — пусто
+    const mem = s.memory?.[viewer] ?? {};
+    const hallAt = new Map(Object.values(s.halls).map((hl) => [key(hl.hex), hl]));
+    type Known = { owner?: string; building?: { kind: 'farm' | 'sawmill' | 'mine' | 'fishery'; level: number }; reserved?: boolean;
+      hall?: { name: string; owner: string; level: number; siege?: boolean } };
+    const known = new Map<string, Known>();
+    for (const cell of cells) {
+      const k = key(cell.hex);
+      if (visible(k)) {
+        const hall = hallAt.get(k);
+        known.set(k, { owner: cell.owner, building: cell.building, reserved: cell.reserved,
+          hall: hall && { name: hall.name, owner: hall.owner, level: hall.level, siege: !!hall.siege } });
+      } else if (mem[k]) known.set(k, mem[k]);
+    }
 
     // 1. местность и территория
     for (const cell of cells) {
@@ -100,7 +114,7 @@ export class MapView {
       c.fill();
       this.terrainMark(cell.terrain, x, y, S);
       const k = key(cell.hex);
-      const col = visible(k) ? ownerColor(s, cell.owner) : null;
+      const col = ownerColor(s, known.get(k)?.owner);
       if (col) { this.hexPath(x, y, S); c.fillStyle = col + '38'; c.fill(); }
       c.strokeStyle = 'rgba(0,0,0,0.08)';
       c.lineWidth = 1;
@@ -109,33 +123,29 @@ export class MapView {
     }
     // 2. границы территорий
     for (const cell of cells) {
-      if (!cell.owner || !visible(key(cell.hex))) continue;
+      const owner = known.get(key(cell.hex))?.owner;
+      if (!owner) continue;
       const { x, y } = this.toPixel(cell.hex);
       const corners = this.corners(x, y, S - 1.2);
       // соседи в порядке рёбер для pointy-top: E, SE, SW, W, NW, NE
       const order = [{ q: 1, r: 0 }, { q: 0, r: 1 }, { q: -1, r: 1 }, { q: -1, r: 0 }, { q: 0, r: -1 }, { q: 1, r: -1 }];
-      c.strokeStyle = ownerColor(s, cell.owner)!;
+      c.strokeStyle = ownerColor(s, owner)!;
       c.lineWidth = Math.max(2, 3 * this.zoom);
       c.lineCap = 'round';
       order.forEach((d, i) => {
-        const n = s.cells[key({ q: cell.hex.q + d.q, r: cell.hex.r + d.r })];
-        if (n && n.owner === cell.owner) return;
+        if (known.get(key({ q: cell.hex.q + d.q, r: cell.hex.r + d.r }))?.owner === owner) return;
         const [ax, ay] = corners[i], [bx, by] = corners[(i + 1) % 6];
         c.beginPath(); c.moveTo(ax, ay); c.lineTo(bx, by); c.stroke();
       });
     }
     // 3. здания и ратуши
     for (const cell of cells) {
-      const k = key(cell.hex);
-      if (!visible(k)) continue;
+      const v = known.get(key(cell.hex));
+      if (!v) continue;
       const { x, y } = this.toPixel(cell.hex);
-      if (cell.building) this.building(x, y, S, cell.building.kind, cell.building.level);
-      else if (cell.reserved) this.badge(x, y, S, '…', 0);
-    }
-    for (const hall of Object.values(s.halls)) {
-      if (!visible(key(hall.hex))) continue;
-      const { x, y } = this.toPixel(hall.hex);
-      this.hall(x, y, S, ownerColor(s, hall.owner)!, hall.level, !!hall.siege);
+      if (v.building) this.building(x, y, S, v.building.kind, v.building.level);
+      else if (v.reserved) this.badge(x, y, S, '…', 0);
+      if (v.hall) this.hall(x, y, S, ownerColor(s, v.hall.owner)!, v.hall.level, !!v.hall.siege);
     }
     // 4. генералы
     const byCell = new Map<string, typeof s.generals[string][]>();
@@ -180,9 +190,10 @@ export class MapView {
     }
     // 7. названия городов, как в «Цивилизации»: плашка цвета владельца под городом
     if (S >= 12) {
-      for (const hall of Object.values(s.halls)) {
-        if (!visible(key(hall.hex))) continue;
-        const { x, y } = this.toPixel(hall.hex);
+      for (const cell of cells) {
+        const hall = known.get(key(cell.hex))?.hall;
+        if (!hall) continue;
+        const { x, y } = this.toPixel(cell.hex);
         this.cityLabel(x, y + S * 0.8, S, hall.name ?? 'City', ownerColor(s, hall.owner)!);
       }
     }

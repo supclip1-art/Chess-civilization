@@ -3,6 +3,8 @@
 type TgWebApp = {
   ready(): void;
   expand(): void;
+  /** Bot API 7.7+: не сворачивать мини-приложение свайпом вниз. */
+  disableVerticalSwipes?(): void;
   platform: string;
   version: string;
   colorScheme: 'light' | 'dark';
@@ -21,6 +23,8 @@ export const initTelegram = (): void => {
   document.documentElement.classList.add('tg');
   w.ready();
   w.expand();
+  // свайп вниз по карте не должен сворачивать игру
+  try { w.disableVerticalSwipes?.(); } catch { /* старый клиент Telegram */ }
 };
 
 let backHandler: (() => void) | null = null;

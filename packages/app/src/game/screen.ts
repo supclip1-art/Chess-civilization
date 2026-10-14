@@ -6,7 +6,7 @@ import {
   RESOURCE_OUTPUT, TAVERN, TOWN_HALL_FOUND, TOWN_HALL_UPGRADE, BUILDER_HIRE_FOOD, BUILDER_UPKEEP_FOOD, GENERAL_UPKEEP_FOOD, cityUpgradeCost, tavernCost, PIECES, aiEconomyTurn, attack, endTurn,
   foundTownHall, freeBuilders, hireBuilder, hireGeneral, hirePiece, income, key, maxBuilders, move, playerGenerals,
   reachable, recruitElo, resolveBattle, startResearch, upgrade, upgradeBarracks, upgradeTavern, upgradeTownHall,
-  upkeep, visible, winner, build, type GameState, type Hex, type Piece, type Res, type ResourceBuilding,
+  remember, upkeep, visible, winner, build, type GameState, type Hex, type Piece, type Res, type ResourceBuilding,
 } from '../../../core/src/index.ts';
 import { autobattle, type BattleRecord } from './battle.ts';
 import { playManual, showReplay } from './fight.ts';
@@ -28,7 +28,7 @@ const fmt = (n: number) => (Math.round(n * 10) / 10).toString();
 
 export const ownerName = (s: GameState, owner?: string): string => {
   if (!owner) return 'Unclaimed';
-  if (s.neutrals[owner]) return 'Neutral state';
+  if (s.neutrals[owner] || /^n\d+$/.test(owner)) return 'Neutral state'; // в т.ч. уже захваченный нейтрал из памяти
   const p = s.players[owner];
   return p ? (owner === ME ? `You (${NATIONS[p.nation].name})` : NATIONS[p.nation].name) : owner;
 };
@@ -84,7 +84,11 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
     if (sel.gid) for (const [k, d] of reachable(s, sel.gid)) if (d > 0) reach.add(k);
     return { selected: sel.hex, reach, attack: atk };
   };
-  const draw = () => view.draw(s, ME, visible(s, ME), highlight());
+  const draw = () => {
+    const seen = visible(s, ME);
+    remember(s, ME, seen); // память карты под туманом войны
+    view.draw(s, ME, seen, highlight());
+  };
   iconsReady.then(() => draw());
 
   // ---------- нижняя панель ----------
@@ -102,7 +106,9 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
     const seen = visible(s, ME).has(k);
     const p = s.players[ME];
     const parts: string[] = [];
-    parts.push(`<div class="cellhead"><b>${TERRAIN_NAME[cell.terrain]}</b><span class="muted">${seen ? esc(ownerName(s, cell.owner)) : 'Unexplored'}</span></div>`);
+    const memo = seen ? undefined : s.memory?.[ME]?.[k];
+    const head = seen ? esc(ownerName(s, cell.owner)) : memo ? `${esc(ownerName(s, memo.owner))} · seen on turn ${memo.turn}` : 'Unexplored';
+    parts.push(`<div class="cellhead"><b>${TERRAIN_NAME[cell.terrain]}</b><span class="muted">${head}</span></div>`);
     if (sel.gid && sel.target === 'move') {
       const d = reachable(s, sel.gid).get(k) ?? 0;
       parts.push(`<div class="acts">${btn('move', 'Move general here', `${d} of ${s.generals[sel.gid].moveLeft} moves`)}</div>`);
@@ -111,7 +117,14 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
       const army = Object.values(s.generals).some((g) => key(g.hex) === k && g.owner !== ME && g.army.p + g.army.n + g.army.b + g.army.r + g.army.q > 0);
       parts.push(`<div class="acts">${btn('attack', army ? 'Attack this army' : `Besiege ${esc(Object.values(s.halls).find((h) => key(h.hex) === k)?.name ?? 'the city')}`, army ? 'a chess battle, you play White' : 'it falls in one turn unless reinforced')}</div>`);
     }
-    if (!seen) { el.innerHTML = parts.join(''); return; }
+    if (!seen) {
+      // под туманом — то, что игрок запомнил, когда видел клетку
+      if (memo?.hall) parts.push(`<div class="card"><b>${esc(memo.hall.name)} · city level ${memo.hall.level}</b><p class="muted">${esc(ownerName(s, memo.hall.owner))} · as of turn ${memo.turn}</p></div>`);
+      if (memo?.building) parts.push(`<div class="card"><b class="withico">${iconSvg(memo.building.kind, 20)}${BUILDING_NAME[memo.building.kind]} · level ${memo.building.level}</b><p class="muted">as of turn ${memo.turn}</p></div>`);
+      if (memo) parts.push('<p class="muted">Covered by the fog of war: armies here are hidden.</p>');
+      el.innerHTML = parts.join('');
+      return;
+    }
 
     // генералы на клетке
     const gens = Object.values(s.generals).filter((g) => key(g.hex) === k);

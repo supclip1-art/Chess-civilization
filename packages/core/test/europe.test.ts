@@ -32,3 +32,20 @@ test('Европа: все столицы и нейтралы связаны с�
     assert.ok(n('field') >= 3 && n('forest') >= 3 && n('deposit') >= 2, `дом ${key(c)}: ${n('field')}/${n('forest')}/${n('deposit')}`);
   }
 });
+
+test('память карты: под туманом виден город таким, каким его видели', async () => {
+  const { remember, visible } = await import('../src/index.ts');
+  const s = newGame(europeMap(), [{ nation: 'spain' }, { nation: 'italy' }], { elo: 1200, seed: 1 });
+  const g = Object.values(s.generals).find((x) => x.owner === 'p1')!;
+  const lisbon = Object.values(s.halls).find((h) => h.name === 'Lisbon')!;
+  g.hex = { q: lisbon.hex.q + 1, r: lisbon.hex.r };
+  remember(s, 'p1');
+  const k = key(lisbon.hex);
+  assert.equal(s.memory!.p1[k].hall!.name, 'Lisbon');
+  // генерал ушёл, город вырос — игрок помнит старый уровень
+  g.hex = { ...playerHalls(s, 'p1')[0].hex };
+  lisbon.level = 3;
+  remember(s, 'p1');
+  assert.ok(!visible(s, 'p1').has(k));
+  assert.equal(s.memory!.p1[k].hall!.level, 1);
+});

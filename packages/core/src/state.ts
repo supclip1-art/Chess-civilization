@@ -87,6 +87,16 @@ export type GameState = {
   neutrals: Record<string, Neutral>;
   nextId: number;
   log: { turn: number; player?: string; text: string }[];
+  /** Что игрок видел на клетках, когда они были открыты (как в «Цивилизации»): под туманом войны
+   *  карта показывает это, а не текущее положение. memory[игрок][клетка]. Армии не запоминаются. */
+  memory?: Record<string, Record<string, CellMemory>>;
+};
+
+export type CellMemory = {
+  turn: number; // когда видел в последний раз
+  owner?: string;
+  building?: { kind: ResourceBuilding; level: number };
+  hall?: { name: string; owner: string; level: number };
 };
 
 export type MapDef = {
