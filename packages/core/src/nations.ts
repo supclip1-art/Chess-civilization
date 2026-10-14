@@ -18,7 +18,7 @@ export type Nation = {
 export type Mods = {
   townHallFoundCostMult?: number; // Россия
   townHallFoundTurns?: number; // Россия
-  highUpgradeTurnsMinus?: number; // Германия: улучшения до ур.4–5 быстрее
+  highUpgradeTurnsMinus?: number; // Германия: улучшения ресурсных зданий до ур.4–5 быстрее (казарма и таверна — нет)
   freeBuilderHire?: boolean; // Франция
   armyUpkeepRate?: number; // Британия
   mineLowLevelBonus?: number; // Испания: рудники ур.1–2 дают +N золота
@@ -36,7 +36,7 @@ export const NATIONS: Record<NationId, Nation> = {
   },
   germany: {
     id: 'germany', name: 'Germany', bonus: 'School of Engineering',
-    effect: 'Upgrades to building levels 4 and 5 finish 1 turn faster.',
+    effect: 'Farm, sawmill, mine and fishery upgrades to levels 4 and 5 finish 1 turn faster.',
     rulers: { warlike: 'Frederick the Great', moderate: 'Otto von Bismarck', peaceful: 'Frederick III' },
     cities: ['Berlin', 'Hamburg', 'Munich', 'Cologne', 'Frankfurt', 'Nuremberg', 'Dresden', 'Leipzig', 'Bremen', 'Stuttgart', 'Hanover', 'Königsberg'],
     mods: { highUpgradeTurnsMinus: 1 },

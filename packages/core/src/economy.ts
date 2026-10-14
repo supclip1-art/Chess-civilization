@@ -150,7 +150,7 @@ export const upgradeBarracks = (s: GameState, pid: string): Result => {
   const b = BARRACKS[level as 1 | 2 | 3 | 4 | 5];
   if (!canAfford(p.res, b.cost)) return no('not enough resources');
   pay(p, b.cost);
-  p.jobs.push({ kind: 'barracks', level, finish: s.turn + Math.max(1, b.turns - (level >= 4 ? (mods(s, pid).highUpgradeTurnsMinus ?? 0) : 0)) });
+  p.jobs.push({ kind: 'barracks', level, finish: s.turn + b.turns });
   return ok;
 };
 
@@ -164,7 +164,7 @@ export const upgradeTavern = (s: GameState, pid: string): Result => {
   const cost = tavernCost(s, pid, level as 1 | 2 | 3 | 4);
   if (!canAfford(p.res, cost)) return no('not enough resources');
   pay(p, cost);
-  p.jobs.push({ kind: 'tavern', level, finish: s.turn + Math.max(1, t.turns - (level >= 4 ? (mods(s, pid).highUpgradeTurnsMinus ?? 0) : 0)) });
+  p.jobs.push({ kind: 'tavern', level, finish: s.turn + t.turns });
   return ok;
 };
 

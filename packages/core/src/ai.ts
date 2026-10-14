@@ -1,8 +1,8 @@
 // Экономический ИИ (этап 5 добавит экспансию и атаки по уровню агрессии правителя).
-// Каждый ход: ратуша 2 после двух ферм, строители, казарма под следующую фигуру,
+// Каждый ход: город 2 после двух ферм (или промыслов), строители, казарма под следующую фигуру (копит на неё),
 // жадная стройка по выгоде на единицу цены, найм фигур к полной армии, «Тактика» на остаток золота.
 
-import { ARMY_UPKEEP_RATE, PIECES, PIECE_PRICE, HIRE_LEVEL, RESOURCE_COST, RESOURCE_OUTPUT, type Piece, type ResourceBuilding } from './config.ts';
+import { ARMY_UPKEEP_RATE, BARRACKS, PIECES, PIECE_PRICE, HIRE_LEVEL, RESOURCE_COST, RESOURCE_OUTPUT, type Piece, type ResourceBuilding } from './config.ts';
 import { hirePiece } from './army.ts';
 import {
   build, freeBuilders, hireBuilder, income, playerGenerals, playerHalls, startResearch, upgrade, upgradeBarracks,
@@ -23,9 +23,13 @@ export const aiEconomyTurn = (s: GameState, pid: string): void => {
   if (capital.level < 2 && count(s, pid, 'farm') + count(s, pid, 'fishery') >= 2) upgradeTownHall(s, pid, capital.id);
   while (hireBuilder(s, pid).ok);
   const g = playerGenerals(s, pid).sort((a, b) => a.id.localeCompare(b.id))[0];
+  // казарма — узкое место армии: если она нужна, но не хватило ресурсов, копим на неё и не тратим на стройку
+  let reserve = { wood: 0, food: 0 };
   if (g) {
     const need = Math.max(0, ...PIECES.filter((x) => g.army[x] < FULL_ARMY[x]).map((x) => HIRE_LEVEL[x]));
-    if (count(s, pid, 'mine') >= 1 && p.barracks < need) upgradeBarracks(s, pid);
+    if (count(s, pid, 'mine') >= 1 && p.barracks < need && !p.jobs.some((j) => j.kind === 'barracks')) {
+      if (!upgradeBarracks(s, pid).ok) reserve = BARRACKS[(p.barracks + 1) as 1 | 2 | 3 | 4 | 5].cost;
+    }
   }
   const halls = new Set(Object.values(s.halls).map((h) => key(h.hex)));
   for (let guard = 0; guard < 6 && freeBuilders(p) > 0; guard++) {
@@ -39,10 +43,12 @@ export const aiEconomyTurn = (s: GameState, pid: string): void => {
         if (!level || level > 5) continue;
         const cost = RESOURCE_COST[kind][level - 1];
         if (p.res.wood < cost.wood || p.res.food < cost.food) continue;
-        const gain = RESOURCE_OUTPUT[kind][level - 1] - (RESOURCE_OUTPUT[kind][level - 2] ?? 0);
         const food = kind === 'farm' || kind === 'fishery';
+        const hungry = food && foodNet < 10;
+        if (!hungry && (p.res.wood - cost.wood < reserve.wood || p.res.food - cost.food < reserve.food)) continue;
+        const gain = RESOURCE_OUTPUT[kind][level - 1] - (RESOURCE_OUTPUT[kind][level - 2] ?? 0);
         // золото в масштабе ×10 дороже еды; при большом избытке еды фермы не нужны
-        const weight = kind === 'mine' ? 6 : food && foodNet < 10 ? 3 : food && foodNet > 40 ? 0.3 : 1;
+        const weight = kind === 'mine' ? 6 : hungry ? 3 : food && foodNet > 40 ? 0.3 : 1;
         const score = (gain * weight) / (cost.wood + cost.food);
         const hex = c.hex;
         if (!best || score > best.score) best = { score, run: () => { level === 1 ? build(s, pid, hex, kind) : upgrade(s, pid, hex); } };
