@@ -20,7 +20,7 @@ export const aiEconomyTurn = (s: GameState, pid: string): void => {
   const p = s.players[pid];
   const capital = playerHalls(s, pid).sort((a, b) => a.order - b.order)[0];
   if (!capital) return;
-  if (capital.level < 2 && count(s, pid, 'farm') >= 2) upgradeTownHall(s, pid, capital.id);
+  if (capital.level < 2 && count(s, pid, 'farm') + count(s, pid, 'fishery') >= 2) upgradeTownHall(s, pid, capital.id);
   while (hireBuilder(s, pid).ok);
   const g = playerGenerals(s, pid).sort((a, b) => a.id.localeCompare(b.id))[0];
   if (g) {
@@ -40,7 +40,9 @@ export const aiEconomyTurn = (s: GameState, pid: string): void => {
         const cost = RESOURCE_COST[kind][level - 1];
         if (p.res.wood < cost.wood || p.res.food < cost.food) continue;
         const gain = RESOURCE_OUTPUT[kind][level - 1] - (RESOURCE_OUTPUT[kind][level - 2] ?? 0);
-        const weight = kind === 'mine' ? 2.5 : kind === 'farm' && foodNet < 1 ? 3 : 1;
+        const food = kind === 'farm' || kind === 'fishery';
+        // золото в масштабе ×10 дороже еды; при большом избытке еды фермы не нужны
+        const weight = kind === 'mine' ? 6 : food && foodNet < 10 ? 3 : food && foodNet > 40 ? 0.3 : 1;
         const score = (gain * weight) / (cost.wood + cost.food);
         const hex = c.hex;
         if (!best || score > best.score) best = { score, run: () => { level === 1 ? build(s, pid, hex, kind) : upgrade(s, pid, hex); } };

@@ -15,13 +15,13 @@ import { setBack, tap } from '../tg.ts';
 
 const ME = 'p1';
 const PIECE_NAME: Record<Piece, string> = { p: 'Pawn', n: 'Knight', b: 'Bishop', r: 'Rook', q: 'Queen' };
-const BUILDING_NAME: Record<ResourceBuilding, string> = { farm: 'Farm', sawmill: 'Sawmill', mine: 'Gold mine' };
+const BUILDING_NAME: Record<ResourceBuilding, string> = { farm: 'Farm', sawmill: 'Sawmill', mine: 'Gold mine', fishery: 'Fishery' };
 const TERRAIN_NAME: Record<string, string> = {
-  field: 'Field', forest: 'Forest', deposit: 'Gold deposit', tundra: 'Tundra', desert: 'Desert', mountain: 'Mountains', water: 'Water',
+  field: 'Field', forest: 'Forest', deposit: 'Gold deposit', tundra: 'Tundra', desert: 'Desert', mountain: 'Mountains', water: 'Sea',
 };
 const esc = (t: string) => t.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]!));
 const amount = (name: 'wood' | 'food' | 'gold', n: number) => `<i class="amt" title="${name}">${iconSvg(name, 13)}${n}</i>`;
-const RES_OF = { farm: 'food', sawmill: 'wood', mine: 'gold' } as const;
+const RES_OF = { farm: 'food', sawmill: 'wood', mine: 'gold', fishery: 'food' } as const;
 const cost = (c: Res) => [c.wood && amount('wood', c.wood), c.food && amount('food', c.food), c.gold && amount('gold', c.gold)].filter(Boolean).join(' ') || 'free';
 const fmt = (n: number) => (Math.round(n * 10) / 10).toString();
 

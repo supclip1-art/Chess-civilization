@@ -10,13 +10,15 @@ export const START_RESOURCES: Res = res(50, 40, 0);
 /** Время стройки: постройка ур.1 и улучшения до ур.2..5 (ходов). */
 export const BUILD_TURNS = [1, 1, 2, 3, 4] as const;
 
-export type ResourceBuilding = 'farm' | 'sawmill' | 'mine';
+export type ResourceBuilding = 'farm' | 'sawmill' | 'mine' | 'fishery';
 
 /** Цена постройки ур.1 и улучшений до ур.2..5. Ресурсные здания стоят только дерево и еду. */
 export const RESOURCE_COST: Record<ResourceBuilding, readonly Res[]> = {
   farm: [res(20, 10), res(30, 10), res(70, 50), res(100, 80), res(200, 160)],
   sawmill: [res(10, 20), res(10, 30), res(50, 70), res(80, 100), res(160, 200)],
   mine: [res(30, 30), res(50, 50), res(70, 80), res(110, 110), res(280, 280)],
+  // рыбный промысел на своей морской клетке: лодки и причалы — в основном дерево
+  fishery: [res(30, 0), res(40, 10), res(80, 40), res(110, 70), res(220, 140)],
 };
 
 /** Выработка за ход на уровнях 1..5. */
@@ -24,9 +26,10 @@ export const RESOURCE_OUTPUT: Record<ResourceBuilding, readonly number[]> = {
   farm: [20, 30, 50, 70, 100],
   sawmill: [20, 30, 50, 70, 100],
   mine: [5, 10, 15, 20, 25],
+  fishery: [15, 25, 40, 55, 80], // ~80% фермы: море — запасной источник еды
 };
 
-export const RESOURCE_OF: Record<ResourceBuilding, keyof Res> = { farm: 'food', sawmill: 'wood', mine: 'gold' };
+export const RESOURCE_OF: Record<ResourceBuilding, keyof Res> = { farm: 'food', sawmill: 'wood', mine: 'gold', fishery: 'food' };
 export const MAX_RESOURCE_LEVEL = 5;
 
 // ---- Ратуша и строители ----

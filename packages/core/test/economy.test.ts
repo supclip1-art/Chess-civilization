@@ -129,3 +129,18 @@ test('исследование «Тактики» поднимает ELO тол�
   assert.equal(recruitElo(s, 'p1'), 1225);
   assert.equal(Object.values(s.generals).find((g) => g.owner === 'p1')!.elo, 1200);
 });
+
+test('рыбный промысел: только на своей морской клетке, даёт еду', () => {
+  const s = game();
+  s.players.p1.res = { wood: 500, food: 500, gold: 0 };
+  const hallCells = new Set(Object.values(s.halls).map((h) => key(h.hex)));
+  const own = Object.values(s.cells).filter((c) => c.owner === 'p1' && !hallCells.has(key(c.hex)) && !c.building);
+  const field = own.find((c) => c.terrain === 'field')!;
+  const sea = own.find((c) => c !== field)!;
+  sea.terrain = 'water'; // море у столицы
+  assert.equal(build(s, 'p1', field.hex, 'fishery').ok, false, 'на поле рыбу не ловят');
+  const before = income(s, 'p1').food;
+  assert.equal(build(s, 'p1', sea.hex, 'fishery').ok, true);
+  round(s);
+  assert.equal(income(s, 'p1').food - before, RESOURCE_OUTPUT.fishery[0]);
+});

@@ -348,7 +348,20 @@ for name, lon, lat in NEUTRALS:
 for nation, name, c in spawns:
     terrain[c] = 'field'
     ring = [x for x in terrain if 1 <= hdist(x, c) <= 2 and terrain[x] not in ('water',) and x not in bridges]
-    ring.sort(key=lambda x: (hdist(x, c), x))
+    ring.sort(key=lambda x: (-hdist(x, c), x))  # недостающее добираем сначала во втором кольце
+    # первое кольцо (территория города 1-го уровня) обязано дать все три ресурса, иначе старт тупиковый:
+    # без леса нет дерева на стройку, без месторождения — золота на армию
+    ring1 = [x for x in terrain if hdist(x, c) == 1 and terrain[x] != 'water' and x not in bridges]
+    ring1.sort(key=lambda x: (terrain[x] != 'mountain', x))  # сначала превращаем горы
+    for kind in ('deposit', 'forest', 'field'):
+        if any(terrain[x] == kind for x in ring1):
+            continue
+        counts1 = {k: sum(1 for x in ring1 if terrain[x] == k) for k in ('deposit', 'forest', 'field')}
+        for x in ring1:
+            cur = terrain[x]
+            if cur not in counts1 or counts1[cur] > 1:
+                terrain[x] = kind
+                break
     need = {'field': 3, 'forest': 3, 'deposit': 2}
     have = {k: sum(1 for x in ring if terrain[x] == k) for k in need}
     for kind in ('deposit', 'forest', 'field'):
@@ -364,6 +377,8 @@ for nation, name, c in spawns:
                     continue
                 if cur in need and have[cur] <= need[cur]:
                     continue
+                if hdist(x, c) == 1 and sum(1 for y in ring1 if terrain[y] == cur) <= 1:
+                    continue  # единственный такой ресурс в первом кольце не трогаем
                 if cur in need:
                     have[cur] -= 1
                 terrain[x] = kind

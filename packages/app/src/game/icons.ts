@@ -1,7 +1,8 @@
 // Значки ресурсов и ресурсных зданий: одни и те же рисунки в панели ресурсов (SVG в HTML) и на карте (через Image на Canvas).
-// Рисунки свои, простые: колос — еда и ферма, бревно — дерево, монета — золото, пила — лесопилка, кирка — рудник.
+// Рисунки свои, простые: колос — еда и ферма, бревно — дерево, монета — золото, пила — лесопилка, кирка — рудник,
+// рыба — рыбный промысел.
 
-export type IconName = 'food' | 'wood' | 'gold' | 'farm' | 'sawmill' | 'mine';
+export type IconName = 'food' | 'wood' | 'gold' | 'farm' | 'sawmill' | 'mine' | 'fishery';
 
 const WHEAT = `
   <path d="M12 22.5V7" stroke="#7c5c17" stroke-width="1.7" stroke-linecap="round" fill="none"/>
@@ -47,7 +48,13 @@ const PICK = `
   <path d="M6.8 5.6Q16.8 2.6 20.2 15.4Q15.6 8 6.8 5.6Z" fill="#9ba5af" stroke="#454d55" stroke-width="0.9" stroke-linejoin="round"/>
   <circle cx="17.6" cy="19" r="2.6" fill="#f3c33a" stroke="#9d7208" stroke-width="0.9"/>`;
 
-const BODY: Record<IconName, string> = { food: WHEAT, farm: WHEAT, wood: LOG, gold: COIN, sawmill: SAW, mine: PICK };
+const FISH = `
+  <path d="M3.5 12c3-4.6 9.6-5.6 13.6-1.2L21 7.6v8.8l-3.9-3.2C13.1 17.6 6.5 16.6 3.5 12z" fill="#5f9fc4" stroke="#2c5872" stroke-width="1" stroke-linejoin="round"/>
+  <path d="M9.5 8.3c1 2.4 1 5 0 7.4" stroke="#2c5872" stroke-width="0.8" fill="none"/>
+  <circle cx="6.8" cy="11.2" r="0.9" fill="#1d3a4c"/>
+  <path d="M3 20.2c2-1.3 4-1.3 6 0s4 1.3 6 0 4-1.3 6 0" stroke="#5f9fc4" stroke-width="1.2" fill="none" stroke-linecap="round"/>`;
+
+const BODY: Record<IconName, string> = { food: WHEAT, farm: WHEAT, wood: LOG, gold: COIN, sawmill: SAW, mine: PICK, fishery: FISH };
 
 /** SVG-разметка значка для HTML. */
 export const iconSvg = (name: IconName, size = 18): string =>

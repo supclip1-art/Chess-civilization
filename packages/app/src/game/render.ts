@@ -230,9 +230,9 @@ export class MapView {
   }
 
   /** Ресурсное здание: значок (колос, пила, кирка) на светлой плашке и уровень в кружке. */
-  private building(x: number, y: number, S: number, kind: 'farm' | 'sawmill' | 'mine', level: number): void {
+  private building(x: number, y: number, S: number, kind: 'farm' | 'sawmill' | 'mine' | 'fishery', level: number): void {
     const img = iconImage(kind);
-    if (!img) { this.badge(x, y, S, kind === 'farm' ? 'F' : kind === 'sawmill' ? 'S' : 'M', level); return; }
+    if (!img) { this.badge(x, y, S, kind === 'farm' ? 'F' : kind === 'sawmill' ? 'S' : kind === 'fishery' ? 'B' : 'M', level); return; }
     const c = this.ctx;
     const w = S * 0.86, top = y - S * 0.3;
     c.fillStyle = 'rgba(255,255,255,0.9)';

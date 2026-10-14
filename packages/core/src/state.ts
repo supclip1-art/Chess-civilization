@@ -11,7 +11,7 @@ export const PASSABLE: Record<Terrain, boolean> = {
   field: true, forest: true, deposit: true, tundra: true, desert: true, mountain: false, water: false,
 };
 /** На какой клетке какое ресурсное здание можно ставить. */
-export const BUILDING_TERRAIN: Record<ResourceBuilding, Terrain> = { farm: 'field', sawmill: 'forest', mine: 'deposit' };
+export const BUILDING_TERRAIN: Record<ResourceBuilding, Terrain> = { farm: 'field', sawmill: 'forest', mine: 'deposit', fishery: 'water' };
 
 export type Army = Record<Piece, number>;
 export const emptyArmy = (): Army => ({ p: 0, n: 0, b: 0, r: 0, q: 0 });
