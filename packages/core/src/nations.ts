@@ -1,6 +1,6 @@
 // Нации MVP и их экономические бонусы. Полный список из 26 — в дизайн-документе.
 
-export type NationId = 'russia' | 'germany' | 'france' | 'britain' | 'spain' | 'turkey';
+export type NationId = 'russia' | 'germany' | 'france' | 'britain' | 'spain' | 'turkey' | 'italy';
 export type Aggression = 'warlike' | 'moderate' | 'peaceful';
 
 export type Nation = {
@@ -23,6 +23,7 @@ export type Mods = {
   armyUpkeepRate?: number; // Британия
   mineLowLevelBonus?: number; // Испания: рудники ур.1–2 дают +N золота
   generalHireDiscount?: number; // Турция
+  upgradeDiscount?: number; // Италия: улучшения города и таверны дешевле на эту долю
 };
 
 export const NATIONS: Record<NationId, Nation> = {
@@ -61,6 +62,13 @@ export const NATIONS: Record<NationId, Nation> = {
     cities: ['Madrid', 'Toledo', 'Seville', 'Barcelona', 'Valencia', 'Granada', 'Córdoba', 'Zaragoza', 'Salamanca', 'Bilbao', 'Málaga', 'Burgos'],
     mods: { mineLowLevelBonus: 5 },
   },
+  italy: {
+    id: 'italy', name: 'Italy', bonus: 'Renaissance',
+    effect: 'City and tavern upgrades cost 25% less.',
+    rulers: { warlike: 'Trajan', moderate: 'Victor Emmanuel II', peaceful: 'Lorenzo de\' Medici' },
+    cities: ['Rome', 'Milan', 'Florence', 'Turin', 'Bologna', 'Genoa', 'Pisa', 'Siena', 'Verona', 'Palermo', 'Bari', 'Ravenna'],
+    mods: { upgradeDiscount: 0.25 },
+  },
   turkey: {
     id: 'turkey', name: 'Turkey', bonus: 'Grand Bazaar',
     effect: 'Hiring a general costs 20 gold less.',
@@ -72,5 +80,5 @@ export const NATIONS: Record<NationId, Nation> = {
 
 /** Названия городов нейтральных государств. */
 export const NEUTRAL_CITIES: string[] = [
-  'Venice', 'Genoa', 'Florence', 'Naples', 'Milan', 'Vienna', 'Prague', 'Kraków', 'Warsaw', 'Budapest', 'Belgrade', 'Athens', 'Lisbon', 'Amsterdam', 'Brussels', 'Bern', 'Copenhagen', 'Stockholm', 'Riga', 'Vilnius', 'Bucharest', 'Sofia', 'Dubrovnik', 'Valletta',
+  'Venice', 'Naples', 'Ragusa', 'Trieste', 'Zürich', 'Vienna', 'Prague', 'Kraków', 'Warsaw', 'Budapest', 'Belgrade', 'Athens', 'Lisbon', 'Amsterdam', 'Brussels', 'Bern', 'Copenhagen', 'Stockholm', 'Riga', 'Vilnius', 'Bucharest', 'Sofia', 'Dubrovnik', 'Valletta',
 ];

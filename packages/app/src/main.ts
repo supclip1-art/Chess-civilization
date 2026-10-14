@@ -1,7 +1,7 @@
 // Mini App: главное меню, новая партия, партия на карте (этап 3) и замер Stockfish.
 
 import {
-  NATIONS, armiesFromFen, insufficientMaterial, newGame, sandboxMap, type Aggression, type NationId,
+  NATIONS, armiesFromFen, europeMap, insufficientMaterial, newGame, type Aggression, type NationId,
 } from '../../core/src/index.ts';
 import { Engine, profile } from './engine.ts';
 import { openGame } from './game/screen.ts';
@@ -35,20 +35,23 @@ const home = () => {
 
 // ---------- Новая партия ----------
 
-const MVP_NATIONS: NationId[] = ['russia', 'germany', 'france', 'britain', 'spain', 'turkey'];
+// Карта «Европа»: нации — те, у кого на карте есть родная столица.
+const MAP = europeMap;
+const MVP_NATIONS: NationId[] = MAP().spawnNations!;
 const AGGR: Aggression[] = ['warlike', 'moderate', 'peaceful'];
 
 const setup = () => {
   setBack(home);
-  let nation: NationId = 'russia';
+  let nation: NationId = MVP_NATIONS[0];
   const draw = () => {
     render(`
       <h1>New game</h1>
+      <p class="muted">Map: Europe · 4 nations · you start in your homeland</p>
       <div class="card"><h2>Your nation</h2><div class="grid">
         ${MVP_NATIONS.map((id) => `<button class="nation ${id === nation ? 'on' : ''}" data-n="${id}"><b>${NATIONS[id].name}</b><span>${esc(NATIONS[id].bonus)}</span><small>${esc(NATIONS[id].effect)}</small></button>`).join('')}
       </div></div>
       <div class="card">
-        <div class="row"><span>Players</span><select id="players">${[2, 3, 4, 5, 6].map((n) => `<option ${n === 4 ? 'selected' : ''}>${n}</option>`).join('')}</select></div>
+        <div class="row"><span>Players</span><select id="players">${[2, 3, 4].map((n) => `<option ${n === 4 ? 'selected' : ''}>${n}</option>`).join('')}</select></div>
         <div class="row" style="margin-top:10px"><span>Generals' ELO</span><select id="elo">${[800, 1000, 1200, 1400, 1600, 1800, 2000].map((e) => `<option ${e === 1200 ? 'selected' : ''}>${e}</option>`).join('')}</select></div>
         <p class="muted" style="margin-top:10px">One ELO for every general in the game, yours and the AI's.</p>
       </div>
@@ -60,7 +63,7 @@ const setup = () => {
       const elo = Number((document.getElementById('elo') as HTMLSelectElement).value);
       const seed = Math.floor(Math.random() * 1e9);
       const others = MVP_NATIONS.filter((n) => n !== nation).sort(() => Math.random() - 0.5).slice(0, players - 1);
-      const s = newGame(sandboxMap(), [
+      const s = newGame(MAP(), [
         { nation },
         ...others.map((n) => {
           const aggression = AGGR[Math.floor(Math.random() * 3)];

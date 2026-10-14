@@ -30,6 +30,13 @@ const scale = (c: Res, m: number): Res => ({
   wood: Math.ceil(c.wood * m), food: Math.ceil(c.food * m), gold: Math.ceil(c.gold * m),
 });
 
+/** Цена улучшения города до уровня level с учётом бонуса нации. */
+export const cityUpgradeCost = (s: GameState, pid: string, level: 2 | 3): Res =>
+  scale(TOWN_HALL_UPGRADE[level].cost, 1 - (mods(s, pid).upgradeDiscount ?? 0));
+/** Цена таверны уровня level с учётом бонуса нации. */
+export const tavernCost = (s: GameState, pid: string, level: 1 | 2 | 3 | 4): Res =>
+  scale(TAVERN[level].cost, 1 - (mods(s, pid).upgradeDiscount ?? 0));
+
 // ---------- Строители ----------
 
 /** Стройки, которые занимают строителя (основание ратуши ведёт генерал, а не строитель). */
@@ -106,8 +113,9 @@ export const upgradeTownHall = (s: GameState, pid: string, hallId: string): Resu
   if (p.jobs.some((j) => j.kind === 'townhall' && j.hallId === hallId)) return no('already being upgraded');
   if (freeBuilders(p) < 1) return no('no free builder');
   const u = TOWN_HALL_UPGRADE[(h.level + 1) as 2 | 3];
-  if (!canAfford(p.res, u.cost)) return no('not enough resources');
-  pay(p, u.cost);
+  const cost = cityUpgradeCost(s, pid, (h.level + 1) as 2 | 3);
+  if (!canAfford(p.res, cost)) return no('not enough resources');
+  pay(p, cost);
   p.jobs.push({ kind: 'townhall', hallId, level: h.level + 1, finish: s.turn + u.turns });
   return ok;
 };
@@ -153,8 +161,9 @@ export const upgradeTavern = (s: GameState, pid: string): Result => {
   if (freeBuilders(p) < 1) return no('no free builder');
   const level = p.tavern + 1;
   const t = TAVERN[level as 1 | 2 | 3 | 4];
-  if (!canAfford(p.res, t.cost)) return no('not enough resources');
-  pay(p, t.cost);
+  const cost = tavernCost(s, pid, level as 1 | 2 | 3 | 4);
+  if (!canAfford(p.res, cost)) return no('not enough resources');
+  pay(p, cost);
   p.jobs.push({ kind: 'tavern', level, finish: s.turn + Math.max(1, t.turns - (level >= 4 ? (mods(s, pid).highUpgradeTurnsMinus ?? 0) : 0)) });
   return ok;
 };

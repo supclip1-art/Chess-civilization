@@ -1,6 +1,7 @@
 // Отрисовка шестиугольной карты на Canvas 2D: местность, территории с границами, ратуши, здания,
 // генералы, туман войны, подсветка хода. Камера: перетаскивание и щипок для масштаба.
 
+import { iconImage } from './icons.ts';
 import { type GameState, type Hex, type Terrain, key, neighbors } from '../../../core/src/index.ts';
 
 export const PLAYER_COLORS = ['#2f6fd6', '#d64a3c', '#e0a020', '#8a52d6', '#1f9e86', '#d65f9c', '#6b8f2a', '#c76a1f'];
@@ -54,7 +55,7 @@ export class MapView {
   }
 
   zoomAt(factor: number, px: number, py: number): void {
-    const z = Math.min(2.6, Math.max(0.45, this.zoom * factor));
+    const z = Math.min(2.6, Math.max(0.25, this.zoom * factor));
     const k = z / this.zoom;
     this.ox = px - (px - this.ox) * k;
     this.oy = py - (py - this.oy) * k;
@@ -128,7 +129,7 @@ export class MapView {
       const k = key(cell.hex);
       if (!visible(k)) continue;
       const { x, y } = this.toPixel(cell.hex);
-      if (cell.building) this.badge(x, y, S, cell.building.kind === 'farm' ? 'F' : cell.building.kind === 'sawmill' ? 'S' : 'M', cell.building.level);
+      if (cell.building) this.building(x, y, S, cell.building.kind, cell.building.level);
       else if (cell.reserved) this.badge(x, y, S, '…', 0);
     }
     for (const hall of Object.values(s.halls)) {
@@ -151,7 +152,7 @@ export class MapView {
         const pieces = g.army.p + g.army.n + g.army.b + g.army.r + g.army.q;
         // на клетке ратуши генерал стоит сбоку и меньше, чтобы ратушу было видно
         const gx = onHall ? x + S * 0.42 + i * S * 0.3 : x + i * S * 0.42;
-        const gy = onHall ? y + S * 0.38 : y - S * 0.12;
+        const gy = onHall ? y - S * 0.42 : y - S * 0.12; // на клетке города — справа сверху, снизу подпись
         this.general(gx, gy, onHall ? S * 0.78 : S, ownerColor(s, g.owner)!, pieces, g.owner === viewer && !g.attacked && g.moveLeft > 0);
       });
     }
@@ -177,12 +178,12 @@ export class MapView {
       const { x, y } = this.toPixel(cell.hex);
       this.hexPath(x, y, S + 0.6); c.fillStyle = 'rgba(28,30,34,0.62)'; c.fill();
     }
-    // 7. названия городов, как в «Цивилизации»: плашка цвета владельца над городом
+    // 7. названия городов, как в «Цивилизации»: плашка цвета владельца под городом
     if (S >= 12) {
       for (const hall of Object.values(s.halls)) {
         if (!visible(key(hall.hex))) continue;
         const { x, y } = this.toPixel(hall.hex);
-        this.cityLabel(x, y - S * 0.86, S, hall.name ?? 'City', ownerColor(s, hall.owner)!);
+        this.cityLabel(x, y + S * 0.8, S, hall.name ?? 'City', ownerColor(s, hall.owner)!);
       }
     }
   }
@@ -226,6 +227,27 @@ export class MapView {
       for (const dx of [-0.25, 0, 0.25]) { c.beginPath(); c.moveTo(x + dx * S, y - 0.3 * S); c.lineTo(x + dx * S, y + 0.3 * S); c.stroke(); }
     }
     c.restore();
+  }
+
+  /** Ресурсное здание: значок (колос, пила, кирка) на светлой плашке и уровень в кружке. */
+  private building(x: number, y: number, S: number, kind: 'farm' | 'sawmill' | 'mine', level: number): void {
+    const img = iconImage(kind);
+    if (!img) { this.badge(x, y, S, kind === 'farm' ? 'F' : kind === 'sawmill' ? 'S' : 'M', level); return; }
+    const c = this.ctx;
+    const w = S * 0.86, top = y - S * 0.3;
+    c.fillStyle = 'rgba(255,255,255,0.9)';
+    c.strokeStyle = 'rgba(0,0,0,0.3)'; c.lineWidth = 1;
+    c.beginPath(); c.roundRect(x - w / 2, top, w, w, S * 0.2); c.fill(); c.stroke();
+    const pad = w * 0.1;
+    c.drawImage(img, x - w / 2 + pad, top + pad, w - 2 * pad, w - 2 * pad);
+    // уровень
+    const rr = Math.max(6, S * 0.22), bx = x + w / 2 - rr * 0.35, by = top + w - rr * 0.35;
+    c.beginPath(); c.arc(bx, by, rr, 0, Math.PI * 2);
+    c.fillStyle = '#2a2a26'; c.fill();
+    c.strokeStyle = '#ffffff'; c.lineWidth = 1.2; c.stroke();
+    c.fillStyle = '#ffffff'; c.font = `700 ${Math.round(rr * 1.25)}px system-ui, sans-serif`;
+    c.textAlign = 'center'; c.textBaseline = 'middle';
+    c.fillText(String(level), bx, by + 0.5);
   }
 
   private badge(x: number, y: number, S: number, letter: string, level: number): void {

@@ -94,8 +94,12 @@ export type MapDef = {
   cells: { q: number; r: number; terrain: Terrain }[];
   /** Стартовые точки наций (по порядку выбора). Невыбранные становятся нейтралами. */
   spawns: Hex[];
+  /** Нация каждой стартовой точки (карты по реальной географии): игрок стартует у себя на родине. */
+  spawnNations?: NationId[];
   /** Ратуши слаборазвитых нейтральных государств. */
   neutrals: Hex[];
+  /** Названия городов по клеткам («q,r»): нейтралы и свободные столицы получают исторические имена. */
+  names?: Record<string, string>;
 };
 
 export type PlayerSetup = { nation: NationId; ai?: { aggression: Aggression; ruler: string } };
@@ -155,15 +159,15 @@ export const cityName = (s: GameState, owner: string): string => {
   for (let k = 2; ; k++) for (const n of list) if (!used.has(`${n} ${k}`)) return `${n} ${k}`;
 };
 
-const addHall = (s: GameState, owner: string, hex: Hex, level: number): TownHall => {
-  const h: TownHall = { id: newId(s, 'h'), name: cityName(s, owner), hex, owner, level, order: s.nextId };
+const addHall = (s: GameState, owner: string, hex: Hex, level: number, name?: string): TownHall => {
+  const h: TownHall = { id: newId(s, 'h'), name: name ?? cityName(s, owner), hex, owner, level, order: s.nextId };
   s.halls[h.id] = h;
   return h;
 };
 
-const addNeutral = (s: GameState, hex: Hex): void => {
+const addNeutral = (s: GameState, hex: Hex, name?: string): void => {
   const id = newId(s, 'n');
-  const hall = addHall(s, id, hex, 1);
+  const hall = addHall(s, id, hex, 1, name);
   s.neutrals[id] = { id, hallId: hall.id };
   makeGeneral(s, id, hex, s.settings.elo, rollGarrison(s.rng), 'Garrison');
 };
@@ -175,18 +179,26 @@ export const createGame = (map: MapDef, setup: PlayerSetup[], opts: { elo: numbe
     cells: {}, halls: {}, players: {}, generals: {}, neutrals: {}, nextId: 1, log: [],
   };
   for (const c of map.cells) s.cells[key(c)] = { hex: { q: c.q, r: c.r }, terrain: c.terrain };
+  // на географической карте игрок стартует на родине своей нации, иначе — по порядку
+  const spawnOf = setup.map((p, i) => {
+    if (!map.spawnNations) return i;
+    const at = map.spawnNations.indexOf(p.nation);
+    if (at < 0) throw new Error(`no spawn for ${p.nation} on ${map.name}`);
+    return at;
+  });
   setup.forEach((p, i) => {
     const id = `p${i + 1}`;
+    const hex = map.spawns[spawnOf[i]];
     s.order.push(id);
     s.players[id] = {
       id, nation: p.nation, ai: p.ai, res: { ...START_RESOURCES }, builders: 1, barracks: 0, tavern: 0,
       research: { done: 0 }, jobs: [], starterKnight: true, alive: true,
     };
-    addHall(s, id, map.spawns[i], 1);
-    makeGeneral(s, id, map.spawns[i], opts.elo, { ...STARTING_ARMY }, 'General');
+    addHall(s, id, hex, 1);
+    makeGeneral(s, id, hex, opts.elo, { ...STARTING_ARMY }, 'General');
   });
-  map.spawns.slice(setup.length).forEach((h) => addNeutral(s, h));
-  map.neutrals.forEach((h) => addNeutral(s, h));
+  map.spawns.forEach((h, i) => { if (!spawnOf.includes(i)) addNeutral(s, h, map.names?.[key(h)]); });
+  map.neutrals.forEach((h) => addNeutral(s, h, map.names?.[key(h)]));
   recomputeTerritory(s, hallRadius);
   return s;
 };

@@ -8,5 +8,6 @@ export * from './army.ts';
 export * from './map.ts';
 export * from './turn.ts';
 export * from './maps/sandbox.ts';
+export * from './maps/europe.ts';
 export * from './battle.ts';
 export * from './ai.ts';
