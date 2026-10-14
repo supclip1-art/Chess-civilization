@@ -3,7 +3,7 @@
 import { iconSvg, iconsReady } from './icons.ts';
 import {
   BARRACKS, BUILD_TURNS, BUILDING_TERRAIN, GENERAL_HIRE_GOLD, HIRE_LEVEL, NATIONS, PIECE_PRICE, RESEARCH, RESOURCE_COST,
-  RESOURCE_OUTPUT, TAVERN, TOWN_HALL_FOUND, TOWN_HALL_UPGRADE, BUILDER_HIRE_FOOD, BUILDER_UPKEEP_FOOD, GENERAL_UPKEEP_FOOD, cityUpgradeCost, tavernCost, PIECES, aiEconomyTurn, attack, endTurn,
+  RESOURCE_OUTPUT, TAVERN, TOWN_HALL_FOUND, TOWN_HALL_UPGRADE, BUILDER_HIRE_FOOD, BUILDER_UPKEEP_FOOD, GENERAL_UPKEEP_FOOD, cityUpgradeCost, tavernCost, PIECES, aiEconomyTurn, aiMilitaryTurn, attack, endTurn, say,
   foundTownHall, freeBuilders, hireBuilder, hireGeneral, hirePiece, income, key, maxBuilders, move, playerGenerals,
   reachable, recruitElo, resolveBattle, startResearch, upgrade, upgradeBarracks, upgradeTavern, upgradeTownHall,
   remember, upkeep, visible, winner, build, type GameState, type Hex, type Piece, type Res, type ResourceBuilding,
@@ -43,7 +43,7 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
     </header>
     <div class="mapwrap"><canvas id="map"></canvas></div>
     <section class="sheet" id="sheet"></section>
-    <div class="toast" id="toast" hidden></div>
+    <div class="toast" id="toast" hidden></div><div class="aibanner" id="aibanner" hidden></div>
     <div class="modal" id="modal" hidden><div class="dialog" id="dialog"></div></div>`;
   const canvas = app.querySelector<HTMLCanvasElement>('#map')!;
   const view = new MapView(canvas);
@@ -59,6 +59,12 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
     t.textContent = text; t.hidden = false;
     clearTimeout((t as unknown as { _h?: number })._h);
     (t as unknown as { _h?: number })._h = window.setTimeout(() => (t.hidden = true), 2600);
+  };
+  /** Плашка «Германия ходит…» на время ходов ИИ (null — убрать). */
+  const banner = (text: string | null) => {
+    const b = app.querySelector<HTMLElement>('#aibanner')!;
+    b.hidden = text === null;
+    if (text !== null) b.textContent = text;
   };
   const act = (r: { ok: boolean; reason?: string }) => {
     if (!r.ok) toast((r as { reason: string }).reason);
@@ -220,62 +226,101 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
     if (html !== null) app.querySelector('#dialog')!.innerHTML = html;
   };
 
-  const startBattle = async (attackerId: string, defenderId: string) => {
+  const ask = () => new Promise<string>((resolve) => {
+    app.querySelector('#dialog')!.addEventListener('click', function on(ev) {
+      const b = (ev.target as HTMLElement).closest<HTMLButtonElement>('button[data-a]');
+      if (!b) return;
+      app.querySelector('#dialog')!.removeEventListener('click', on);
+      resolve(b.dataset.a!);
+    });
+  });
+
+  /** Бой с участием игрока: атака (игрок белыми) или защита от ИИ (игрок чёрными). */
+  const fightBattle = async (attackerId: string, defenderId: string, defending: boolean): Promise<void> => {
     const att = s.generals[attackerId], def = s.generals[defenderId];
-    const defName = ownerName(s, def.owner), defColor = ownerColor(s, def.owner)!;
     const city = Object.values(s.halls).find((h) => key(h.hex) === key(def.hex));
     const title = city ? `Battle for ${city.name}` : 'Battle';
-    const me = { name: 'Your general', color: ownerColor(s, att.owner)!, elo: att.elo, stars: att.stars };
-    const foe = { name: defName, color: defColor, elo: def.elo, stars: def.stars };
-    const show = (body: string) => modal(`<h2>${esc(title)}</h2>
-      <p><b style="color:${me.color}">Your general</b> (ELO ${me.elo}, White) vs <b style="color:${defColor}">${esc(defName)}</b> (ELO ${foe.elo}, Black)</p>${body}`);
-    const ask = () => new Promise<string>((resolve) => {
-      app.querySelector('#dialog')!.addEventListener('click', function on(ev) {
-        const b = (ev.target as HTMLElement).closest<HTMLButtonElement>('button[data-a]');
-        if (!b) return;
-        app.querySelector('#dialog')!.removeEventListener('click', on);
-        resolve(b.dataset.a!);
-      });
-    });
-    show(`<div class="acts">${btn('manual', 'Play it yourself', 'you command White on the board')}${btn('auto', 'Auto battle', 'the generals play it out')}${btn('cancel', 'Retreat', 'cancel the attack')}</div>`);
+    const mineG = defending ? def : att, foeG = defending ? att : def;
+    const me = { name: 'Your general', color: ownerColor(s, ME)!, elo: mineG.elo, stars: mineG.stars };
+    const foe = { name: ownerName(s, foeG.owner), color: ownerColor(s, foeG.owner)!, elo: foeG.elo, stars: foeG.stars };
+    const sides = defending
+      ? `<b style="color:${foe.color}">${esc(foe.name)}</b> (ELO ${foe.elo}, White) attacks <b style="color:${me.color}">your general</b> (ELO ${me.elo}, Black)`
+      : `<b style="color:${me.color}">Your general</b> (ELO ${me.elo}, White) vs <b style="color:${foe.color}">${esc(foe.name)}</b> (ELO ${foe.elo}, Black)`;
+    const show = (body: string) => modal(`<h2>${defending ? '⚔ ' : ''}${esc(title)}</h2><p>${sides}</p>${body}`);
+    show(defending
+      ? `<div class="acts">${btn('manual', 'Defend it yourself', 'you command Black on the board')}${btn('auto', 'Let your general defend', 'the generals play it out')}</div>`
+      : `<div class="acts">${btn('manual', 'Play it yourself', 'you command White on the board')}${btn('auto', 'Auto battle', 'the generals play it out')}${btn('cancel', 'Retreat', 'cancel the attack')}</div>`);
     const choice = await ask();
     if (choice === 'cancel') { modal(null); return; }
-    busy = true;
-    let rec: BattleRecord | null = null;
+    let rec: BattleRecord;
     try {
       if (choice === 'manual') {
         modal(null);
-        rec = await playManual(app, s, attackerId, defenderId, me, foe, title);
+        rec = await playManual(app, s, attackerId, defenderId, me, foe, title, defending ? 'black' : 'white');
       } else {
         show(`<p class="big" id="ply">Move 0</p><p class="muted">Stockfish is playing the battle…</p>`);
         rec = await autobattle(s, attackerId, defenderId, (n) => {
           const el = app.querySelector('#ply'); if (el) el.textContent = `Move ${Math.ceil(n / 2)}`;
         });
       }
-      const before = { ...att.army };
-      const out = resolveBattle(s, attackerId, defenderId, rec.report);
-      saveGame(s);
-      const headline = out.winner === 'attacker' ? 'Victory' : out.winner === 'defender' ? 'Defeat' : 'Draw';
-      const mine = s.generals[attackerId];
-      const left = mine ? PIECES.filter((x) => mine.army[x]).map((x) => `${mine.army[x]} ${PIECE_NAME[x].toLowerCase()}${mine.army[x] > 1 ? 's' : ''}`).join(', ') || 'no pieces' : 'your general fell';
-      const lost = mine ? PIECES.reduce((n, x) => n + Math.max(0, before[x] - mine.army[x]), 0) : null;
-      for (;;) {
-        show(`<p class="big">${headline}</p><p>${esc(out.note)} · ${rec.moves.length} half-moves${rec.bookPlies ? ` · ${rec.bookPlies} from the opening book` : ''}</p>
-          <p>Your army now: ${esc(left)}${lost ? ` (lost ${lost})` : ''}</p>
-          <div class="acts">${btn('replay', 'Watch replay', 'step through the game')}${btn('close', 'Continue', '')}</div>`);
-        if (await ask() !== 'replay') break;
-        modal(null);
-        await showReplay(app, rec, me, foe, title);
-      }
     } catch (e) {
       show(`<p class="bad">${esc(String((e as Error).message ?? e))}</p><div class="acts">${btn('close', 'Close', '')}</div>`);
       await ask();
+      modal(null);
+      return;
     }
-    busy = false;
+    const mineId = mineG.id;
+    const before = { ...mineG.army };
+    const out = resolveBattle(s, attackerId, defenderId, rec.report);
+    saveGame(s);
+    const iWon = out.winner === (defending ? 'defender' : 'attacker');
+    const headline = out.winner === null ? (defending ? 'The attack is repelled' : 'Draw') : iWon ? 'Victory' : 'Defeat';
+    const mine = s.generals[mineId];
+    const left = mine ? PIECES.filter((x) => mine.army[x]).map((x) => `${mine.army[x]} ${PIECE_NAME[x].toLowerCase()}${mine.army[x] > 1 ? 's' : ''}`).join(', ') || 'no pieces' : 'your general fell';
+    const lost = mine ? PIECES.reduce((n, x) => n + Math.max(0, before[x] - mine.army[x]), 0) : null;
+    for (;;) {
+      show(`<p class="big">${headline}</p><p>${esc(out.note)} · ${rec.moves.length} half-moves${rec.bookPlies ? ` · ${rec.bookPlies} from the opening book` : ''}</p>
+        <p>Your army now: ${esc(left)}${lost ? ` (lost ${lost})` : ''}</p>
+        <div class="acts">${btn('replay', 'Watch replay', 'step through the game')}${btn('close', 'Continue', '')}</div>`);
+      if (await ask() !== 'replay') break;
+      modal(null);
+      const white = defending ? foe : me, black = defending ? me : foe;
+      await showReplay(app, rec, white, black, title, defending);
+    }
     modal(null);
+  };
+
+  const startBattle = async (attackerId: string, defenderId: string) => {
+    busy = true;
+    await fightBattle(attackerId, defenderId, false);
+    busy = false;
     sel = { hex: s.generals[attackerId]?.hex, gid: s.generals[attackerId] ? attackerId : undefined };
     refresh();
     checkEnd();
+  };
+
+  /** Ход компьютерной страны: экономика, затем походы и бои. Бои ИИ против ИИ и нейтралов идут без показа. */
+  const aiTurn = async (pid: string) => {
+    const name = ownerName(s, pid);
+    aiEconomyTurn(s, pid);
+    for (const a of aiMilitaryTurn(s, pid)) {
+      const r = attack(s, a.gid, a.target);
+      if (r.kind !== 'battle') continue;
+      const def = s.generals[r.defender];
+      const target = Object.values(s.halls).find((h) => key(h.hex) === key(def.hex))?.name;
+      if (def.owner === ME) {
+        refresh();
+        view.centerOn(def.hex);
+        draw();
+        await fightBattle(r.attacker, r.defender, true);
+        continue;
+      }
+      banner(`${name}: battle${target ? ` for ${target}` : ''}…`);
+      const defName = ownerName(s, def.owner);
+      const rec = await autobattle(s, r.attacker, r.defender);
+      const out = resolveBattle(s, r.attacker, r.defender, rec.report);
+      say(s, `${out.winner === 'attacker' ? 'defeated' : out.winner === 'defender' ? 'was beaten by' : 'was repelled by'} ${defName}${target ? ` at ${target}` : ''}`, pid);
+    }
   };
 
   const checkEnd = () => {
@@ -287,17 +332,26 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
   };
 
   // ---------- ход ----------
-  app.querySelector('#end')!.addEventListener('click', () => {
+  app.querySelector('#end')!.addEventListener('click', async () => {
     if (busy) return;
     tap();
+    busy = true;
     const from = s.log.length;
     endTurn(s);
-    while (s.order[s.current] !== ME && s.players[ME].alive && !winner(s)) {
-      aiEconomyTurn(s, s.order[s.current]);
-      endTurn(s);
+    try {
+      while (s.order[s.current] !== ME && s.players[ME].alive && !winner(s)) {
+        const pid = s.order[s.current];
+        banner(`${ownerName(s, pid)} is moving…`);
+        await aiTurn(pid);
+        endTurn(s);
+      }
+    } catch (e) {
+      toast(`AI turn error: ${(e as Error).message ?? e}`);
     }
+    banner(null);
+    busy = false;
     saveGame(s);
-    const news = s.log.slice(from).filter((e) => e.player === ME || /captured|out of the game|famine/.test(e.text));
+    const news = s.log.slice(from).filter((e) => e.player === ME || /captured|out of the game|siege of/.test(e.text));
     if (news.length) toast(news.map((e) => `${e.player && e.player !== ME ? ownerName(s, e.player) + ': ' : ''}${e.text}`).join(' · '));
     sel = { hex: sel.hex, gid: sel.gid && s.generals[sel.gid] ? sel.gid : undefined };
     refresh();

@@ -50,17 +50,19 @@ export class BoardView {
   private cells = new Map<string, HTMLElement>();
   onSquare?: (sq: string) => void;
 
-  constructor(host: HTMLElement) {
+  /** flipped — чёрные снизу (игрок защищается чёрными). */
+  constructor(host: HTMLElement, flipped = false) {
     this.el = document.createElement('div');
     this.el.className = 'board';
-    for (let r = 8; r >= 1; r--) {
-      for (let f = 0; f < 8; f++) {
+    for (let row = 0; row < 8; row++) {
+      for (let col = 0; col < 8; col++) {
+        const r = flipped ? row + 1 : 8 - row, f = flipped ? 7 - col : col;
         const sq = FILES[f] + r;
         const d = document.createElement('div');
         d.className = `sq ${(f + r) % 2 ? 'd' : 'l'}`; // a1 — тёмное
         d.dataset.sq = sq;
-        if (r === 1) d.insertAdjacentHTML('beforeend', `<i class="cf">${FILES[f]}</i>`);
-        if (f === 0) d.insertAdjacentHTML('beforeend', `<i class="cr">${r}</i>`);
+        if (row === 7) d.insertAdjacentHTML('beforeend', `<i class="cf">${FILES[f]}</i>`);
+        if (col === 0) d.insertAdjacentHTML('beforeend', `<i class="cr">${r}</i>`);
         d.insertAdjacentHTML('beforeend', '<span class="pc"></span>');
         this.el.appendChild(d);
         this.cells.set(sq, d);

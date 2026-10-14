@@ -1,17 +1,19 @@
-// Экономический ИИ (этап 5 добавит экспансию и атаки по уровню агрессии правителя).
+// Экономический ИИ. Экспансия и атаки — в aiwar.ts.
 // Каждый ход: город 2 после двух ферм (или промыслов), строители, казарма под следующую фигуру (копит на неё),
 // жадная стройка по выгоде на единицу цены, найм фигур к полной армии, «Тактика» на остаток золота.
 
 import { ARMY_UPKEEP_RATE, BARRACKS, PIECES, PIECE_PRICE, HIRE_LEVEL, RESOURCE_COST, RESOURCE_OUTPUT, type Piece, type ResourceBuilding } from './config.ts';
-import { hirePiece } from './army.ts';
+import { hireGeneral, hirePiece } from './army.ts';
 import {
   build, freeBuilders, hireBuilder, income, playerGenerals, playerHalls, startResearch, upgrade, upgradeBarracks,
-  upgradeTownHall, upkeep,
+  upgradeTavern, upgradeTownHall, upkeep,
 } from './economy.ts';
 import { key } from './hex.ts';
 import { BUILDING_TERRAIN, type GameState } from './state.ts';
 
 export const FULL_ARMY: Record<Piece, number> = { p: 8, n: 2, b: 2, r: 2, q: 1 };
+/** Армия гарнизона столицы (второй генерал). */
+export const GUARD_ARMY: Record<Piece, number> = { p: 6, n: 1, b: 1, r: 0, q: 0 };
 
 const count = (s: GameState, pid: string, kind: ResourceBuilding) =>
   Object.values(s.cells).filter((c) => c.owner === pid && c.building?.kind === kind).length;
@@ -61,6 +63,17 @@ export const aiEconomyTurn = (s: GameState, pid: string): void => {
     for (const piece of PIECES) {
       while (g.army[piece] < FULL_ARMY[piece] && income(s, pid).food >= upkeep(s, pid) + PIECE_PRICE[piece] * ARMY_UPKEEP_RATE) {
         if (!hirePiece(s, pid, g.id, piece).ok) break;
+      }
+    }
+  }
+  // вторая армия — гарнизон столицы: таверна после казармы 3, потом найм генерала и немного фигур ему
+  if (p.barracks >= 3 && p.tavern < 1) upgradeTavern(s, pid);
+  const gens = playerGenerals(s, pid).sort((a, b) => a.id.localeCompare(b.id));
+  if (p.tavern >= 1 && gens.length < 2 && p.res.gold >= 60) hireGeneral(s, pid);
+  for (const guard of playerGenerals(s, pid).sort((a, b) => a.id.localeCompare(b.id)).slice(1)) {
+    for (const piece of PIECES) {
+      while (guard.army[piece] < GUARD_ARMY[piece] && income(s, pid).food >= upkeep(s, pid) + PIECE_PRICE[piece] * ARMY_UPKEEP_RATE) {
+        if (!hirePiece(s, pid, guard.id, piece).ok) break;
       }
     }
   }

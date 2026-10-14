@@ -36,13 +36,15 @@ const moveList = (fens: string[], moves: string[], last = 6): string => {
   return (start > 0 ? '… ' : '') + parts.slice(start).join(' ');
 };
 
-/** Ручной бой: белыми ходит игрок. */
+/** Ручной бой: игрок ходит белыми (атакует) или чёрными (защищается). */
 export const playManual = (
   app: HTMLElement, s: GameState, attackerId: string, defenderId: string, me: Side, foe: Side, title: string,
+  side: 'white' | 'black' = 'white',
 ): Promise<BattleRecord> => {
+  const meWhite = side === 'white';
   const el = shell(app, title, foe, me,
     act('auto', 'Let the general finish', 'Stockfish plays for you') + act('resign', 'Resign', 'the battle is lost'));
-  const board = new BoardView(el.querySelector('#boardhost')!);
+  const board = new BoardView(el.querySelector('#boardhost')!, !meWhite);
   const status = (t: string) => { el.querySelector('#fstatus')!.innerHTML = t; };
   const att = s.generals[attackerId], def = s.generals[defenderId];
   const fens: string[] = [battleFen(att.army, def.army)];
@@ -54,8 +56,8 @@ export const playManual = (
 
   const draw = (fen: string, marks: Parameters<BoardView['render']>[1] = {}) => {
     board.render(fen, { last: moves[moves.length - 1], check: lastCheck, ...marks });
-    el.querySelector('#mtop')!.innerHTML = armyGlyphs(fen, false);
-    el.querySelector('#mbot')!.innerHTML = armyGlyphs(fen, true);
+    el.querySelector('#mtop')!.innerHTML = armyGlyphs(fen, !meWhite);
+    el.querySelector('#mbot')!.innerHTML = armyGlyphs(fen, meWhite);
     el.querySelector('#fply')!.textContent = `Half-move ${moves.length} / ${MAX_PLIES}`;
     el.querySelector('#fmoves')!.textContent = fens.length > 1 ? moveList(fens, moves) : '';
   };
@@ -102,7 +104,7 @@ export const playManual = (
       if (selected && targets().includes(sq)) {
         const cands = t.legal.filter((m) => m.startsWith(selected! + sq));
         let move = cands[0];
-        if (cands.length > 1) move = selected + sq + await promote(true);
+        if (cands.length > 1) move = selected + sq + await promote(meWhite);
         tap();
         const f = pending; pending = null;
         board.onSquare = undefined;
@@ -110,7 +112,7 @@ export const playManual = (
         f?.({ move });
         return;
       }
-      selected = p && isWhite(p) && t.legal.some((m) => m.startsWith(sq)) ? sq : undefined;
+      selected = p && isWhite(p) === meWhite && t.legal.some((m) => m.startsWith(sq)) ? sq : undefined;
       draw(t.fen, { selected, targets: targets() });
     };
   });
@@ -120,6 +122,7 @@ export const playManual = (
     try {
       const rec = await runBattle(s, attackerId, defenderId, {
         human,
+        humanSide: side,
         minDelayMs: () => delay,
         onPly: (t) => {
           moves.push(t.moves[t.moves.length - 1]);
@@ -128,7 +131,7 @@ export const playManual = (
           if (t.book) {
             const white = t.moves.length % 2 === 1;
             const name = repertoireFor(white ? att : def, white, t.moves.slice(0, -1));
-            if (name) note = `${white ? 'your general plays' : 'the enemy plays'} the ${esc(name)}`;
+            if (name) note = `${white === meWhite ? 'your general plays' : 'the enemy plays'} the ${esc(name)}`;
           } else note = '';
           draw(t.fen);
         },
@@ -141,18 +144,18 @@ export const playManual = (
 };
 
 /** Просмотр сыгранной партии. */
-export const showReplay = (app: HTMLElement, rec: BattleRecord, white: Side, black: Side, title: string): Promise<void> => {
-  const el = shell(app, title, black, white,
+export const showReplay = (app: HTMLElement, rec: BattleRecord, white: Side, black: Side, title: string, flipped = false): Promise<void> => {
+  const el = shell(app, title, flipped ? white : black, flipped ? black : white,
     `${act('first', '⏮')}${act('back', '◀')}${act('play', '▶')}${act('fwd', '▶▶')}${act('last', '⏭')}${act('close', 'Close')}`);
   el.classList.add('replay');
-  const board = new BoardView(el.querySelector('#boardhost')!);
+  const board = new BoardView(el.querySelector('#boardhost')!, flipped);
   let i = rec.moves.length;
   let timer: ReturnType<typeof setInterval> | undefined;
   const show = () => {
     const fen = rec.fens[i];
     board.render(fen, { last: i > 0 ? rec.moves[i - 1] : undefined });
-    el.querySelector('#mtop')!.innerHTML = armyGlyphs(fen, false);
-    el.querySelector('#mbot')!.innerHTML = armyGlyphs(fen, true);
+    el.querySelector('#mtop')!.innerHTML = armyGlyphs(fen, flipped);
+    el.querySelector('#mbot')!.innerHTML = armyGlyphs(fen, !flipped);
     el.querySelector('#fply')!.textContent = `Half-move ${i} / ${rec.moves.length}`;
     el.querySelector('#fmoves')!.textContent = i ? moveList(rec.fens, rec.moves.slice(0, i)) : 'Starting position';
     el.querySelector('#fstatus')!.textContent = i <= rec.bookPlies && i > 0 ? 'Opening book' : '';

@@ -29,8 +29,9 @@ export type Turn = { fen: string; moves: string[]; legal: string[]; inCheck: boo
 export type HumanAction = { move: string } | { resign: true } | { auto: true };
 
 export type BattleHooks = {
-  /** Если задан — белыми (атакующим) ходит игрок. */
+  /** Если задан — за сторону humanSide (по умолчанию белые, атакующий) ходит игрок. */
   human?: (t: Turn) => Promise<HumanAction>;
+  humanSide?: 'white' | 'black';
   /** После каждого полухода. */
   onPly?: (t: { fen: string; moves: string[]; inCheck: boolean; book: boolean }) => void;
   /** Ход генерала не быстрее этого — чтобы игрок успевал увидеть ответ. */
@@ -83,9 +84,9 @@ export const runBattle = async (s: GameState, attackerId: string, defenderId: st
     }
     let move: string;
     let book = false;
-    if (white && human) {
+    if (human && white === ((hooks.humanSide ?? 'white') === 'white')) {
       const a = await human({ fen, moves: [...moves], legal, inCheck });
-      if ('resign' in a) { end = 'resign'; mateWinner = 'black'; break; }
+      if ('resign' in a) { end = 'resign'; mateWinner = white ? 'black' : 'white'; break; }
       if ('auto' in a) { human = undefined; continue; }
       move = a.move;
     } else {

@@ -12,3 +12,4 @@ export * from './maps/europe.ts';
 export * from './battle.ts';
 export * from './openings.ts';
 export * from './ai.ts';
+export * from './aiwar.ts';
