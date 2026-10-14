@@ -1,6 +1,6 @@
 // Сборка Mini App в dist/: бандл приложения (esbuild), index.html и файлы Stockfish из npm-пакета.
 import { build } from 'esbuild';
-import { cpSync, existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -9,16 +9,22 @@ const dist = join(here, 'dist');
 rmSync(dist, { recursive: true, force: true });
 mkdirSync(join(dist, 'engine'), { recursive: true });
 
-await build({
-  entryPoints: [join(here, 'src/main.ts')],
+// Имя бандла с хешем содержимого: Telegram и браузеры кешируют app.js, а новое имя гарантирует свежий код.
+const result = await build({
+  entryPoints: { app: join(here, 'src/main.ts') },
   bundle: true,
   format: 'esm',
   target: 'es2020',
   minify: true,
   sourcemap: true,
-  outfile: join(dist, 'app.js'),
+  outdir: dist,
+  entryNames: '[name].[hash]',
+  metafile: true,
 });
-cpSync(join(here, 'index.html'), join(dist, 'index.html'));
+const bundle = Object.keys(result.metafile.outputs).find((f) => f.endsWith('.js'));
+const bundleName = bundle.split('/').pop();
+const html = readFileSync(join(here, 'index.html'), 'utf8').replace('./app.js', `./${bundleName}`);
+writeFileSync(join(dist, 'index.html'), html);
 
 // Stockfish: при установке через npm (workspaces кладут пакеты в корневой node_modules)
 const candidates = [join(here, 'node_modules/stockfish/bin'), join(here, '../../node_modules/stockfish/bin')];
