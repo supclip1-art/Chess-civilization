@@ -2,7 +2,7 @@
 // генералы, туман войны, подсветка хода. Камера: перетаскивание и щипок для масштаба.
 
 import { iconImage } from './icons.ts';
-import { type GameState, type Hex, type Terrain, key, neighbors } from '../../../core/src/index.ts';
+import { type GameState, type Hex, type Job, type Terrain, key, neighbors } from '../../../core/src/index.ts';
 
 export const PLAYER_COLORS = ['#2f6fd6', '#d64a3c', '#e0a020', '#8a52d6', '#1f9e86', '#d65f9c', '#6b8f2a', '#c76a1f'];
 export const NEUTRAL_COLOR = '#8c8a84';
@@ -105,6 +105,17 @@ export class MapView {
       } else if (mem[k]) known.set(k, mem[k]);
     }
 
+    // стройки игрока: клетка → в очереди ли (казарма и таверна — в столице)
+    const clocks = new Map<string, boolean>();
+    const me = s.players[viewer];
+    if (me) {
+      const capital = Object.values(s.halls).filter((h) => h.owner === viewer).sort((a, b) => a.order - b.order)[0];
+      const at = (j: Job): string | null => j.kind === 'resource' || j.kind === 'found' ? key(j.hex)
+        : j.kind === 'townhall' ? (s.halls[j.hallId] ? key(s.halls[j.hallId].hex) : null) : capital ? key(capital.hex) : null;
+      for (const q of me.queue ?? []) { const k = at(q.job); if (k) clocks.set(k, true); }
+      for (const j of me.jobs) { const k = at(j); if (k) clocks.set(k, false); }
+    }
+
     // 1. местность и территория
     for (const cell of cells) {
       const { x, y } = this.toPixel(cell.hex);
@@ -144,8 +155,16 @@ export class MapView {
       if (!v) continue;
       const { x, y } = this.toPixel(cell.hex);
       if (v.building) this.building(x, y, S, v.building.kind, v.building.level);
-      else if (v.reserved) this.badge(x, y, S, '…', 0);
+      else if (v.reserved && !clocks.has(key(cell.hex))) this.clock(x, y, S * 0.36, false);
       if (v.hall) this.hall(x, y, S, ownerColor(s, v.hall.owner)!, v.hall.level, !!v.hall.siege);
+    }
+    // часы над стройками игрока: идёт стройка (белые) или ждёт в очереди (серые)
+    for (const [k, queued] of clocks) {
+      const cell = s.cells[k]; if (!cell) continue;
+      const { x, y } = this.toPixel(cell.hex);
+      const v = known.get(k);
+      if (v?.building || v?.hall) this.clock(x - S * 0.5, y - S * 0.42, Math.max(6, S * 0.25), queued);
+      else this.clock(x, y, S * 0.36, queued);
     }
     // 4. генералы
     const byCell = new Map<string, typeof s.generals[string][]>();
@@ -259,6 +278,18 @@ export class MapView {
     c.fillStyle = '#ffffff'; c.font = `700 ${Math.round(rr * 1.25)}px system-ui, sans-serif`;
     c.textAlign = 'center'; c.textBaseline = 'middle';
     c.fillText(String(level), bx, by + 0.5);
+  }
+
+  /** Часы: стройка идёт; queued — серые, стройка ждёт свободного строителя. */
+  private clock(x: number, y: number, r: number, queued: boolean): void {
+    const c = this.ctx;
+    c.save();
+    c.beginPath(); c.arc(x, y, r, 0, Math.PI * 2);
+    c.fillStyle = queued ? '#d9d6cc' : '#ffffff'; c.fill();
+    c.lineWidth = Math.max(1.2, r * 0.18); c.strokeStyle = '#2a2a26'; c.stroke();
+    c.beginPath(); c.moveTo(x, y - r * 0.6); c.lineTo(x, y); c.lineTo(x + r * 0.42, y + r * 0.26);
+    c.lineWidth = Math.max(1.2, r * 0.2); c.lineCap = 'round'; c.lineJoin = 'round'; c.stroke();
+    c.restore();
   }
 
   private badge(x: number, y: number, S: number, letter: string, level: number): void {

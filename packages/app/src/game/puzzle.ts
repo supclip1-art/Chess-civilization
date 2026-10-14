@@ -2,6 +2,7 @@
 // Ход игрока проверяет Stockfish: верный — если после него соперник получает мат не позже, чем нужно по задаче.
 // Поэтому принимаются и другие решения, а не только «авторское». Все позиции проверены Stockfish (глубина 16).
 
+import { pieceHtml } from './pieces.ts';
 import { tap } from '../tg.ts';
 import { getEngine } from './battle.ts';
 import { BoardView, isWhite, moveText, parseFen } from './board.ts';
@@ -128,7 +129,7 @@ export const showPuzzle = (app: HTMLElement, next = 'Start the game'): Promise<v
     const promote = (): Promise<string> => new Promise((res) => {
       const box = el.querySelector<HTMLElement>('#promo')!;
       box.innerHTML = `<p>Promote the pawn to</p><div>${['q', 'r', 'b', 'n'].map((p) =>
-        `<button data-q="${p}" class="pc ${white ? 'w' : 'b'}">${{ q: '♛', r: '♜', b: '♝', n: '♞' }[p]}︎</button>`).join('')}</div>`;
+        `<button data-q="${p}">${pieceHtml(white, p)}</button>`).join('')}</div>`;
       box.hidden = false;
       box.onclick = (ev) => { const b = (ev.target as HTMLElement).closest<HTMLButtonElement>('button[data-q]'); if (b) { box.hidden = true; res(b.dataset.q!); } };
     });

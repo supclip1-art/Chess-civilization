@@ -10,7 +10,7 @@ import {
 import { type Hex, key, neighbors } from './hex.ts';
 import { NATIONS, type Mods } from './nations.ts';
 import {
-  BUILDING_TERRAIN, PASSABLE, type Army, type Cell, type GameState, type General, type Player, cityName, newId, recomputeTerritory, say,
+  BUILDING_TERRAIN, PASSABLE, type Army, type Cell, type GameState, type General, type Job, type Player, cityName, newId, recomputeTerritory, say,
 } from './state.ts';
 
 export type Result = { ok: true } | { ok: false; reason: string };
@@ -99,6 +99,7 @@ export const hireBuilder = (s: GameState, pid: string): Result => {
   p.res.food -= food;
   p.builders = n;
   say(s, `builder ${n} hired`, pid);
+  startQueued(s, pid);
   return ok;
 };
 
@@ -228,6 +229,76 @@ export const startResearch = (s: GameState, pid: string): Result => {
 export const recruitElo = (s: GameState, pid: string): number =>
   s.settings.elo + s.players[pid].research.done * ELO_PER_RESEARCH;
 
+// ---------- Очередь строек ----------
+
+/** Стройки, которые можно поставить в очередь, когда все строители заняты. */
+export type QueueOrder =
+  | { kind: 'build'; hex: Hex; building: ResourceBuilding }
+  | { kind: 'upgrade'; hex: Hex }
+  | { kind: 'townhall'; hallId: string }
+  | { kind: 'barracks' }
+  | { kind: 'tavern' };
+
+const sameTarget = (a: Job, b: Job): boolean =>
+  a.kind === b.kind && (a.kind === 'resource' ? key(a.hex) === key((b as typeof a).hex)
+    : a.kind === 'townhall' ? a.hallId === (b as typeof a).hallId : true);
+
+const runOrder = (s: GameState, pid: string, o: QueueOrder): Result =>
+  o.kind === 'build' ? build(s, pid, o.hex, o.building)
+    : o.kind === 'upgrade' ? upgrade(s, pid, o.hex)
+      : o.kind === 'townhall' ? upgradeTownHall(s, pid, o.hallId)
+        : o.kind === 'barracks' ? upgradeBarracks(s, pid) : upgradeTavern(s, pid);
+
+/** Поставить стройку в очередь: все проверки и оплата — как у обычной стройки, но начнётся она,
+ *  когда освободится строитель. Повторно ту же стройку в очередь не ставим. */
+export const enqueue = (s: GameState, pid: string, o: QueueOrder): Result => {
+  const p = s.players[pid];
+  const queue = (p.queue ??= []);
+  if (freeBuilders(p) > 0) return runOrder(s, pid, o);
+  const before = { ...p.res };
+  const jobs = p.jobs.length;
+  p.builders++; // временный строитель: проверки и оплата идут обычным путём
+  const r = runOrder(s, pid, o);
+  p.builders--;
+  if (!r.ok) return r;
+  const job = p.jobs.splice(jobs, 1)[0];
+  if (queue.some((q) => sameTarget(q.job, job))) {
+    // уже в очереди — откатываем
+    p.res = before;
+    if (job.kind === 'resource' && job.level === 1) s.cells[key(job.hex)].reserved = false;
+    return no('already in the queue');
+  }
+  queue.push({ job, turns: job.finish - s.turn, paid: { wood: before.wood - p.res.wood, food: before.food - p.res.food, gold: before.gold - p.res.gold } });
+  return ok;
+};
+
+/** Отменить стройку из очереди и вернуть ресурсы. */
+export const cancelQueued = (s: GameState, pid: string, index: number): Result => {
+  const p = s.players[pid];
+  const q = p.queue?.[index];
+  if (!q) return no('nothing to cancel');
+  p.queue!.splice(index, 1);
+  p.res.wood += q.paid.wood; p.res.food += q.paid.food; p.res.gold += q.paid.gold;
+  if (q.job.kind === 'resource' && q.job.level === 1) s.cells[key(q.job.hex)].reserved = false;
+  return ok;
+};
+
+/** Запустить стройки из очереди, пока есть свободные строители. Стройку, которая стала невозможной
+ *  (клетку или город захватили), убираем и возвращаем ресурсы. */
+export const startQueued = (s: GameState, pid: string): void => {
+  const p = s.players[pid];
+  while (p.queue?.length && freeBuilders(p) > 0) {
+    const q = p.queue[0];
+    const j = q.job;
+    const valid = j.kind === 'resource' ? s.cells[key(j.hex)]?.owner === pid && (j.level === 1 || s.cells[key(j.hex)].building?.level === j.level - 1)
+      : j.kind === 'townhall' ? s.halls[j.hallId]?.owner === pid && s.halls[j.hallId].level === j.level - 1
+        : j.kind === 'barracks' ? p.barracks === j.level - 1 : j.kind === 'tavern' ? p.tavern === j.level - 1 : false;
+    if (!valid) { cancelQueued(s, pid, 0); say(s, 'a queued construction was cancelled, resources returned', pid); continue; }
+    p.queue.shift();
+    p.jobs.push({ ...j, finish: s.turn + q.turns });
+  }
+};
+
 // ---------- Доход, содержание, голод ----------
 
 export const armyValue = (a: Army): number =>
@@ -315,6 +386,7 @@ export const completeJobs = (s: GameState, pid: string): void => {
   }
   const r = p.research.active;
   if (r && r.finish <= s.turn) { p.research.done = r.step + 1; p.research.active = undefined; }
+  startQueued(s, pid);
 };
 
 /** Конец хода игрока: доход минус содержание; при нехватке еды — голод. */

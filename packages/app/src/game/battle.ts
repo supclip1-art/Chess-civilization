@@ -5,7 +5,7 @@
 // Конец партии: мат, пат, сдача, троекратное повторение, правило 50 ходов, нет матующего материала, 150 полуходов.
 
 import {
-  MAX_PLIES, armiesFromFen, battleFen, bookMove, insufficientMaterial, next, type BattleEnd, type BattleReport,
+  MAX_PLIES, armiesFromFen, battleFen, bookMove, insufficientMaterial, next, promotions, type BattleEnd, type BattleReport,
   type GameState, type General,
 } from '../../../core/src/index.ts';
 import { Engine, profile } from '../engine.ts';
@@ -109,7 +109,7 @@ export const runBattle = async (s: GameState, attackerId: string, defenderId: st
     if (Number(fen.split(' ')[4]) >= 100) { end = 'fifty'; break; }
   }
   const { white, black } = armiesFromFen(fen);
-  return { report: { end, mateWinner, white, black }, startFen, moves, fens, bookPlies, seconds: (performance.now() - t0) / 1000 };
+  return { report: { end, mateWinner, white, black, promoted: promotions(moves) }, startFen, moves, fens, bookPlies, seconds: (performance.now() - t0) / 1000 };
 };
 
 /** Автобой: оба генерала играют сами. */

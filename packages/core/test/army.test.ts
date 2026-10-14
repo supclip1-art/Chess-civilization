@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   armiesFromFen, canForceMate, insufficientMaterial, attack, emptyArmy, endTurn, formationOk, hireGeneral, hirePiece, judge, move, newGame, playerHalls,
-  reachable, resolveBattle, returning, visible, winner, key, upgradeBarracks, type GameState, type Army,
+  reachable, resolveBattle, returning, promotions, visible, winner, key, upgradeBarracks, type GameState, type Army,
 } from '../src/index.ts';
 import { NEUTRAL, SPAWN_A, SPAWN_B, testMap } from './helpers.ts';
 
@@ -81,18 +81,16 @@ test('фигуры на доске по FEN', () => {
   assert.deepEqual(armiesFromFen('1n2k3/2pppp2/8/8/8/8/2PPPP2/1N2K3 w - - 0 1'), { white: army({ p: 4, n: 1 }), black: army({ p: 4, n: 1 }) });
 });
 
-test('возврат фигур: свои уцелевшие возвращаются всегда, превращённые — по казарме', () => {
+test('возврат фигур: свои уцелевшие возвращаются, превращённые пешки снова становятся пешками', () => {
   const s = game();
-  s.players.p1.barracks = 0;
-  // без казармы стартовая армия возвращается целиком
   assert.deepEqual(returning(s, 'p1', army({ p: 4, n: 1 }), army({ p: 4, n: 1 })), army({ p: 4, n: 1 }));
-  // пешка превратилась в ферзя: ферзь не остаётся
-  assert.deepEqual(returning(s, 'p1', army({ p: 3, n: 1, q: 1 }), army({ p: 4, n: 1 })), army({ p: 3, n: 1 }));
-  // пешка стала вторым конём: при казарме 2 — остаётся, при 1 — нет
-  s.players.p1.barracks = 1;
-  assert.deepEqual(returning(s, 'p1', army({ p: 3, n: 2 }), army({ p: 4, n: 1 })), army({ p: 3, n: 1 }));
-  s.players.p1.barracks = 2;
-  assert.deepEqual(returning(s, 'p1', army({ p: 3, n: 2 }), army({ p: 4, n: 1 })), army({ p: 3, n: 2 }));
+  // пешка превратилась в ферзя: возвращается пешкой
+  assert.deepEqual(returning(s, 'p1', army({ p: 3, n: 1, q: 1 }), army({ p: 4, n: 1 })), army({ p: 4, n: 1 }));
+  // ферзя срубили, пешка стала ферзём: ферзь уцелел превращённый — значит пешка
+  assert.deepEqual(returning(s, 'p1', army({ p: 3, q: 1 }), army({ p: 4, q: 1 }), army({ q: 1 })), army({ p: 4 }));
+  // два коня, один срубили: неясно какой — считаем, что уцелел превращённый
+  assert.deepEqual(returning(s, 'p1', army({ p: 3, n: 1 }), army({ p: 4, n: 1 }), army({ n: 1 })), army({ p: 4 }));
+  assert.deepEqual(promotions(['e2e4', 'e7e5', 'a7a8q', 'b2b1n']), { white: army({ q: 1 }), black: army({ n: 1 }) });
 });
 
 test('движение: 2 клетки за ход, горы и вода непроходимы', () => {

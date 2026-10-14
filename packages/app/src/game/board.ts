@@ -1,12 +1,12 @@
 // Шахматная доска для боя и реплея: рисует позицию из FEN, подсвечивает последний ход, шах,
 // выбранную фигуру и поля, куда она может пойти. Белые всегда снизу (атакующий — игрок).
 
+import { PIECE_SVG, pieceKey } from './pieces.ts';
+
 const FILES = 'abcdefgh';
 // сплошные знаки для обеих сторон, цвет задаёт CSS; ︎ — текстовое, а не эмодзи-начертание (iOS)
 const GLYPH: Record<string, string> = { k: '♚', q: '♛', r: '♜', b: '♝', n: '♞', p: '♟' };
 const VS = '\uFE0E';
-// контурные знаки — поверх белой заливки, чтобы белые фигуры были белыми с чёрным контуром
-const OUTLINE: Record<string, string> = { k: '♔', q: '♕', r: '♖', b: '♗', n: '♘', p: '♙' };
 
 export type Squares = Map<string, string>; // "e4" -> "N" (заглавная — белые)
 
@@ -78,15 +78,14 @@ export class BoardView {
   render(fen: string, marks: BoardMarks = {}): void {
     const b = parseFen(fen);
     const toMoveWhite = fen.split(' ')[1] === 'w';
-    const size = this.el.clientWidth / 8 || 40;
-    this.el.style.setProperty('--pc', `${Math.round(size * 0.8)}px`);
     const last = marks.last ? [marks.last.slice(0, 2), marks.last.slice(2, 4)] : [];
     for (const [sq, d] of this.cells) {
       const p = b.get(sq);
       const pc = d.querySelector<HTMLElement>('.pc')!;
-      pc.textContent = p ? GLYPH[p.toLowerCase()] + VS : '';
-      pc.className = `pc ${p ? (isWhite(p) ? 'w' : 'b') : ''}`;
-      if (p && isWhite(p)) pc.dataset.o = OUTLINE[p.toLowerCase()] + VS; else delete pc.dataset.o;
+      if (pc.dataset.p !== (p ?? '')) {
+        pc.dataset.p = p ?? '';
+        pc.style.backgroundImage = p ? `url("${PIECE_SVG[pieceKey(p)]}")` : '';
+      }
       d.classList.toggle('last', last.includes(sq));
       d.classList.toggle('sel', marks.selected === sq);
       d.classList.toggle('check', !!marks.check && p === (toMoveWhite ? 'K' : 'k'));

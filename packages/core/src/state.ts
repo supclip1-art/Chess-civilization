@@ -2,7 +2,7 @@
 // интерфейс при необходимости делает structuredClone для отмены или сохранения.
 
 import { STARTING_ARMY, START_RESOURCES, TOWN_HALL_RADIUS, type Piece, type Res, type ResourceBuilding } from './config.ts';
-import { type Hex, key, range } from './hex.ts';
+import { type Hex, distance, key, range } from './hex.ts';
 import { NATIONS, NEUTRAL_CITIES, type Aggression, type NationId } from './nations.ts';
 import { type Rng, int } from './rng.ts';
 
@@ -68,6 +68,8 @@ export type Player = {
   tavern: number;
   research: { done: number; active?: { step: number; finish: number } };
   jobs: Job[];
+  /** Очередь строек: оплачены, начнутся, когда освободится строитель. turns — сколько ходов займёт стройка. */
+  queue?: { job: Job; turns: number; paid: Res }[];
   starterKnight: boolean; // стартовый конь жив и всегда возвращается после боя
   alive: boolean;
 };
@@ -108,8 +110,10 @@ export type MapDef = {
   spawnNations?: NationId[];
   /** Расставить игроков по стартовым точкам случайно (по зерну партии). */
   randomSpawns?: boolean;
-  /** Ратуши слаборазвитых нейтральных государств. */
+  /** Места нейтральных городов. Если задан neutralCount — это кандидаты, из которых в партии появляется часть. */
   neutrals: Hex[];
+  /** Сколько нейтралов появляется в партии: случайный, но равномерный по карте выбор из neutrals. */
+  neutralCount?: number;
   /** Названия городов по клеткам («q,r»): нейтралы и свободные столицы получают исторические имена. */
   names?: Record<string, string>;
 };
@@ -190,6 +194,24 @@ const addNeutral = (s: GameState, hex: Hex, name?: string): void => {
   makeGeneral(s, id, hex, s.settings.elo, rollGarrison(s.rng), 'Garrison');
 };
 
+/** Нейтралы партии: кандидаты в случайном порядке, берём тот, что не ближе minGap к уже стоящим городам;
+ *  если набрать нужное число не удаётся — понемногу уменьшаем зазор. Так города каждый раз разные, но покрывают карту ровно. */
+const pickNeutrals = (s: GameState, map: MapDef, cities: Hex[]): Hex[] => {
+  const want = map.neutralCount ?? map.neutrals.length;
+  if (want >= map.neutrals.length) return map.neutrals;
+  const pool = [...map.neutrals];
+  for (let i = pool.length - 1; i > 0; i--) { const j = int(s.rng, 0, i); [pool[i], pool[j]] = [pool[j], pool[i]]; }
+  const chosen: Hex[] = [];
+  for (let gap = 7; chosen.length < want && gap >= 0; gap--) {
+    for (const h of pool) {
+      if (chosen.length >= want) break;
+      if (chosen.includes(h)) continue;
+      if ([...cities, ...chosen].every((c) => distance(c, h) >= gap)) chosen.push(h);
+    }
+  }
+  return chosen;
+};
+
 export const createGame = (map: MapDef, setup: PlayerSetup[], opts: { elo: number; seed: number }): GameState => {
   if (setup.length < 2 || setup.length > map.spawns.length) throw new Error(`players: 2..${map.spawns.length}`);
   const s: GameState = {
@@ -225,7 +247,8 @@ export const createGame = (map: MapDef, setup: PlayerSetup[], opts: { elo: numbe
     makeGeneral(s, id, hex, opts.elo, { ...STARTING_ARMY }, 'General');
   });
   map.spawns.forEach((h, i) => { if (!spawnOf.includes(i)) addNeutral(s, h, map.names?.[key(h)]); });
-  map.neutrals.forEach((h) => addNeutral(s, h, map.names?.[key(h)]));
+  const freeSpawns = map.spawns.filter((_, i) => !spawnOf.includes(i));
+  pickNeutrals(s, map, [...spawnOf.map((i) => map.spawns[i]), ...freeSpawns]).forEach((h) => addNeutral(s, h, map.names?.[key(h)]));
   recomputeTerritory(s);
   return s;
 };

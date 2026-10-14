@@ -300,7 +300,21 @@ NEUTRALS = [
     ('Constantinople', 28.95, 41.0), ('Tunis', 10.2, 36.8), ('Algiers', 3.05, 36.75), ('Bern', 7.45, 46.95),
     ('Marseille', 5.4, 43.3), ('Barcelona', 2.15, 41.4), ('Hamburg', 10.0, 53.55), ('Edinburgh', -3.2, 55.95),
     ('Stockholm', 18.05, 59.0 - 0.6), ('Bucharest', 26.1, 44.4), ('Sofia', 23.3, 42.7), ('Kraków', 19.9, 50.05),
+    # кандидаты: в каждой партии появляется только часть нейтралов (NEUTRAL_COUNT), равномерно по карте
+    ('Seville', -5.98, 37.39), ('Valencia', -0.38, 39.47), ('Porto', -8.61, 41.15), ('Bilbao', -2.93, 43.26),
+    ('Zaragoza', -0.88, 41.65), ('Granada', -3.6, 37.18), ('Bordeaux', -0.58, 44.84), ('Toulouse', 1.44, 43.6),
+    ('Lyon', 4.83, 45.76), ('Nantes', -1.55, 47.22), ('Brest', -4.49, 48.39), ('Lille', 3.06, 50.63),
+    ('Brussels', 4.35, 50.85), ('Cologne', 6.96, 50.94), ('Frankfurt', 8.68, 50.11), ('Munich', 11.58, 48.14),
+    ('Dresden', 13.74, 51.05), ('Hanover', 9.73, 52.37), ('Gdańsk', 18.65, 54.35), ('Poznań', 16.93, 52.41),
+    ('Wrocław', 17.04, 51.11), ('Milan', 9.19, 45.46), ('Turin', 7.69, 45.07), ('Genoa', 8.93, 44.41),
+    ('Florence', 11.25, 43.77), ('Bari', 16.87, 41.12), ('Palermo', 13.36, 38.12), ('Cagliari', 9.11, 39.22),
+    ('Ajaccio', 8.74, 41.92), ('Zagreb', 15.98, 45.81), ('Sarajevo', 18.41, 43.86), ('Lviv', 24.03, 49.84),
+    ('Thessaloniki', 22.94, 40.64), ('Tirana', 19.82, 41.33), ('Dublin', -6.26, 53.35), ('Manchester', -2.24, 53.48),
+    ('Bristol', -2.59, 51.45), ('Malmö', 13.0, 55.6), ('Oran', -0.64, 35.7), ('Tangier', -5.8, 35.77),
+    ('Strasbourg', 7.75, 48.58), ('Košice', 21.26, 48.72), ('Cluj', 23.6, 46.77), ('Timișoara', 21.23, 45.75),
+    ('Skopje', 21.43, 42.0), ('Montpellier', 3.88, 43.6), ('Königsberg', 20.5, 54.7), ('Szczecin', 14.55, 53.43),
 ]
+NEUTRAL_COUNT = 20  # сколько нейтралов появляется в партии (кроме свободных столиц)
 
 
 def nearest_land(lon, lat, taken):
@@ -438,6 +452,7 @@ with open(OUT, 'w') as f:
     f.write('  spawns: [' + ', '.join(f'{{ q: {h[0]}, r: {h[1]} }}' for _, _, h in spawns) + '],\n')
     f.write('  // столицы: ' + ', '.join(nm for _, nm, _ in spawns) + ' — нации расставляются по ним случайно\n')
     f.write('  randomSpawns: true,\n')
+    f.write(f'  neutralCount: {NEUTRAL_COUNT},\n')
     f.write('  neutrals: [' + ', '.join(f'{{ q: {h[0]}, r: {h[1]} }}' for _, h in neutrals) + '],\n')
     f.write('  names: {\n')
     for n, nm, h in spawns:

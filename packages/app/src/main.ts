@@ -28,13 +28,13 @@ const home = () => {
   render(`
     <div><h1>Chess Civilization</h1><p class="muted">Build an empire. Every war is a real chess game.</p></div>
     ${name ? `<p>Welcome, ${esc(name)}.</p>` : ''}
-    ${alive ? `<button id="continue">Continue · ${esc(NATIONS[saved!.players.p1.nation].name)}, turn ${saved!.turn}</button>` : ''}
+    ${alive ? `<button id="continue">Continue · ${esc(NATIONS[saved!.players.p1.nation].name)}</button>` : ''}
     <button id="new" ${alive ? 'class="ghost"' : ''}>New game</button>
     <button id="puzzle" class="ghost">Warm-up puzzle</button>
     <button id="howto" class="ghost">How to play</button>
     <button id="bench" class="ghost">Engine speed test</button>
     <p class="muted">Build ${esc(__BUILD__)} · ${esc(platformLabel())}</p>
-    <p class="muted">Chess engine: <a href="https://github.com/official-stockfish/Stockfish" target="_blank" rel="noopener">Stockfish</a> (GPL-3.0).</p>`);
+    <p class="muted">Chess engine: <a href="https://github.com/official-stockfish/Stockfish" target="_blank" rel="noopener">Stockfish</a> (GPL-3.0). Pieces: cburnett by Colin M.L. Burnett (GPLv2+).</p>`);
   on('continue', () => { if (saved) openGame(app, saved, home); });
   on('new', setup);
   on('bench', bench);

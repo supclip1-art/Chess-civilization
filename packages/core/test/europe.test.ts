@@ -39,15 +39,29 @@ test('Европа: все столицы и нейтралы связаны с�
   }
 });
 
+test('нейтралы: в каждой партии разный набор из кандидатов, равномерно по карте', () => {
+  const sets = [1, 2, 3].map((seed) => {
+    const s = newGame(europeMap(), [{ nation: 'spain' }, { nation: 'italy' }], { elo: 1200, seed });
+    const hs = Object.values(s.neutrals).map((n) => s.halls[n.hallId]);
+    return { s, hs, names: hs.map((h) => h.name).sort().join() };
+  });
+  assert.notEqual(sets[0].names, sets[1].names);
+  for (const { s, hs } of sets) {
+    assert.equal(hs.length, (europeMap().neutralCount ?? 0) + 2); // + 2 свободные столицы
+    // ни один нейтрал не стоит вплотную к другому городу
+    for (const a of hs) for (const b of Object.values(s.halls)) if (a !== b) assert.ok(distance(a.hex, b.hex) >= 3, `${a.name}–${b.name}`);
+  }
+});
+
 test('память карты: под туманом виден город таким, каким его видели', async () => {
   const { remember, visible } = await import('../src/index.ts');
   const s = newGame(europeMap(), [{ nation: 'spain' }, { nation: 'italy' }], { elo: 1200, seed: 1 });
   const g = Object.values(s.generals).find((x) => x.owner === 'p1')!;
-  const lisbon = Object.values(s.halls).find((h) => h.name === 'Lisbon')!;
+  const lisbon = Object.values(s.halls).find((h) => s.neutrals[h.owner])!;
   g.hex = { q: lisbon.hex.q + 1, r: lisbon.hex.r };
   remember(s, 'p1');
   const k = key(lisbon.hex);
-  assert.equal(s.memory!.p1[k].hall!.name, 'Lisbon');
+  assert.equal(s.memory!.p1[k].hall!.name, lisbon.name);
   // генерал ушёл, город вырос — игрок помнит старый уровень
   g.hex = { ...playerHalls(s, 'p1')[0].hex };
   lisbon.level = 3;

@@ -2,7 +2,7 @@
 // Рисунки свои, простые: колос — еда и ферма, бревно — дерево, монета — золото, пила — лесопилка, кирка — рудник,
 // рыба — рыбный промысел.
 
-export type IconName = 'food' | 'wood' | 'gold' | 'farm' | 'sawmill' | 'mine' | 'fishery';
+export type IconName = 'food' | 'wood' | 'gold' | 'farm' | 'sawmill' | 'mine' | 'fishery' | 'clock' | 'tactics';
 
 const WHEAT = `
   <path d="M12 22.5V7" stroke="#7c5c17" stroke-width="1.7" stroke-linecap="round" fill="none"/>
@@ -54,7 +54,21 @@ const FISH = `
   <circle cx="6.8" cy="11.2" r="0.9" fill="#1d3a4c"/>
   <path d="M3 20.2c2-1.3 4-1.3 6 0s4 1.3 6 0 4-1.3 6 0" stroke="#5f9fc4" stroke-width="1.2" fill="none" stroke-linecap="round"/>`;
 
-const BODY: Record<IconName, string> = { food: WHEAT, farm: WHEAT, wood: LOG, gold: COIN, sawmill: SAW, mine: PICK, fishery: FISH };
+/** Часы — стройка идёт. */
+const CLOCK = `
+  <circle cx="12" cy="12" r="9.6" fill="#ffffff" stroke="#2a2a26" stroke-width="1.8"/>
+  <path d="M12 6.4V12l3.8 2.4" stroke="#2a2a26" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <g fill="#2a2a26"><circle cx="12" cy="3.9" r="0.8"/><circle cx="20.1" cy="12" r="0.8"/><circle cx="12" cy="20.1" r="0.8"/><circle cx="3.9" cy="12" r="0.8"/></g>`;
+
+/** Тактика — свиток с планом боя. */
+const TACTICS = `
+  <path d="M5 4.5h11.5a2.5 2.5 0 0 1 2.5 2.5v12.5H7.5A2.5 2.5 0 0 1 5 17z" fill="#f4e6c3" stroke="#6b4f1d" stroke-width="1.2" stroke-linejoin="round"/>
+  <path d="M5 17a2.5 2.5 0 0 0 2.5 2.5h11" stroke="#6b4f1d" stroke-width="1.2" fill="none"/>
+  <path d="M8.5 8.5l2.5 2.5M11 8.5l-2.5 2.5" stroke="#c0392b" stroke-width="1.4" stroke-linecap="round"/>
+  <path d="M10.5 15.5q3-0.5 4.5-4.5" stroke="#2a2a26" stroke-width="1.1" stroke-dasharray="1.4 1.1" fill="none"/>
+  <path d="M15.8 9.6l-0.9 1.9-1.6-1.3" stroke="#2a2a26" stroke-width="1.1" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`;
+
+const BODY: Record<IconName, string> = { food: WHEAT, farm: WHEAT, wood: LOG, gold: COIN, sawmill: SAW, mine: PICK, fishery: FISH, clock: CLOCK, tactics: TACTICS };
 
 /** SVG-разметка значка для HTML. */
 export const iconSvg = (name: IconName, size = 18): string =>

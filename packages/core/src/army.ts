@@ -73,7 +73,7 @@ export type BattleEnd = 'mate' | 'resign' | 'stalemate' | 'repetition' | 'fifty'
 
 /** Что вернул движок: как закончилась партия и что стоит на доске (без королей). Атакующий — белые. */
 /** mateWinner — победитель при мате или сдаче соперника. */
-export type BattleReport = { end: BattleEnd; mateWinner?: 'white' | 'black'; white: Army; black: Army };
+export type BattleReport = { end: BattleEnd; mateWinner?: 'white' | 'black'; white: Army; black: Army; promoted?: { white: Army; black: Army } };
 
 export type BattleOutcome = { winner: 'attacker' | 'defender' | null; note: string };
 
@@ -116,17 +116,29 @@ export const judge = (r: BattleReport, drawRule: 'repel' | 'material' = 'repel')
   return { winner: null, note: 'draw: the attack is repelled' };
 };
 
-/** Какие фигуры вернутся на карту. Уцелевшие фигуры, с которыми генерал вошёл в бой, возвращаются всегда.
- *  Лишние фигуры (из превращённых пешек) остаются, только если казарма умеет их нанимать. */
-export const returning = (s: GameState, owner: string, onBoard: Army, before: Army): Army => {
-  const p = s.players[owner];
-  if (!p) return { ...onBoard }; // нейтралы: казармы нет, уцелевшие остаются
+/** Сколько пешек каждой стороны превратилось и в какие фигуры — по ходам партии (белые ходят первыми). */
+export const promotions = (moves: string[]): { white: Army; black: Army } => {
+  const white = emptyArmy(), black = emptyArmy();
+  moves.forEach((m, i) => {
+    const to = m[4] as Piece | undefined;
+    if (to && PIECES.includes(to)) (i % 2 ? black : white)[to]++;
+  });
+  return { white, black };
+};
+
+/** Какие фигуры вернутся на карту. Уцелевшие фигуры, с которыми генерал вошёл в бой, возвращаются.
+ *  Превращённые пешки снова становятся пешками. Если неясно, какая из одинаковых фигур уцелела,
+ *  считаем, что уцелела превращённая. Без списка превращений лишние фигуры считаются превращёнными. */
+export const returning = (_s: GameState, _owner: string, onBoard: Army, before: Army, promoted?: Army): Army => {
   const kept = emptyArmy();
+  let pawns = onBoard.p;
   for (const piece of PIECES) {
-    const own = Math.min(onBoard[piece], before[piece]);
-    const promoted = onBoard[piece] - own;
-    kept[piece] = own + (p.barracks >= HIRE_LEVEL[piece] ? promoted : 0);
+    if (piece === 'p') continue;
+    const promo = promoted ? promoted[piece] : Math.max(0, onBoard[piece] - before[piece]);
+    kept[piece] = Math.min(before[piece], Math.max(0, onBoard[piece] - promo));
+    pawns += onBoard[piece] - kept[piece];
   }
+  kept.p = Math.min(before.p, pawns);
   return kept;
 };
 
@@ -136,8 +148,8 @@ export const applyBattle = (s: GameState, attackerId: string, defenderId: string
   const att = s.generals[attackerId];
   const def = s.generals[defenderId];
   const out = judge(report, 'repel');
-  att.army = out.winner === 'defender' ? emptyArmy() : returning(s, att.owner, report.white, att.army);
-  def.army = out.winner === 'attacker' ? emptyArmy() : returning(s, def.owner, report.black, def.army);
+  att.army = out.winner === 'defender' ? emptyArmy() : returning(s, att.owner, report.white, att.army, report.promoted?.white);
+  def.army = out.winner === 'attacker' ? emptyArmy() : returning(s, def.owner, report.black, def.army, report.promoted?.black);
   att.attacked = true;
   att.moveLeft = 0;
   const winner = out.winner === 'attacker' ? att : out.winner === 'defender' ? def : null;

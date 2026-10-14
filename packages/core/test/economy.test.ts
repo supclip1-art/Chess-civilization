@@ -175,3 +175,30 @@ test('бонусы новых наций работают', async () => {
   assert.equal(maxLevelAt(pe, 'p1', cell, 'farm'), 3);
   assert.equal(maxLevelAt(g('france'), 'p1', cell, 'farm'), 0);
 });
+
+test('очередь строек: оплата сразу, старт, когда освободится строитель; отмена возвращает ресурсы', async () => {
+  const { enqueue, cancelQueued, completeJobs, upgradeBarracks, europeMap } = await import('../src/index.ts');
+  const s = newGame(europeMap(), [{ nation: 'russia' }, { nation: 'poland' }], { elo: 1200, seed: 4 });
+  const p = s.players.p1;
+  p.res = { wood: 1000, food: 1000, gold: 1000 };
+  assert.ok(upgradeBarracks(s, 'p1').ok); // единственный строитель занят
+  const farmCell = Object.values(s.cells).find((c) => c.owner === 'p1' && c.terrain === 'field' && !Object.values(s.halls).some((h) => h.hex.q === c.hex.q && h.hex.r === c.hex.r))!;
+  assert.equal(build(s, 'p1', farmCell.hex, 'farm').ok, false); // нет строителя
+  const wood = p.res.wood;
+  assert.ok(enqueue(s, 'p1', { kind: 'build', hex: farmCell.hex, building: 'farm' }).ok);
+  assert.ok(p.res.wood < wood, 'оплачено сразу');
+  assert.equal(p.queue!.length, 1);
+  assert.equal(enqueue(s, 'p1', { kind: 'build', hex: farmCell.hex, building: 'farm' }).ok, false); // клетка уже занята
+  assert.ok(enqueue(s, 'p1', { kind: 'tavern' }).ok);
+  assert.equal(enqueue(s, 'p1', { kind: 'tavern' }).ok, false); // повтор
+  // казарма строится 1 ход — потом стартует первая стройка из очереди
+  s.turn = p.jobs[0].finish;
+  completeJobs(s, 'p1');
+  assert.equal(p.barracks, 1);
+  assert.equal(p.queue!.length, 1);
+  assert.equal(p.jobs[0].kind, 'resource');
+  const w2 = p.res.wood;
+  assert.ok(cancelQueued(s, 'p1', 0).ok);
+  assert.ok(p.res.wood > w2);
+  assert.equal(p.queue!.length, 0);
+});

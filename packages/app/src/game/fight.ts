@@ -1,5 +1,6 @@
 // Экран боя: ручная партия игрока против генерала-соперника и просмотр сыгранной партии (реплей).
 
+import { pieceHtml } from './pieces.ts';
 import { MAX_PLIES, battleFen, repertoireFor, type GameState } from '../../../core/src/index.ts';
 import { tap } from '../tg.ts';
 import { type BattleRecord, type HumanAction, type Turn, runBattle } from './battle.ts';
@@ -81,7 +82,7 @@ export const playManual = (
   const promote = (white: boolean): Promise<string> => new Promise((resolve) => {
     const box = el.querySelector<HTMLElement>('#promo')!;
     box.innerHTML = `<p>Promote the pawn to</p><div>${['q', 'r', 'b', 'n'].map((p) =>
-      `<button data-p="${p}" class="pc ${white ? 'w' : 'b'}">${{ q: '♛', r: '♜', b: '♝', n: '♞' }[p]}︎</button>`).join('')}</div>`;
+      `<button data-p="${p}">${pieceHtml(white, p)}</button>`).join('')}</div>`;
     box.hidden = false;
     box.onclick = (e) => {
       const b = (e.target as HTMLElement).closest<HTMLButtonElement>('button[data-p]');
