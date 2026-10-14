@@ -4,7 +4,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
-  PIECES, PIECE_PRICE, RESOURCE_COST, RESOURCE_OUTPUT, HIRE_LEVEL, BUILDING_TERRAIN, armyValue, build, endTurn,
+  ARMY_UPKEEP_RATE, PIECES, PIECE_PRICE, RESOURCE_COST, RESOURCE_OUTPUT, HIRE_LEVEL, BUILDING_TERRAIN, armyValue, build, endTurn,
   freeBuilders, hireBuilder, hirePiece, income, newGame, playerGenerals, playerHalls, upgrade, upgradeBarracks,
   upgradeTownHall, upkeep, type GameState, type Piece, type ResourceBuilding,
 } from '../src/index.ts';
@@ -49,7 +49,7 @@ const botTurn = (s: GameState, pid: string) => {
   }
   // армия: по порядку пешки → кони → слоны → ладьи → ферзь, если еда тянет содержание
   for (const piece of PIECES) {
-    while (g.army[piece] < TARGET[piece] && income(s, pid).food >= upkeep(s, pid) + PIECE_PRICE[piece] * 0.1) {
+    while (g.army[piece] < TARGET[piece] && income(s, pid).food >= upkeep(s, pid) + PIECE_PRICE[piece] * ARMY_UPKEEP_RATE) {
       if (!hirePiece(s, pid, g.id, piece).ok) break;
     }
   }
@@ -71,4 +71,5 @@ test('темп развития дома на настоящих правила�
   console.log('вехи:', marks, '| ресурсы на 40-м ходу:', s.players.p1.res, '| голод:', famine);
   assert.ok(!famine, 'бот не должен голодать');
   assert.ok(marks.half && marks.half <= 30, 'половина армии к 30-му ходу');
+  assert.ok(marks.full && marks.full >= 30 && marks.full <= 40, 'полная армия на 30–40-м ходу');
 });

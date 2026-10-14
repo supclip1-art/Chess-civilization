@@ -41,7 +41,7 @@ export const hireGeneral = (s: GameState, pid: string): Result => {
   const gold = Math.max(0, GENERAL_HIRE_GOLD[(count + 1) as 2 | 3 | 4 | 5] - (mods(s, pid).generalHireDiscount ?? 0));
   if (p.res.gold < gold) return no('not enough gold');
   const capital = playerHalls(s, pid).sort((a, b) => a.order - b.order)[0];
-  if (!capital) return no('no town hall');
+  if (!capital) return no('no city');
   p.res.gold -= gold;
   const g = makeGeneral(s, pid, { ...capital.hex }, recruitElo(s, pid), emptyArmy(), 'General');
   say(s, `new general hired (ELO ${g.elo}, ${g.white})`, pid);

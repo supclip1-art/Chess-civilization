@@ -41,7 +41,7 @@ test('генералы: таверна задаёт число, Турция н�
   assert.equal(hireGeneral(s, 'p2').ok, false, 'без таверны только стартовый');
   s.players.p2.tavern = 1;
   assert.equal(hireGeneral(s, 'p2').ok, true);
-  assert.equal(s.players.p2.res.gold, 100 - (10 - 5));
+  assert.equal(s.players.p2.res.gold, 100 - (4 - 2));
 });
 
 test('исход боя: мат, материал на лимите, ничья отбивает атаку', () => {

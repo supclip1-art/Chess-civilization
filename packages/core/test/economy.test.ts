@@ -42,9 +42,9 @@ test('ферма строится только на поле, за ход, од�
   assert.equal(income(s, 'p1').food, 2);
 });
 
-test('стартовая армия ест 2 еды — ровно одна ферма', () => {
+test('стартовая армия ест 1,75 еды — хватает одной фермы', () => {
   const s = game();
-  assert.equal(upkeep(s, 'p1'), 2);
+  assert.equal(upkeep(s, 'p1'), 1.75);
 });
 
 test('время улучшений растёт с уровнем; Германия строит ур.4–5 на ход быстрее', () => {
@@ -84,7 +84,7 @@ test('Франция нанимает строителей бесплатно', 
   assert.equal(s.players.p1.res.food, food);
 });
 
-test('основание ратуши на ничейной земле, Россия — дешевле и за 1 ход', () => {
+test('основание города на ничейной земле, Россия — дешевле и за 1 ход', () => {
   for (const [nation, turns, wood] of [['germany', 2, 10], ['russia', 1, 7]] as const) {
     const s = newGame(testMap(), [{ nation }, { nation: 'spain' }], { elo: 1200, seed: 1 });
     const g = Object.values(s.generals).find((x) => x.owner === 'p1')!;
@@ -94,7 +94,14 @@ test('основание ратуши на ничейной земле, Росс
     assert.equal(20 - s.players.p1.res.wood, wood, nation);
     for (let i = 0; i < turns; i++) round(s);
     assert.equal(playerHalls(s, 'p1').length, 2, nation);
+    const names = playerHalls(s, 'p1').sort((a, b) => a.order - b.order).map((h) => h.name);
+    assert.deepEqual(names, nation === 'russia' ? ['Moscow', 'Saint Petersburg'] : ['Berlin', 'Hamburg']);
   }
+  // у всех городов на карте разные названия
+  const s = newGame(testMap(), [{ nation: 'turkey' }, { nation: 'spain' }], { elo: 1200, seed: 3 });
+  const all = Object.values(s.halls).map((h) => h.name);
+  assert.equal(new Set(all).size, all.length);
+  assert.ok(all.includes('Istanbul') && all.includes('Madrid'));
 });
 
 test('порядок дезертирства при голоде сохраняет правило строя', () => {

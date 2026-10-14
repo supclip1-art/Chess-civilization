@@ -4,6 +4,7 @@ import { applyBattle, type BattleOutcome, type BattleReport } from './army.ts';
 import { ARMY_MOVE, FOG_RADIUS, SIEGE_TURNS } from './config.ts';
 import { type Result, armyValue, playerHalls } from './economy.ts';
 import { type Hex, distance, key, neighbors, range } from './hex.ts';
+import { NATIONS } from './nations.ts';
 import { type GameState, type General, type TownHall, PASSABLE, recomputeTerritory, say } from './state.ts';
 
 const no = (reason: string): Result => ({ ok: false, reason });
@@ -87,7 +88,7 @@ export const attack = (s: GameState, gid: string, target: Hex): AttackStart => {
   if (h && h.owner !== g.owner) {
     h.siege = { by: gid, since: s.turn };
     g.attacked = true;
-    say(s, `siege of a town hall begins`, g.owner);
+    say(s, `siege of ${h.name} begins`, g.owner);
     return { kind: 'siege', hall: h.id };
   }
   return { kind: 'error', reason: 'nothing to attack here' };
@@ -146,11 +147,11 @@ export const capture = (s: GameState, hallId: string, newOwner: string): void =>
     for (const g of Object.values(s.generals)) if (g.owner === old) delete s.generals[g.id];
   }
   recomputeTerritory(s);
-  say(s, `a town hall is captured`, newOwner);
+  say(s, `${h.name} is captured`, newOwner);
   if (oldPlayer && playerHalls(s, old).length === 0) {
     oldPlayer.alive = false;
     for (const g of Object.values(s.generals)) if (g.owner === old) delete s.generals[g.id];
-    say(s, `${old} is out of the game`, newOwner);
+    say(s, `${NATIONS[oldPlayer.nation].name} is out of the game`, newOwner);
   }
 };
 

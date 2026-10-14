@@ -10,7 +10,7 @@ import {
 import { type Hex, key } from './hex.ts';
 import { NATIONS, type Mods } from './nations.ts';
 import {
-  BUILDING_TERRAIN, PASSABLE, type Army, type GameState, type General, type Player, newId, recomputeTerritory, say,
+  BUILDING_TERRAIN, PASSABLE, type Army, type GameState, type General, type Player, cityName, newId, recomputeTerritory, say,
 } from './state.ts';
 
 export type Result = { ok: true } | { ok: false; reason: string };
@@ -45,7 +45,7 @@ export const maxBuilders = (s: GameState, pid: string): number =>
 export const hireBuilder = (s: GameState, pid: string): Result => {
   const p = s.players[pid];
   const n = p.builders + 1;
-  if (n > maxBuilders(s, pid)) return no('upgrade your town hall first');
+  if (n > maxBuilders(s, pid)) return no('upgrade your city first');
   const food = mods(s, pid).freeBuilderHire ? 0 : BUILDER_HIRE_FOOD[n as 2 | 3];
   if (p.res.food < food) return no('not enough food');
   p.res.food -= food;
@@ -101,7 +101,7 @@ export const upgrade = (s: GameState, pid: string, hex: Hex): Result => {
 export const upgradeTownHall = (s: GameState, pid: string, hallId: string): Result => {
   const p = s.players[pid];
   const h = s.halls[hallId];
-  if (!h || h.owner !== pid) return no('not your town hall');
+  if (!h || h.owner !== pid) return no('not your city');
   if (h.level >= TOWN_HALL_MAX_LEVEL) return no('already at the top level');
   if (p.jobs.some((j) => j.kind === 'townhall' && j.hallId === hallId)) return no('already being upgraded');
   if (freeBuilders(p) < 1) return no('no free builder');
@@ -121,7 +121,7 @@ export const foundTownHall = (s: GameState, pid: string, generalId: string): Res
   const c = s.cells[key(g.hex)];
   if (!c || !PASSABLE[c.terrain]) return no('you cannot build here');
   if (c.owner) return no('this land already belongs to someone');
-  if (p.jobs.some((j) => j.kind === 'found' && key(j.hex) === key(g.hex))) return no('a town hall is already being founded here');
+  if (p.jobs.some((j) => j.kind === 'found' && key(j.hex) === key(g.hex))) return no('a city is already being founded here');
   const m = mods(s, pid);
   const cost = scale(TOWN_HALL_FOUND.cost, m.townHallFoundCostMult ?? 1);
   if (!canAfford(p.res, cost)) return no('not enough resources');
@@ -251,9 +251,10 @@ export const completeJobs = (s: GameState, pid: string): void => {
       const c = s.cells[key(j.hex)];
       if (c && !c.owner) {
         const id = newId(s, 'h');
-        s.halls[id] = { id, hex: j.hex, owner: pid, level: 1, order: s.nextId };
+        const name = cityName(s, pid);
+        s.halls[id] = { id, name, hex: j.hex, owner: pid, level: 1, order: s.nextId };
         recomputeTerritory(s);
-        say(s, 'a new town hall is founded', pid);
+        say(s, `${name} is founded`, pid);
       }
     } else if (j.kind === 'barracks') p.barracks = j.level;
     else if (j.kind === 'tavern') p.tavern = j.level;

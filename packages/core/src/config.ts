@@ -22,7 +22,7 @@ export const RESOURCE_COST: Record<ResourceBuilding, readonly Res[]> = {
 export const RESOURCE_OUTPUT: Record<ResourceBuilding, readonly number[]> = {
   farm: [2, 3, 5, 7, 10],
   sawmill: [2, 3, 5, 7, 10],
-  mine: [1, 2, 3, 4, 6],
+  mine: [1, 1, 2, 2, 3],
 };
 
 export const RESOURCE_OF: Record<ResourceBuilding, keyof Res> = { farm: 'food', sawmill: 'wood', mine: 'gold' };
@@ -55,14 +55,14 @@ export const BARRACKS: Record<1 | 2 | 3 | 4 | 5, { cost: Res; turns: number }> =
 };
 /** С какого уровня казармы фигуру можно нанять и вернуть на карту после боя. */
 export const HIRE_LEVEL: Record<Piece, number> = { p: 1, n: 2, b: 3, r: 4, q: 5 };
-/** Цена фигур в золоте. */
-export const PIECE_PRICE: Record<Piece, number> = { p: 3, n: 8, b: 8, r: 13, q: 25 };
+/** Цена фигур в золоте = шахматная ценность: пешка 1, конь и слон 3, ладья 5, ферзь 9. */
+export const PIECE_PRICE: Record<Piece, number> = { p: 1, n: 3, b: 3, r: 5, q: 9 };
 /** Шахматная ценность для подсчёта материала на 150-м полуходе. */
 export const PIECE_VALUE: Record<Piece, number> = { p: 1, n: 3, b: 3, r: 5, q: 9 };
 /** Правило строя: сколько пешек нужно в армии, чтобы держать фигуру. */
 export const PAWNS_REQUIRED: Record<Piece, number> = { p: 0, n: 4, b: 6, r: 8, q: 8 };
-/** Содержание армии: доля её золотой стоимости в еде за ход. */
-export const ARMY_UPKEEP_RATE = 0.1;
+/** Содержание армии: еды за ход на единицу её стоимости (полная армия 39 → ~9,75 еды). */
+export const ARMY_UPKEEP_RATE = 0.25;
 export const STARTING_ARMY: Record<Piece, number> = { p: 4, n: 1, b: 0, r: 0, q: 0 };
 
 // ---- Таверна и генералы ----
@@ -74,18 +74,18 @@ export const TAVERN: Record<1 | 2 | 3 | 4, { cost: Res; turns: number }> = {
 };
 /** Таверна ур. N позволяет держать N+1 генералов. */
 export const MAX_GENERALS = 5;
-export const GENERAL_HIRE_GOLD: Record<2 | 3 | 4 | 5, number> = { 2: 10, 3: 15, 4: 20, 5: 25 };
+export const GENERAL_HIRE_GOLD: Record<2 | 3 | 4 | 5, number> = { 2: 4, 3: 6, 4: 7, 5: 9 };
 export const GENERAL_UPKEEP_FOOD = 1; // за каждого нанятого, стартовый бесплатный
 export const ELO_PER_WIN = 15;
 export const MAX_STARS = 5;
 
 // ---- Ветка «Тактика»: +25 ELO генералам, нанятым после исследования ----
 export const RESEARCH: readonly { cost: Res; turns: number }[] = [
-  { cost: res(3, 0, 2), turns: 1 },
-  { cost: res(4, 0, 3), turns: 1 },
-  { cost: res(5, 0, 4), turns: 2 },
-  { cost: res(6, 0, 5), turns: 2 },
-  { cost: res(7, 0, 6), turns: 2 },
+  { cost: res(3, 0, 1), turns: 1 },
+  { cost: res(4, 0, 1), turns: 1 },
+  { cost: res(5, 0, 2), turns: 2 },
+  { cost: res(6, 0, 2), turns: 2 },
+  { cost: res(7, 0, 2), turns: 2 },
 ];
 export const ELO_PER_RESEARCH = 25;
 

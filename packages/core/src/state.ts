@@ -3,7 +3,7 @@
 
 import { STARTING_ARMY, START_RESOURCES, TOWN_HALL_RADIUS, type Piece, type Res, type ResourceBuilding } from './config.ts';
 import { type Hex, key, range } from './hex.ts';
-import { type Aggression, type NationId } from './nations.ts';
+import { NATIONS, NEUTRAL_CITIES, type Aggression, type NationId } from './nations.ts';
 import { type Rng, int } from './rng.ts';
 
 export type Terrain = 'field' | 'forest' | 'deposit' | 'tundra' | 'desert' | 'mountain' | 'water';
@@ -25,12 +25,14 @@ export type Cell = {
   reserved?: boolean; // здесь идёт постройка нового здания
 };
 
+/** Город (в коде — hall): центр территории. Название даётся при основании и сохраняется при захвате. */
 export type TownHall = {
   id: string;
+  name: string;
   hex: Hex;
   owner: string;
   level: number;
-  order: number; // порядок основания: при спорной клетке её держит более ранняя ратуша
+  order: number; // порядок основания: при спорной клетке её держит более ранний город
   siege?: { by: string; since: number }; // id осаждающего генерала и ход начала осады
 };
 
@@ -142,8 +144,19 @@ export const makeGeneral = (s: GameState, owner: string, hex: Hex, elo: number, 
   return g;
 };
 
+/** Название для нового города: следующее свободное из списка нации (у нейтралов — случайное из общего списка).
+ *  Когда список кончился — «Новый …» с номером. */
+export const cityName = (s: GameState, owner: string): string => {
+  const used = new Set(Object.values(s.halls).map((h) => h.name));
+  const p = s.players[owner];
+  const list = p ? NATIONS[p.nation].cities : NEUTRAL_CITIES;
+  const free = list.filter((n) => !used.has(n));
+  if (free.length) return p ? free[0] : free[int(s.rng, 0, free.length - 1)];
+  for (let k = 2; ; k++) for (const n of list) if (!used.has(`${n} ${k}`)) return `${n} ${k}`;
+};
+
 const addHall = (s: GameState, owner: string, hex: Hex, level: number): TownHall => {
-  const h: TownHall = { id: newId(s, 'h'), hex, owner, level, order: s.nextId };
+  const h: TownHall = { id: newId(s, 'h'), name: cityName(s, owner), hex, owner, level, order: s.nextId };
   s.halls[h.id] = h;
   return h;
 };

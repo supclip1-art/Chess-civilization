@@ -177,6 +177,28 @@ export class MapView {
       const { x, y } = this.toPixel(cell.hex);
       this.hexPath(x, y, S + 0.6); c.fillStyle = 'rgba(28,30,34,0.62)'; c.fill();
     }
+    // 7. названия городов, как в «Цивилизации»: плашка цвета владельца над городом
+    if (S >= 12) {
+      for (const hall of Object.values(s.halls)) {
+        if (!visible(key(hall.hex))) continue;
+        const { x, y } = this.toPixel(hall.hex);
+        this.cityLabel(x, y - S * 0.86, S, hall.name ?? 'City', ownerColor(s, hall.owner)!);
+      }
+    }
+  }
+
+  private cityLabel(x: number, y: number, S: number, name: string, color: string): void {
+    const c = this.ctx;
+    c.save();
+    c.font = `600 ${Math.max(10, Math.round(S * 0.36))}px system-ui, sans-serif`;
+    const w = c.measureText(name).width + S * 0.4;
+    const h = Math.max(13, S * 0.5);
+    c.beginPath(); c.roundRect(x - w / 2, y - h / 2, w, h, h / 2);
+    c.fillStyle = color; c.fill();
+    c.strokeStyle = 'rgba(0,0,0,0.35)'; c.lineWidth = 1; c.stroke();
+    c.fillStyle = '#ffffff'; c.textAlign = 'center'; c.textBaseline = 'middle';
+    c.fillText(name, x, y + 0.5);
+    c.restore();
   }
 
   private terrainMark(t: Terrain, x: number, y: number, S: number): void {

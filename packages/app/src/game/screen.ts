@@ -104,7 +104,7 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
     } else if (sel.gid && sel.target === 'attack') {
       const hall = Object.values(s.halls).some((h) => key(h.hex) === k);
       const army = Object.values(s.generals).some((g) => key(g.hex) === k && g.owner !== ME && g.army.p + g.army.n + g.army.b + g.army.r + g.army.q > 0);
-      parts.push(`<div class="acts">${btn('attack', army ? 'Attack this army' : 'Besiege the town hall', army ? 'a chess battle, you play White' : 'it falls in one turn unless reinforced')}</div>`);
+      parts.push(`<div class="acts">${btn('attack', army ? 'Attack this army' : `Besiege ${esc(Object.values(s.halls).find((h) => key(h.hex) === k)?.name ?? 'the city')}`, army ? 'a chess battle, you play White' : 'it falls in one turn unless reinforced')}</div>`);
     }
     if (!seen) { el.innerHTML = parts.join(''); return; }
 
@@ -124,7 +124,7 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
         if (!cell.owner && cell.terrain !== 'water' && cell.terrain !== 'mountain') {
           const m = NATIONS[p.nation].mods;
           const c = { wood: Math.ceil(TOWN_HALL_FOUND.cost.wood * (m.townHallFoundCostMult ?? 1)), food: Math.ceil(TOWN_HALL_FOUND.cost.food * (m.townHallFoundCostMult ?? 1)), gold: 0 };
-          html += `<div class="acts">${btn(`found:${g.id}`, 'Found a town hall', `${cost(c)} · ${m.townHallFoundTurns ?? TOWN_HALL_FOUND.turns} turn${(m.townHallFoundTurns ?? TOWN_HALL_FOUND.turns) > 1 ? 's' : ''}`, !g.attacked)}</div>`;
+          html += `<div class="acts">${btn(`found:${g.id}`, 'Found a city', `${cost(c)} · ${m.townHallFoundTurns ?? TOWN_HALL_FOUND.turns} turn${(m.townHallFoundTurns ?? TOWN_HALL_FOUND.turns) > 1 ? 's' : ''}`, !g.attacked)}</div>`;
         }
       }
       parts.push(html + '</div>');
@@ -133,7 +133,7 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
     // ратуша
     const hall = Object.values(s.halls).find((h) => key(h.hex) === k);
     if (hall && hall.owner === ME) {
-      const jobs = p.jobs.map((j) => `${j.kind === 'resource' ? BUILDING_NAME[j.building] : j.kind === 'found' ? 'New town hall' : j.kind[0].toUpperCase() + j.kind.slice(1)} → ${j.kind === 'found' ? '' : `level ${j.level}`} (ready turn ${j.finish})`);
+      const jobs = p.jobs.map((j) => `${j.kind === 'resource' ? BUILDING_NAME[j.building] : j.kind === 'found' ? 'New city' : j.kind === 'townhall' ? (s.halls[j.hallId]?.name ?? 'City') : j.kind[0].toUpperCase() + j.kind.slice(1)} → ${j.kind === 'found' ? '' : `level ${j.level}`} (ready turn ${j.finish})`);
       const thUp = hall.level < 3 ? TOWN_HALL_UPGRADE[(hall.level + 1) as 2 | 3] : null;
       const nb = p.builders + 1;
       const barNext = p.barracks < 5 ? BARRACKS[(p.barracks + 1) as 1 | 2 | 3 | 4 | 5] : null;
@@ -141,9 +141,9 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
       const res = p.research.done < RESEARCH.length ? RESEARCH[p.research.done] : null;
       const gCount = playerGenerals(s, ME).length;
       const gCost = gCount < 5 ? Math.max(0, GENERAL_HIRE_GOLD[(gCount + 1) as 2 | 3 | 4 | 5] - (NATIONS[p.nation].mods.generalHireDiscount ?? 0)) : 0;
-      parts.push(`<div class="card"><div class="row"><b>Town hall · level ${hall.level}</b><span class="muted">builders ${freeBuilders(p)}/${p.builders} free</span></div>
+      parts.push(`<div class="card"><div class="row"><b>${esc(hall.name)} · level ${hall.level}</b><span class="muted">builders ${freeBuilders(p)}/${p.builders} free</span></div>
         <div class="acts">
-          ${thUp ? btn(`th:${hall.id}`, `Town hall → ${hall.level + 1}`, `${cost(thUp.cost)} · ${thUp.turns} turn · +1 builder slot, wider land`) : ''}
+          ${thUp ? btn(`th:${hall.id}`, `City → ${hall.level + 1}`, `${cost(thUp.cost)} · ${thUp.turns} turn · +1 builder slot, wider land`) : ''}
           ${nb <= maxBuilders(s, ME) ? btn('builder', `Hire builder ${nb}`, `${NATIONS[p.nation].mods.freeBuilderHire ? 'free' : `${BUILDER_HIRE_FOOD[nb as 2 | 3]} food`} · eats 1 food/turn`) : ''}
           ${barNext ? btn('barracks', p.barracks ? `Barracks → ${p.barracks + 1}` : 'Build barracks', `${cost(barNext.cost)} · ${barNext.turns} turn${barNext.turns > 1 ? 's' : ''} · unlocks ${PIECE_NAME[PIECES[p.barracks]].toLowerCase()}s`) : ''}
           ${tavNext ? btn('tavern', p.tavern ? `Tavern → ${p.tavern + 1}` : 'Build tavern', `${cost(tavNext.cost)} · ${tavNext.turns} turn${tavNext.turns > 1 ? 's' : ''} · ${p.tavern + 2} generals`) : ''}
@@ -153,7 +153,7 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
         <p class="muted">Barracks ${p.barracks} · Tavern ${p.tavern} · Tactics ${p.research.done}/5${p.research.active ? ' (researching)' : ''}</p>
         ${jobs.length ? `<p class="muted">In progress: ${jobs.map(esc).join('; ')}</p>` : ''}</div>`);
     } else if (hall) {
-      parts.push(`<div class="card"><b>Town hall · level ${hall.level}</b><p class="muted">${esc(ownerName(s, hall.owner))}${hall.siege ? ' · under siege' : ''}</p></div>`);
+      parts.push(`<div class="card"><b>${esc(hall.name)} · city level ${hall.level}</b><p class="muted">${esc(ownerName(s, hall.owner))}${hall.siege ? ' · under siege' : ''}</p></div>`);
     }
 
     // ресурсное здание
@@ -246,7 +246,7 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
 
   const checkEnd = () => {
     const w = winner(s);
-    if (!s.players[ME].alive) modal(`<h2>Defeat</h2><p>Your last town hall has fallen.</p><div class="acts">${btn('exit', 'Back to menu', '')}</div>`);
+    if (!s.players[ME].alive) modal(`<h2>Defeat</h2><p>Your last city has fallen.</p><div class="acts">${btn('exit', 'Back to menu', '')}</div>`);
     else if (w === ME) modal(`<h2>Victory</h2><p>You are the last nation standing on turn ${s.turn}.</p><div class="acts">${btn('exit', 'Back to menu', '')}</div>`);
     else return;
     app.querySelector('#dialog')!.addEventListener('click', exit, { once: true });
@@ -300,7 +300,7 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
     if (r.kind === 'battle') { startBattle(r.attacker, r.defender); return; }
     if (r.kind === 'siege') {
       saveGame(s);
-      toast('Siege begins: the town hall falls at the start of your next turn unless reinforcements arrive.');
+      toast('Siege begins: the city falls at the start of your next turn unless reinforcements arrive.');
       sel = { hex: s.generals[gid].hex, gid };
       refresh();
       return;

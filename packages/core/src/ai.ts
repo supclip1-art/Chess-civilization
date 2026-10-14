@@ -2,7 +2,7 @@
 // Каждый ход: ратуша 2 после двух ферм, строители, казарма под следующую фигуру,
 // жадная стройка по выгоде на единицу цены, найм фигур к полной армии, «Тактика» на остаток золота.
 
-import { PIECES, PIECE_PRICE, HIRE_LEVEL, RESOURCE_COST, RESOURCE_OUTPUT, type Piece, type ResourceBuilding } from './config.ts';
+import { ARMY_UPKEEP_RATE, PIECES, PIECE_PRICE, HIRE_LEVEL, RESOURCE_COST, RESOURCE_OUTPUT, type Piece, type ResourceBuilding } from './config.ts';
 import { hirePiece } from './army.ts';
 import {
   build, freeBuilders, hireBuilder, income, playerGenerals, playerHalls, startResearch, upgrade, upgradeBarracks,
@@ -51,10 +51,10 @@ export const aiEconomyTurn = (s: GameState, pid: string): void => {
   }
   if (g) {
     for (const piece of PIECES) {
-      while (g.army[piece] < FULL_ARMY[piece] && income(s, pid).food >= upkeep(s, pid) + PIECE_PRICE[piece] * 0.1) {
+      while (g.army[piece] < FULL_ARMY[piece] && income(s, pid).food >= upkeep(s, pid) + PIECE_PRICE[piece] * ARMY_UPKEEP_RATE) {
         if (!hirePiece(s, pid, g.id, piece).ok) break;
       }
     }
   }
-  if (p.res.gold >= 12) startResearch(s, pid);
+  if (p.res.gold >= 5) startResearch(s, pid);
 };

@@ -1,6 +1,6 @@
 // Автосохранение партии в хранилище устройства (localStorage). Сервер с копиями — позже.
 
-import { type GameState } from '../../../core/src/index.ts';
+import { type GameState, cityName } from '../../../core/src/index.ts';
 
 const KEY = 'chessciv.save.v1';
 
@@ -11,7 +11,11 @@ export const saveGame = (s: GameState): void => {
 export const loadGame = (): GameState | null => {
   try {
     const raw = localStorage.getItem(KEY);
-    return raw ? (JSON.parse(raw) as GameState) : null;
+    if (!raw) return null;
+    const s = JSON.parse(raw) as GameState;
+    // сохранения до появления названий городов
+    for (const h of Object.values(s.halls).sort((a, b) => a.order - b.order)) h.name ??= cityName(s, h.owner);
+    return s;
   } catch { return null; }
 };
 
