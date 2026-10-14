@@ -67,6 +67,15 @@ test('нет матующего материала — ничья сразу, д
   assert.equal(judge({ end: 'limit', white: army({ b: 1 }), black: army({ n: 1 }) }).winner, null);
 });
 
+test('на лимите материал решает, только если сторона с перевесом может поставить мат', () => {
+  // конь против пешки: 3:1, но конь мат не поставит — ничья
+  assert.equal(judge({ end: 'limit', white: army({ n: 1 }), black: army({ p: 1 }) }).winner, null);
+  // ладья против пешки: 5:1, ладья может — победа
+  assert.equal(judge({ end: 'limit', white: army({ r: 1 }), black: army({ p: 1 }) }).winner, 'attacker');
+  // слон и конь против двух пешек: 6:2 — победа
+  assert.equal(judge({ end: 'limit', white: army({ p: 2 }), black: army({ b: 1, n: 1 }) }).winner, 'defender');
+});
+
 test('фигуры на доске по FEN', () => {
   assert.deepEqual(armiesFromFen('8/8/8/3k2K1/6N1/4n3/8/8 w - - 48 76'), { white: army({ n: 1 }), black: army({ n: 1 }) });
   assert.deepEqual(armiesFromFen('1n2k3/2pppp2/8/8/8/8/2PPPP2/1N2K3 w - - 0 1'), { white: army({ p: 4, n: 1 }), black: army({ p: 4, n: 1 }) });

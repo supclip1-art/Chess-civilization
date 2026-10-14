@@ -105,7 +105,10 @@ export const judge = (r: BattleReport, drawRule: 'repel' | 'material' = 'repel')
   }
   const mw = material(r.white), mb = material(r.black);
   if (r.end === 'limit' || drawRule === 'material') {
-    if (mw !== mb) return { winner: mw > mb ? 'attacker' : 'defender', note: `по материалу ${mw}:${mb}` };
+    // по материалу побеждает только сторона, которая сама способна поставить мат
+    const ahead = mw > mb ? r.white : r.black;
+    if (mw !== mb && canForceMate(ahead)) return { winner: mw > mb ? 'attacker' : 'defender', note: `по материалу ${mw}:${mb}` };
+    if (mw !== mb) return { winner: null, note: `ничья — у стороны с перевесом ${Math.max(mw, mb)}:${Math.min(mw, mb)} нет матующего материала` };
   }
   return { winner: null, note: 'ничья — атака отбита' };
 };
