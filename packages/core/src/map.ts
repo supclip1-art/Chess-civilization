@@ -102,21 +102,10 @@ export const resolveBattle = (s: GameState, attackerId: string, defenderId: stri
   const out = applyBattle(s, attackerId, defenderId, report);
   if (out.winner !== 'attacker') return out;
   const h = hallAt(s, defHex);
-  if (s.neutrals[def.owner]) {
-    delete s.generals[def.id];
-    if (h) { capture(s, h.id, att.owner); att.hex = { ...defHex }; }
-    return out;
-  }
-  retreat(s, def.id);
-  if (h && h.owner !== att.owner) h.siege = { by: att.id, since: s.turn };
+  if (!h || h.owner === att.owner) return out;
+  if (s.neutrals[def.owner]) { capture(s, h.id, att.owner); att.hex = { ...defHex }; }
+  else h.siege = { by: att.id, since: s.turn };
   return out;
-};
-
-/** Разбитый генерал отступает к своей столице. */
-const retreat = (s: GameState, gid: string): void => {
-  const g = s.generals[gid];
-  const capital = playerHalls(s, g.owner).sort((a, b) => a.order - b.order)[0];
-  if (capital) g.hex = { ...capital.hex };
 };
 
 /** Начало хода осаждающего: если прошёл полный ход и подкрепление не пришло — ратуша сдаётся. */

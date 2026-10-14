@@ -117,6 +117,27 @@ test('осада: ратуша сдаётся после полного хода
   assert.equal(winner(s), 'p1');
 });
 
+test('разбитый генерал погибает, а последний генерал игрока отступает в столицу', () => {
+  const s = game();
+  const a = gen(s, 'p1');
+  const d = gen(s, 'p2');
+  d.hex = { q: 0, r: 2 };
+  a.hex = { q: -1, r: 2 };
+  s.players.p2.tavern = 1;
+  s.players.p2.res.gold = 50;
+  hireGeneral(s, 'p2');
+  const lose = { end: 'mate' as const, mateWinner: 'white' as const, white: army({ p: 4 }), black: army({}) };
+  resolveBattle(s, a.id, d.id, lose);
+  assert.equal(s.generals[d.id], undefined, 'у p2 было два генерала — разбитый погиб');
+  const last = gen(s, 'p2');
+  last.hex = { q: 0, r: 2 }; last.army = army({ p: 4 });
+  a.attacked = false;
+  resolveBattle(s, a.id, last.id, lose);
+  assert.ok(s.generals[last.id], 'последний генерал жив');
+  assert.deepEqual(last.hex, SPAWN_B);
+  assert.deepEqual(last.army, emptyArmy());
+});
+
 test('осада снимается, если защитник привёл армию к ратуше', () => {
   const s = game();
   const g = gen(s, 'p1');

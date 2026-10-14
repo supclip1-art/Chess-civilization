@@ -112,9 +112,26 @@ export const applyBattle = (s: GameState, attackerId: string, defenderId: string
     winner.stars++;
     winner.elo += ELO_PER_WIN;
   }
+  say(s, `бой ${att.id} против ${def.id}: ${out.note}${winner ? `, победа ${winner.id}` : ''}`, att.owner);
+  const loser = out.winner === 'attacker' ? def : out.winner === 'defender' ? att : null;
+  if (loser) defeat(s, loser.id);
   for (const pid of [att.owner, def.owner]) {
     if (s.players[pid] && playerGenerals(s, pid).every((g) => g.army.n === 0)) s.players[pid].starterKnight = false;
   }
-  say(s, `бой ${att.id} против ${def.id}: ${out.note}${winner ? `, победа ${winner.id}` : ''}`, att.owner);
   return out;
+};
+
+/** Разбитый генерал погибает. Если он у игрока последний — остаётся жив и отступает в столицу.
+ *  Гарнизон нейтрала погибает всегда. */
+export const defeat = (s: GameState, gid: string): void => {
+  const g = s.generals[gid];
+  if (!s.players[g.owner] || playerGenerals(s, g.owner).length > 1) {
+    delete s.generals[gid];
+    say(s, `генерал ${gid} погиб`, g.owner);
+    return;
+  }
+  const capital = playerHalls(s, g.owner).sort((a, b) => a.order - b.order)[0];
+  if (capital) g.hex = { ...capital.hex };
+  g.moveLeft = 0;
+  say(s, `генерал ${gid} отступил в столицу`, g.owner);
 };
