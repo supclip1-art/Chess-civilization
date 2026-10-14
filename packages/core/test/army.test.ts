@@ -81,12 +81,18 @@ test('фигуры на доске по FEN', () => {
   assert.deepEqual(armiesFromFen('1n2k3/2pppp2/8/8/8/8/2PPPP2/1N2K3 w - - 0 1'), { white: army({ p: 4, n: 1 }), black: army({ p: 4, n: 1 }) });
 });
 
-test('возврат фигур: казарма решает, стартовый конь возвращается всегда', () => {
+test('возврат фигур: свои уцелевшие возвращаются всегда, превращённые — по казарме', () => {
   const s = game();
+  s.players.p1.barracks = 0;
+  // без казармы стартовая армия возвращается целиком
+  assert.deepEqual(returning(s, 'p1', army({ p: 4, n: 1 }), army({ p: 4, n: 1 })), army({ p: 4, n: 1 }));
+  // пешка превратилась в ферзя: ферзь не остаётся
+  assert.deepEqual(returning(s, 'p1', army({ p: 3, n: 1, q: 1 }), army({ p: 4, n: 1 })), army({ p: 3, n: 1 }));
+  // пешка стала вторым конём: при казарме 2 — остаётся, при 1 — нет
   s.players.p1.barracks = 1;
-  assert.deepEqual(returning(s, 'p1', army({ p: 3, n: 1, q: 1 })), army({ p: 3, n: 1 }));
-  s.players.p1.starterKnight = false;
-  assert.deepEqual(returning(s, 'p1', army({ p: 3, n: 1 })), army({ p: 3 }));
+  assert.deepEqual(returning(s, 'p1', army({ p: 3, n: 2 }), army({ p: 4, n: 1 })), army({ p: 3, n: 1 }));
+  s.players.p1.barracks = 2;
+  assert.deepEqual(returning(s, 'p1', army({ p: 3, n: 2 }), army({ p: 4, n: 1 })), army({ p: 3, n: 2 }));
 });
 
 test('движение: 2 клетки за ход, горы и вода непроходимы', () => {

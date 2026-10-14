@@ -113,13 +113,17 @@ export const judge = (r: BattleReport, drawRule: 'repel' | 'material' = 'repel')
   return { winner: null, note: 'draw: the attack is repelled' };
 };
 
-/** Какие фигуры вернутся на карту: только те, что умеет нанимать казарма; стартовый конь — всегда. */
-export const returning = (s: GameState, owner: string, onBoard: Army): Army => {
+/** Какие фигуры вернутся на карту. Уцелевшие фигуры, с которыми генерал вошёл в бой, возвращаются всегда.
+ *  Лишние фигуры (из превращённых пешек) остаются, только если казарма умеет их нанимать. */
+export const returning = (s: GameState, owner: string, onBoard: Army, before: Army): Army => {
   const p = s.players[owner];
   if (!p) return { ...onBoard }; // нейтралы: казармы нет, уцелевшие остаются
   const kept = emptyArmy();
-  for (const piece of PIECES) kept[piece] = p.barracks >= HIRE_LEVEL[piece] ? onBoard[piece] : 0;
-  if (p.barracks < HIRE_LEVEL.n && p.starterKnight) kept.n = Math.min(onBoard.n, 1);
+  for (const piece of PIECES) {
+    const own = Math.min(onBoard[piece], before[piece]);
+    const promoted = onBoard[piece] - own;
+    kept[piece] = own + (p.barracks >= HIRE_LEVEL[piece] ? promoted : 0);
+  }
   return kept;
 };
 
@@ -129,8 +133,8 @@ export const applyBattle = (s: GameState, attackerId: string, defenderId: string
   const att = s.generals[attackerId];
   const def = s.generals[defenderId];
   const out = judge(report, 'repel');
-  att.army = out.winner === 'defender' ? emptyArmy() : returning(s, att.owner, report.white);
-  def.army = out.winner === 'attacker' ? emptyArmy() : returning(s, def.owner, report.black);
+  att.army = out.winner === 'defender' ? emptyArmy() : returning(s, att.owner, report.white, att.army);
+  def.army = out.winner === 'attacker' ? emptyArmy() : returning(s, def.owner, report.black, def.army);
   att.attacked = true;
   att.moveLeft = 0;
   const winner = out.winner === 'attacker' ? att : out.winner === 'defender' ? def : null;

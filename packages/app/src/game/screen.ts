@@ -204,8 +204,9 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
 
   const startBattle = async (attackerId: string, defenderId: string) => {
     const att = s.generals[attackerId], def = s.generals[defenderId];
+    const defName = ownerName(s, def.owner), defColor = ownerColor(s, def.owner), defElo = def.elo;
     const show = (body: string) => modal(`<h2>Battle</h2>
-      <p><b style="color:${ownerColor(s, att.owner)}">Your general</b> (ELO ${att.elo}, White) vs <b style="color:${ownerColor(s, def.owner)}">${esc(ownerName(s, def.owner))}</b> (ELO ${def.elo}, Black)</p>${body}`);
+      <p><b style="color:${ownerColor(s, att.owner)}">Your general</b> (ELO ${att.elo}, White) vs <b style="color:${defColor}">${esc(defName)}</b> (ELO ${defElo}, Black)</p>${body}`);
     show(`<div class="acts">${btn('auto', 'Auto battle', 'the generals play it out')}${btn('cancel', 'Retreat', 'cancel the attack')}</div>
       <p class="muted">Playing the battle yourself arrives in the next build.</p>`);
     const choice = await new Promise<string>((resolve) => {
