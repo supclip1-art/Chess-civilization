@@ -200,7 +200,7 @@ export const upkeep = (s: GameState, pid: string): number => {
   const p = s.players[pid];
   const gens = playerGenerals(s, pid);
   const rate = mods(s, pid).armyUpkeepRate ?? ARMY_UPKEEP_RATE;
-  const army = gens.reduce((sum, g) => sum + armyValue(g.army), 0) * rate;
+  const army = Math.ceil(gens.reduce((sum, g) => sum + armyValue(g.army), 0) * rate);
   return army + (p.builders - 1) * BUILDER_UPKEEP_FOOD + Math.max(0, gens.length - 1) * GENERAL_UPKEEP_FOOD;
 };
 

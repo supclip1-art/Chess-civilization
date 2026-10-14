@@ -23,7 +23,7 @@ test('правило строя: кони от 4 пешек, слоны от 6, 
 test('найм фигур: нужна казарма нужного уровня, золото и пешки', () => {
   const s = game();
   const g = gen(s, 'p1');
-  s.players.p1.res = { wood: 50, food: 50, gold: 50 };
+  s.players.p1.res = { wood: 500, food: 500, gold: 500 };
   assert.equal(hirePiece(s, 'p1', g.id, 'p').ok, false, 'без казармы');
   upgradeBarracks(s, 'p1');
   round(s);
@@ -37,11 +37,11 @@ test('найм фигур: нужна казарма нужного уровня
 
 test('генералы: таверна задаёт число, Турция нанимает дешевле', () => {
   const s = game();
-  s.players.p2.res = { wood: 0, food: 0, gold: 100 };
+  s.players.p2.res = { wood: 0, food: 0, gold: 1000 };
   assert.equal(hireGeneral(s, 'p2').ok, false, 'без таверны только стартовый');
   s.players.p2.tavern = 1;
   assert.equal(hireGeneral(s, 'p2').ok, true);
-  assert.equal(s.players.p2.res.gold, 100 - (4 - 2));
+  assert.equal(s.players.p2.res.gold, 1000 - (40 - 20));
 });
 
 test('исход боя: мат, материал на лимите, ничья отбивает атаку', () => {
@@ -159,7 +159,7 @@ test('разбитый генерал погибает, а последний г
   d.hex = { q: 0, r: 2 };
   a.hex = { q: -1, r: 2 };
   s.players.p2.tavern = 1;
-  s.players.p2.res.gold = 50;
+  s.players.p2.res.gold = 500;
   hireGeneral(s, 'p2');
   const lose = { end: 'mate' as const, mateWinner: 'white' as const, white: army({ p: 4 }), black: army({}) };
   resolveBattle(s, a.id, d.id, lose);

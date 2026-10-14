@@ -56,5 +56,5 @@ export const aiEconomyTurn = (s: GameState, pid: string): void => {
       }
     }
   }
-  if (p.res.gold >= 5) startResearch(s, pid);
+  if (p.res.gold >= 50) startResearch(s, pid);
 };

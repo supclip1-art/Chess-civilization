@@ -25,7 +25,7 @@ test('старт: ратуша ур.1 красит радиус 1, нейтра�
   const own = Object.values(s.cells).filter((c) => c.owner === 'p1');
   assert.equal(own.length, 7);
   assert.equal(Object.keys(s.neutrals).length, 1);
-  assert.deepEqual(s.players.p1.res, { wood: 5, food: 4, gold: 0 });
+  assert.deepEqual(s.players.p1.res, { wood: 50, food: 40, gold: 0 });
 });
 
 test('ферма строится только на поле, за ход, одним строителем', () => {
@@ -35,16 +35,16 @@ test('ферма строится только на поле, за ход, од�
   const forest = cellsAround(SPAWN_A, 'forest', map)[0];
   assert.equal(build(s, 'p1', forest, 'farm').ok, false);
   assert.equal(build(s, 'p1', field, 'farm').ok, true);
-  assert.deepEqual(s.players.p1.res, { wood: 3, food: 3, gold: 0 });
+  assert.deepEqual(s.players.p1.res, { wood: 30, food: 30, gold: 0 });
   assert.equal(build(s, 'p1', cellsAround(SPAWN_A, 'field', map)[1], 'farm').ok, false, 'строитель один');
   round(s);
   assert.deepEqual(s.cells[key(field)].building, { kind: 'farm', level: 1 });
-  assert.equal(income(s, 'p1').food, 2);
+  assert.equal(income(s, 'p1').food, 20);
 });
 
-test('стартовая армия ест 1,75 еды — хватает одной фермы', () => {
+test('стартовая армия ест 18 еды (70 золота × 0,25, вверх) — хватает одной фермы', () => {
   const s = game();
-  assert.equal(upkeep(s, 'p1'), 1.75);
+  assert.equal(upkeep(s, 'p1'), 18);
 });
 
 test('время улучшений растёт с уровнем; Германия строит ур.4–5 на ход быстрее', () => {
@@ -52,7 +52,7 @@ test('время улучшений растёт с уровнем; Герман
     const s = newGame(testMap(), [{ nation }, { nation: 'spain' }], { elo: 1200, seed: 1 });
     const field = cellsAround(SPAWN_A, 'field', testMap())[0];
     s.cells[key(field)].building = { kind: 'farm', level: 3 };
-    s.players.p1.res = { wood: 100, food: 100, gold: 0 };
+    s.players.p1.res = { wood: 1000, food: 1000, gold: 0 };
     assert.equal(upgrade(s, 'p1', field).ok, true);
     const job = s.players.p1.jobs[0];
     assert.equal(job.finish - s.turn, expect4, nation);
@@ -61,7 +61,7 @@ test('время улучшений растёт с уровнем; Герман
 
 test('ратуша 2 открывает второго строителя; без неё нельзя', () => {
   const s = game();
-  s.players.p1.res = { wood: 50, food: 50, gold: 0 };
+  s.players.p1.res = { wood: 500, food: 500, gold: 0 };
   assert.equal(hireBuilder(s, 'p1').ok, false);
   const hall = playerHalls(s, 'p1')[0];
   assert.equal(upgradeTownHall(s, 'p1', hall.id).ok, true);
@@ -70,13 +70,13 @@ test('ратуша 2 открывает второго строителя; бе�
   assert.equal(Object.values(s.cells).filter((c) => c.owner === 'p1').length > 7, true, 'радиус вырос');
   const before = s.players.p1.res.food;
   assert.equal(hireBuilder(s, 'p1').ok, true);
-  assert.equal(before - s.players.p1.res.food, 4);
+  assert.equal(before - s.players.p1.res.food, 40);
   assert.equal(hireBuilder(s, 'p1').ok, false, 'третьему нужна ратуша 3');
 });
 
 test('Франция нанимает строителей бесплатно', () => {
   const s = game(['france', 'germany']);
-  s.players.p1.res = { wood: 50, food: 50, gold: 0 };
+  s.players.p1.res = { wood: 500, food: 500, gold: 0 };
   upgradeTownHall(s, 'p1', playerHalls(s, 'p1')[0].id);
   round(s);
   const food = s.players.p1.res.food;
@@ -85,13 +85,13 @@ test('Франция нанимает строителей бесплатно', 
 });
 
 test('основание города на ничейной земле, Россия — дешевле и за 1 ход', () => {
-  for (const [nation, turns, wood] of [['germany', 2, 10], ['russia', 1, 7]] as const) {
+  for (const [nation, turns, wood] of [['germany', 2, 100], ['russia', 1, 70]] as const) {
     const s = newGame(testMap(), [{ nation }, { nation: 'spain' }], { elo: 1200, seed: 1 });
     const g = Object.values(s.generals).find((x) => x.owner === 'p1')!;
     g.hex = { q: -1, r: -3 };
-    s.players.p1.res = { wood: 20, food: 20, gold: 0 };
+    s.players.p1.res = { wood: 200, food: 200, gold: 0 };
     assert.equal(foundTownHall(s, 'p1', g.id).ok, true);
-    assert.equal(20 - s.players.p1.res.wood, wood, nation);
+    assert.equal(200 - s.players.p1.res.wood, wood, nation);
     for (let i = 0; i < turns; i++) round(s);
     assert.equal(playerHalls(s, 'p1').length, 2, nation);
     const names = playerHalls(s, 'p1').sort((a, b) => a.order - b.order).map((h) => h.name);
@@ -123,7 +123,7 @@ test('голод: сначала фигуры, потом строители, п
 
 test('исследование «Тактики» поднимает ELO только будущих генералов', () => {
   const s = game();
-  s.players.p1.res = { wood: 10, food: 0, gold: 10 };
+  s.players.p1.res = { wood: 100, food: 0, gold: 100 };
   assert.equal(startResearch(s, 'p1').ok, true);
   round(s);
   assert.equal(recruitElo(s, 'p1'), 1225);

@@ -2,7 +2,7 @@
 
 import {
   BARRACKS, BUILD_TURNS, BUILDING_TERRAIN, GENERAL_HIRE_GOLD, HIRE_LEVEL, NATIONS, PIECE_PRICE, RESEARCH, RESOURCE_COST,
-  RESOURCE_OUTPUT, TAVERN, TOWN_HALL_FOUND, TOWN_HALL_UPGRADE, BUILDER_HIRE_FOOD, PIECES, aiEconomyTurn, attack, endTurn,
+  RESOURCE_OUTPUT, TAVERN, TOWN_HALL_FOUND, TOWN_HALL_UPGRADE, BUILDER_HIRE_FOOD, BUILDER_UPKEEP_FOOD, GENERAL_UPKEEP_FOOD, PIECES, aiEconomyTurn, attack, endTurn,
   foundTownHall, freeBuilders, hireBuilder, hireGeneral, hirePiece, income, key, maxBuilders, move, playerGenerals,
   reachable, recruitElo, resolveBattle, startResearch, upgrade, upgradeBarracks, upgradeTavern, upgradeTownHall,
   upkeep, visible, winner, build, type GameState, type Hex, type Piece, type Res, type ResourceBuilding,
@@ -144,11 +144,11 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
       parts.push(`<div class="card"><div class="row"><b>${esc(hall.name)} · level ${hall.level}</b><span class="muted">builders ${freeBuilders(p)}/${p.builders} free</span></div>
         <div class="acts">
           ${thUp ? btn(`th:${hall.id}`, `City → ${hall.level + 1}`, `${cost(thUp.cost)} · ${thUp.turns} turn · +1 builder slot, wider land`) : ''}
-          ${nb <= maxBuilders(s, ME) ? btn('builder', `Hire builder ${nb}`, `${NATIONS[p.nation].mods.freeBuilderHire ? 'free' : `${BUILDER_HIRE_FOOD[nb as 2 | 3]} food`} · eats 1 food/turn`) : ''}
+          ${nb <= maxBuilders(s, ME) ? btn('builder', `Hire builder ${nb}`, `${NATIONS[p.nation].mods.freeBuilderHire ? 'free' : `${BUILDER_HIRE_FOOD[nb as 2 | 3]} food`} · eats ${BUILDER_UPKEEP_FOOD} food/turn`) : ''}
           ${barNext ? btn('barracks', p.barracks ? `Barracks → ${p.barracks + 1}` : 'Build barracks', `${cost(barNext.cost)} · ${barNext.turns} turn${barNext.turns > 1 ? 's' : ''} · unlocks ${PIECE_NAME[PIECES[p.barracks]].toLowerCase()}s`) : ''}
           ${tavNext ? btn('tavern', p.tavern ? `Tavern → ${p.tavern + 1}` : 'Build tavern', `${cost(tavNext.cost)} · ${tavNext.turns} turn${tavNext.turns > 1 ? 's' : ''} · ${p.tavern + 2} generals`) : ''}
           ${res && !p.research.active ? btn('research', `Tactics ${p.research.done + 1}/5`, `${cost(res.cost)} · ${res.turns} turn${res.turns > 1 ? 's' : ''} · new generals +25 ELO`) : ''}
-          ${gCount < Math.min(5, p.tavern + 1) ? btn('general', 'Hire a general', `${gCost} gold · ELO ${recruitElo(s, ME)} · eats 1 food/turn`) : ''}
+          ${gCount < Math.min(5, p.tavern + 1) ? btn('general', 'Hire a general', `${gCost} gold · ELO ${recruitElo(s, ME)} · eats ${GENERAL_UPKEEP_FOOD} food/turn`) : ''}
         </div>
         <p class="muted">Barracks ${p.barracks} · Tavern ${p.tavern} · Tactics ${p.research.done}/5${p.research.active ? ' (researching)' : ''}</p>
         ${jobs.length ? `<p class="muted">In progress: ${jobs.map(esc).join('; ')}</p>` : ''}</div>`);

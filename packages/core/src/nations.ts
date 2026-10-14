@@ -53,13 +53,13 @@ export const NATIONS: Record<NationId, Nation> = {
     id: 'spain', name: 'Spain', bonus: 'New World Silver',
     rulers: { warlike: 'Philip II', moderate: 'Isabella I', peaceful: 'Charles III' },
     cities: ['Madrid', 'Toledo', 'Seville', 'Barcelona', 'Valencia', 'Granada', 'Córdoba', 'Zaragoza', 'Salamanca', 'Bilbao', 'Málaga', 'Burgos'],
-    mods: { mineLowLevelBonus: 0.5 },
+    mods: { mineLowLevelBonus: 5 },
   },
   turkey: {
     id: 'turkey', name: 'Turkey', bonus: 'Grand Bazaar',
     rulers: { warlike: 'Selim I', moderate: 'Suleiman the Magnificent', peaceful: 'Ahmed III' },
     cities: ['Istanbul', 'Ankara', 'Bursa', 'Izmir', 'Edirne', 'Konya', 'Trabzon', 'Antalya', 'Adana', 'Sinop', 'Kayseri', 'Erzurum'],
-    mods: { generalHireDiscount: 2 },
+    mods: { generalHireDiscount: 20 },
   },
 };
 
