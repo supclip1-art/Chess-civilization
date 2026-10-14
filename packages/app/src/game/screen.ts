@@ -8,7 +8,8 @@ import {
   reachable, recruitElo, resolveBattle, startResearch, upgrade, upgradeBarracks, upgradeTavern, upgradeTownHall,
   upkeep, visible, winner, build, type GameState, type Hex, type Piece, type Res, type ResourceBuilding,
 } from '../../../core/src/index.ts';
-import { autobattle } from './battle.ts';
+import { autobattle, type BattleRecord } from './battle.ts';
+import { playManual, showReplay } from './fight.ts';
 import { MapView, attackTargets, ownerColor } from './render.ts';
 import { saveGame } from './save.ts';
 import { setBack, tap } from '../tg.ts';
@@ -208,24 +209,36 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
 
   const startBattle = async (attackerId: string, defenderId: string) => {
     const att = s.generals[attackerId], def = s.generals[defenderId];
-    const defName = ownerName(s, def.owner), defColor = ownerColor(s, def.owner), defElo = def.elo;
-    const show = (body: string) => modal(`<h2>Battle</h2>
-      <p><b style="color:${ownerColor(s, att.owner)}">Your general</b> (ELO ${att.elo}, White) vs <b style="color:${defColor}">${esc(defName)}</b> (ELO ${defElo}, Black)</p>${body}`);
-    show(`<div class="acts">${btn('auto', 'Auto battle', 'the generals play it out')}${btn('cancel', 'Retreat', 'cancel the attack')}</div>
-      <p class="muted">Playing the battle yourself arrives in the next build.</p>`);
-    const choice = await new Promise<string>((resolve) => {
-      app.querySelector('#dialog')!.addEventListener('click', (ev) => {
+    const defName = ownerName(s, def.owner), defColor = ownerColor(s, def.owner)!;
+    const city = Object.values(s.halls).find((h) => key(h.hex) === key(def.hex));
+    const title = city ? `Battle for ${city.name}` : 'Battle';
+    const me = { name: 'Your general', color: ownerColor(s, att.owner)!, elo: att.elo, stars: att.stars };
+    const foe = { name: defName, color: defColor, elo: def.elo, stars: def.stars };
+    const show = (body: string) => modal(`<h2>${esc(title)}</h2>
+      <p><b style="color:${me.color}">Your general</b> (ELO ${me.elo}, White) vs <b style="color:${defColor}">${esc(defName)}</b> (ELO ${foe.elo}, Black)</p>${body}`);
+    const ask = () => new Promise<string>((resolve) => {
+      app.querySelector('#dialog')!.addEventListener('click', function on(ev) {
         const b = (ev.target as HTMLElement).closest<HTMLButtonElement>('button[data-a]');
-        if (b) resolve(b.dataset.a!);
+        if (!b) return;
+        app.querySelector('#dialog')!.removeEventListener('click', on);
+        resolve(b.dataset.a!);
       });
     });
-    if (choice !== 'auto') { modal(null); return; }
+    show(`<div class="acts">${btn('manual', 'Play it yourself', 'you command White on the board')}${btn('auto', 'Auto battle', 'the generals play it out')}${btn('cancel', 'Retreat', 'cancel the attack')}</div>`);
+    const choice = await ask();
+    if (choice === 'cancel') { modal(null); return; }
     busy = true;
-    show(`<p class="big" id="ply">Move 0</p><p class="muted">Stockfish is playing the battle…</p>`);
+    let rec: BattleRecord | null = null;
     try {
-      const rec = await autobattle(s, attackerId, defenderId, (n) => {
-        const el = app.querySelector('#ply'); if (el) el.textContent = `Move ${Math.ceil(n / 2)}`;
-      });
+      if (choice === 'manual') {
+        modal(null);
+        rec = await playManual(app, s, attackerId, defenderId, me, foe, title);
+      } else {
+        show(`<p class="big" id="ply">Move 0</p><p class="muted">Stockfish is playing the battle…</p>`);
+        rec = await autobattle(s, attackerId, defenderId, (n) => {
+          const el = app.querySelector('#ply'); if (el) el.textContent = `Move ${Math.ceil(n / 2)}`;
+        });
+      }
       const before = { ...att.army };
       const out = resolveBattle(s, attackerId, defenderId, rec.report);
       saveGame(s);
@@ -233,13 +246,17 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
       const mine = s.generals[attackerId];
       const left = mine ? PIECES.filter((x) => mine.army[x]).map((x) => `${mine.army[x]} ${PIECE_NAME[x].toLowerCase()}${mine.army[x] > 1 ? 's' : ''}`).join(', ') || 'no pieces' : 'your general fell';
       const lost = mine ? PIECES.reduce((n, x) => n + Math.max(0, before[x] - mine.army[x]), 0) : null;
-      show(`<p class="big">${headline}</p><p>${esc(out.note)} · ${rec.moves.length} half-moves · ${rec.seconds.toFixed(1)} s</p>
-        <p>Your army now: ${esc(left)}${lost ? ` (lost ${lost})` : ''}</p>
-        <div class="acts">${btn('close', 'Continue', '')}</div>`);
-      await new Promise<void>((resolve) => app.querySelector('#dialog')!.addEventListener('click', () => resolve(), { once: true }));
+      for (;;) {
+        show(`<p class="big">${headline}</p><p>${esc(out.note)} · ${rec.moves.length} half-moves${rec.bookPlies ? ` · ${rec.bookPlies} from the opening book` : ''}</p>
+          <p>Your army now: ${esc(left)}${lost ? ` (lost ${lost})` : ''}</p>
+          <div class="acts">${btn('replay', 'Watch replay', 'step through the game')}${btn('close', 'Continue', '')}</div>`);
+        if (await ask() !== 'replay') break;
+        modal(null);
+        await showReplay(app, rec, me, foe, title);
+      }
     } catch (e) {
       show(`<p class="bad">${esc(String((e as Error).message ?? e))}</p><div class="acts">${btn('close', 'Close', '')}</div>`);
-      await new Promise<void>((resolve) => app.querySelector('#dialog')!.addEventListener('click', () => resolve(), { once: true }));
+      await ask();
     }
     busy = false;
     modal(null);

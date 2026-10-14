@@ -68,9 +68,10 @@ export const transfer = (s: GameState, pid: string, fromId: string, toId: string
 
 // ---------- Итог боя ----------
 
-export type BattleEnd = 'mate' | 'stalemate' | 'repetition' | 'fifty' | 'insufficient' | 'limit';
+export type BattleEnd = 'mate' | 'resign' | 'stalemate' | 'repetition' | 'fifty' | 'insufficient' | 'limit';
 
 /** Что вернул движок: как закончилась партия и что стоит на доске (без королей). Атакующий — белые. */
+/** mateWinner — победитель при мате или сдаче соперника. */
 export type BattleReport = { end: BattleEnd; mateWinner?: 'white' | 'black'; white: Army; black: Army };
 
 export type BattleOutcome = { winner: 'attacker' | 'defender' | null; note: string };
@@ -100,6 +101,7 @@ export const armiesFromFen = (fen: string): { white: Army; black: Army } => {
  *  остальные ничьи — по правилу из настроек. */
 export const judge = (r: BattleReport, drawRule: 'repel' | 'material' = 'repel'): BattleOutcome => {
   if (r.end === 'mate') return { winner: r.mateWinner === 'white' ? 'attacker' : 'defender', note: 'checkmate' };
+  if (r.end === 'resign') return { winner: r.mateWinner === 'white' ? 'attacker' : 'defender', note: r.mateWinner === 'white' ? 'the defender resigned' : 'the attacker resigned' };
   if (r.end === 'insufficient' || insufficientMaterial(r.white, r.black)) {
     return { winner: null, note: 'draw: neither side can checkmate' };
   }

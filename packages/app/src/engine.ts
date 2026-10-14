@@ -80,6 +80,18 @@ export class Engine {
     return [...moves.entries()].sort((a, b) => a[0] - b[0]).map(([, m]) => m);
   }
 
+  /** Все легальные ходы в позиции (UCI) — через "go perft 1": движок печатает по строке на ход. */
+  async legalMoves(position: string): Promise<string[]> {
+    const moves: string[] = [];
+    const tap = (l: string) => { const m = l.match(/^([a-h][1-8][a-h][1-8][qrbn]?): \d+$/); if (m) moves.push(m[1]); };
+    this.listeners.push(tap);
+    this.send(`position ${position}`);
+    this.send('go perft 1');
+    await this.waitFor((l) => l.startsWith('Nodes searched'), 5000);
+    this.listeners = this.listeners.filter((x) => x !== tap);
+    return moves;
+  }
+
   /** Текущая позиция и шахи — через отладочную команду "d". */
   async inspect(position: string): Promise<{ fen: string; inCheck: boolean }> {
     this.send(`position ${position}`);
