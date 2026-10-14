@@ -26,7 +26,7 @@ export const RESOURCE_OUTPUT: Record<ResourceBuilding, readonly number[]> = {
   farm: [20, 30, 50, 70, 100],
   sawmill: [20, 30, 50, 70, 100],
   mine: [5, 10, 15, 20, 25],
-  fishery: [15, 25, 40, 55, 80], // ~80% фермы: море — запасной источник еды
+  fishery: [20, 30, 50, 70, 100], // как ферма, но цена — дерево на лодки
 };
 
 export const RESOURCE_OF: Record<ResourceBuilding, keyof Res> = { farm: 'food', sawmill: 'wood', mine: 'gold', fishery: 'food' };
