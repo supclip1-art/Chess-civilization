@@ -22,7 +22,7 @@ export type Mods = {
   freeBuilderHire?: boolean; // Франция: найм 2-го и 3-го строителя бесплатно
   freeBuilderUpkeep?: boolean; // Франция: строители не едят
   armyUpkeepRate?: number; // Британия
-  mineLowLevelBonus?: number; // Испания: рудники ур.1 дают +N золота
+  mineLowLevelBonus?: number; // Испания: каждый рудник даёт +N золота на любом уровне
   generalHireDiscount?: number; // Турция
   upgradeDiscount?: number; // Италия: улучшения города и таверны дешевле на эту долю
 };
@@ -58,10 +58,10 @@ export const NATIONS: Record<NationId, Nation> = {
   },
   spain: {
     id: 'spain', name: 'Spain', bonus: 'New World Silver',
-    effect: 'Level 1 gold mines produce +5 gold per turn (10 instead of 5).',
+    effect: 'Every gold mine produces +3 gold per turn at any level.',
     rulers: { warlike: 'Philip II', moderate: 'Isabella I', peaceful: 'Charles III' },
     cities: ['Madrid', 'Toledo', 'Seville', 'Barcelona', 'Valencia', 'Granada', 'Córdoba', 'Zaragoza', 'Salamanca', 'Bilbao', 'Málaga', 'Burgos'],
-    mods: { mineLowLevelBonus: 5 },
+    mods: { mineLowLevelBonus: 3 },
   },
   italy: {
     id: 'italy', name: 'Italy', bonus: 'Renaissance',

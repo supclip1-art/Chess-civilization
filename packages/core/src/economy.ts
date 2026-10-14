@@ -200,7 +200,7 @@ export const income = (s: GameState, pid: string): Res => {
   for (const c of Object.values(s.cells)) {
     if (c.owner !== pid || !c.building) continue;
     const { kind, level } = c.building;
-    inc[RESOURCE_OF[kind]] += RESOURCE_OUTPUT[kind][level - 1] + (kind === 'mine' && level === 1 ? bonus : 0);
+    inc[RESOURCE_OF[kind]] += RESOURCE_OUTPUT[kind][level - 1] + (kind === 'mine' ? bonus : 0);
   }
   return inc;
 };
