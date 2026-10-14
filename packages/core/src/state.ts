@@ -61,7 +61,7 @@ export type Job =
 export type Player = {
   id: string;
   nation: NationId;
-  ai?: { aggression: Aggression; ruler: string };
+  ai?: { aggression: Aggression; ruler: string; lastWar?: number }; // lastWar — ход последнего нападения на игрока
   res: Res;
   builders: number;
   barracks: number; // 0 — не построена

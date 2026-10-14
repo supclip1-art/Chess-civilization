@@ -5,8 +5,8 @@
 // Характер правителя:
 //   warlike  — выходит в поход со стартовой армией, бьёт нейтралов при небольшом перевесе, игроков — с 8-го хода;
 //   moderate — ждёт армию покрепче и нападает только при явном перевесе, игроков — с 15-го хода;
-//   peaceful — расширяется основанием городов и захватом слабых нейтралов, игроков не трогает,
-//              но выбивает чужую армию со своей земли.
+//   peaceful — расширяется основанием городов и захватом слабых нейтралов; на игроков нападает поздно (с 25-го хода),
+//              редко (раз в 8 ходов) и только при большом перевесе; чужую армию со своей земли выбивает всегда.
 
 import { armyValue, foundTownHall, playerGenerals, playerHalls } from './economy.ts';
 import { type Hex, distance, key, neighbors } from './hex.ts';
@@ -23,6 +23,8 @@ type Character = {
   vsPlayer: number;
   /** С какого хода нападает на других игроков. */
   playersFrom: number;
+  /** Сколько ходов после нападения на игрока ждёт до следующего. */
+  peace: number;
   /** Меньше этой армии генерал сидит дома и набирает фигуры. */
   minArmy: number;
   /** Сколько своих городов хочет иметь, основывая новые. */
@@ -30,9 +32,9 @@ type Character = {
 };
 
 export const CHARACTER: Record<Aggression, Character> = {
-  warlike: { vsNeutral: 1.15, vsPlayer: 1.1, playersFrom: 8, minArmy: 70, wantCities: 2 },
-  moderate: { vsNeutral: 1.5, vsPlayer: 1.5, playersFrom: 15, minArmy: 120, wantCities: 3 },
-  peaceful: { vsNeutral: 2, vsPlayer: Infinity, playersFrom: Infinity, minArmy: 150, wantCities: 4 },
+  warlike: { vsNeutral: 1.15, vsPlayer: 1.1, playersFrom: 8, peace: 0, minArmy: 70, wantCities: 2 },
+  moderate: { vsNeutral: 1.5, vsPlayer: 1.5, playersFrom: 15, peace: 3, minArmy: 120, wantCities: 3 },
+  peaceful: { vsNeutral: 2, vsPlayer: 1.8, playersFrom: 25, peace: 8, minArmy: 150, wantCities: 4 },
 };
 
 /** Сила армии с поправкой на ELO генерала: +400 ELO — вдвое сильнее. */
@@ -108,6 +110,8 @@ type Target = { hex: Hex; steps: number; kind: 'neutral' | 'army' | 'city' | 'in
 const targetsFor = (s: GameState, g: General, field: Map<string, number>): Target[] => {
   const me = s.players[g.owner];
   const ch = CHARACTER[me.ai!.aggression];
+  // войны с игроками: не раньше своего хода и с передышкой после прошлого нападения
+  const warReady = s.turn >= ch.playersFrom && s.turn - (me.ai!.lastWar ?? -Infinity) >= ch.peace;
   const out: Target[] = [];
   const mine = power(g);
   const myLand = new Set(Object.values(s.cells).filter((c) => c.owner === g.owner).map((c) => key(c.hex)));
@@ -118,10 +122,10 @@ const targetsFor = (s: GameState, g: General, field: Map<string, number>): Targe
     const neutral = !!s.neutrals[x.owner];
     if (neutral) { if (mine >= ch.vsNeutral * power(x)) out.push({ hex: x.hex, steps, kind: 'neutral' }); continue; }
     if (myLand.has(key(x.hex)) && mine >= 1.1 * power(x)) { out.push({ hex: x.hex, steps, kind: 'intruder' }); continue; }
-    if (s.turn >= ch.playersFrom && mine >= ch.vsPlayer * power(x)) out.push({ hex: x.hex, steps, kind: 'army' });
+    if (warReady && mine >= ch.vsPlayer * power(x)) out.push({ hex: x.hex, steps, kind: 'army' });
   }
   // пустые города других игроков — осада
-  if (s.turn >= ch.playersFrom) {
+  if (warReady) {
     for (const h of Object.values(s.halls)) {
       if (h.owner === g.owner || !s.players[h.owner] || h.siege) continue;
       if (Object.values(s.generals).some((x) => x.owner === h.owner && x.hex.q === h.hex.q && x.hex.r === h.hex.r && armyValue(x.army) > 0)) continue;
@@ -186,7 +190,10 @@ export const aiMilitaryTurn = (s: GameState, pid: string): AiAttack[] => {
     const goal = targets.find((t) => t.kind === 'intruder') ?? (strongEnough ? targets[0] : undefined);
     if (goal) {
       if (distance(g.hex, goal.hex) > 1) stepToward(s, g, goal.hex, true);
-      if (distance(g.hex, goal.hex) === 1) attacks.push({ gid: g.id, target: goal.hex });
+      if (distance(g.hex, goal.hex) === 1) {
+        attacks.push({ gid: g.id, target: goal.hex });
+        if (goal.kind === 'army' || goal.kind === 'city') p.ai.lastWar = s.turn;
+      }
       continue;
     }
     // целей нет: расширяемся новыми городами, иначе возвращаемся домой набирать армию

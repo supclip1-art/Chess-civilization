@@ -26,12 +26,14 @@ const play = (aggr: Aggression[], turns: number) => {
   return { s, vs };
 };
 
-test('ИИ захватывает нейтралов, воинственный нападает на соседей, миролюбивый — нет', () => {
+test('ИИ захватывает нейтралов, воинственный нападает на соседей, миролюбивый — поздно и редко', () => {
   const { s, vs } = play(['warlike', 'moderate', 'peaceful', 'moderate'], 45);
   const captured = s.log.filter((e) => / is captured$/.test(e.text) && s.players[e.player!]).length;
   assert.ok(captured >= 4, `захватов: ${captured}`);
   assert.ok(vs.some((v) => v.aggr === 'warlike' && !v.neutral), 'воинственный атакует игроков');
-  assert.ok(!vs.some((v) => v.aggr === 'peaceful' && !v.neutral), 'миролюбивый не нападает на игроков');
+  const peaceful = vs.filter((v) => v.aggr === 'peaceful' && !v.neutral).map((v) => v.turn);
+  assert.ok(peaceful.every((t) => t >= 25), 'миролюбивый — не раньше 25-го хода');
+  assert.ok(peaceful.every((t, i) => i === 0 || t - peaceful[i - 1] >= 8 || t === peaceful[i - 1]), 'и не чаще раза в 8 ходов');
   assert.ok(!vs.some((v) => v.aggr === 'moderate' && !v.neutral && v.turn < 15), 'умеренный — не раньше 15-го хода');
 });
 

@@ -67,7 +67,8 @@ export const aiEconomyTurn = (s: GameState, pid: string): void => {
     }
   }
   // вторая армия — гарнизон столицы: таверна после казармы 3, потом найм генерала и немного фигур ему
-  if (p.barracks >= 3 && p.tavern < 1) upgradeTavern(s, pid);
+  // миролюбивый строит гарнизон раньше — ему важнее оборона
+  if (p.barracks >= (p.ai?.aggression === 'peaceful' ? 2 : 3) && p.tavern < 1) upgradeTavern(s, pid);
   const gens = playerGenerals(s, pid).sort((a, b) => a.id.localeCompare(b.id));
   if (p.tavern >= 1 && gens.length < 2 && p.res.gold >= 60) hireGeneral(s, pid);
   for (const guard of playerGenerals(s, pid).sort((a, b) => a.id.localeCompare(b.id)).slice(1)) {
