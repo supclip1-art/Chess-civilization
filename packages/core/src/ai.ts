@@ -2,7 +2,7 @@
 // Каждый ход: город 2 после двух ферм (или промыслов), строители, казарма под следующую фигуру (копит на неё),
 // жадная стройка по выгоде на единицу цены, найм фигур к полной армии, «Тактика» на остаток золота.
 
-import { ARMY_UPKEEP_RATE, BARRACKS, PIECES, PIECE_PRICE, HIRE_LEVEL, RESOURCE_COST, RESOURCE_OUTPUT, type Piece, type ResourceBuilding } from './config.ts';
+import { ARMY_UPKEEP_RATE, BARRACKS, GENERAL_UPKEEP_FOOD, PIECES, PIECE_PRICE, HIRE_LEVEL, RESOURCE_COST, RESOURCE_OUTPUT, type Piece, type ResourceBuilding } from './config.ts';
 import { hireGeneral, hirePiece } from './army.ts';
 import {
   build, buildOptions, freeBuilders, mods, resourceCost, hireBuilder, income, playerGenerals, playerHalls, startResearch, upgrade, upgradeBarracks,
@@ -76,7 +76,8 @@ export const aiEconomyTurn = (s: GameState, pid: string): void => {
   // миролюбивый строит гарнизон раньше — ему важнее оборона
   if (p.barracks >= (p.ai?.aggression === 'peaceful' ? 2 : 3) && p.tavern < 1) upgradeTavern(s, pid);
   const gens = playerGenerals(s, pid).sort((a, b) => Number(a.id.slice(1)) - Number(b.id.slice(1)));
-  if (p.tavern >= 1 && gens.length < 2 && p.res.gold >= 60) hireGeneral(s, pid);
+  // новый генерал ест еду — нанимаем, только если доход еды это выдержит
+  if (p.tavern >= 1 && gens.length < 2 && p.res.gold >= 60 && income(s, pid).food - upkeep(s, pid) >= GENERAL_UPKEEP_FOOD + 5) hireGeneral(s, pid);
   for (const guard of playerGenerals(s, pid).sort((a, b) => Number(a.id.slice(1)) - Number(b.id.slice(1))).slice(1)) {
     for (const piece of PIECES) {
       while (guard.army[piece] < GUARD_ARMY[piece] && income(s, pid).food >= upkeep(s, pid) + PIECE_PRICE[piece] * ARMY_UPKEEP_RATE) {

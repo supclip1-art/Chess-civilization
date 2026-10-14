@@ -15,7 +15,8 @@ import { type Aggression } from './nations.ts';
 import { type GameState, type General, PASSABLE } from './state.ts';
 import { TOWN_HALL_FOUND } from './config.ts';
 
-export type AiAttack = { gid: string; target: Hex };
+/** defense — отбиться (у стен столицы, снять осаду, выгнать со своей земли), offense — поход. */
+export type AiAttack = { gid: string; target: Hex; defense: boolean };
 
 type Character = {
   /** Во сколько раз армия должна быть сильнее, чтобы напасть на нейтрала / на игрока. */
@@ -171,7 +172,7 @@ export const aiMilitaryTurn = (s: GameState, pid: string): AiAttack[] => {
     if (g !== gens[0] && capital) {
       const atWalls = Object.values(s.generals).find((x) => x.owner !== pid && armyValue(x.army) > 0
         && distance(x.hex, capital.hex) <= 1 && power(g) >= 0.9 * power(x));
-      if (atWalls && distance(g.hex, atWalls.hex) === 1) { attacks.push({ gid: g.id, target: atWalls.hex }); continue; }
+      if (atWalls && distance(g.hex, atWalls.hex) === 1) { attacks.push({ gid: g.id, target: atWalls.hex, defense: true }); continue; }
       if (distance(g.hex, capital.hex) > 0) stepToward(s, g, capital.hex, false);
       continue;
     }
@@ -179,7 +180,7 @@ export const aiMilitaryTurn = (s: GameState, pid: string): AiAttack[] => {
     const siegeBy = besieged.map((h) => s.generals[h.siege!.by]).find((x) => x && armyValue(x.army) > 0);
     if (siegeBy && armyValue(g.army) > 0) {
       if (distance(g.hex, siegeBy.hex) > 1) stepToward(s, g, siegeBy.hex, true);
-      if (distance(g.hex, siegeBy.hex) === 1 && power(g) >= 0.8 * power(siegeBy)) attacks.push({ gid: g.id, target: siegeBy.hex });
+      if (distance(g.hex, siegeBy.hex) === 1 && power(g) >= 0.8 * power(siegeBy)) attacks.push({ gid: g.id, target: siegeBy.hex, defense: true });
       continue;
     }
     // идёт осада: стоять у стен, пока город не сдастся в начале следующего хода
@@ -191,7 +192,7 @@ export const aiMilitaryTurn = (s: GameState, pid: string): AiAttack[] => {
     if (goal) {
       if (distance(g.hex, goal.hex) > 1) stepToward(s, g, goal.hex, true);
       if (distance(g.hex, goal.hex) === 1) {
-        attacks.push({ gid: g.id, target: goal.hex });
+        attacks.push({ gid: g.id, target: goal.hex, defense: goal.kind === 'intruder' });
         if (goal.kind === 'army' || goal.kind === 'city') p.ai.lastWar = s.turn;
       }
       continue;

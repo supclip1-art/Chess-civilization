@@ -24,11 +24,11 @@ export const hirePiece = (s: GameState, pid: string, gid: string, piece: Piece):
   const g = s.generals[gid];
   if (!g || g.owner !== pid) return no('not your general');
   if (!inOwnTerritory(s, pid, gid)) return no('the general must stand on your land');
-  if (p.barracks < HIRE_LEVEL[piece]) return no(`needs barracks level ${HIRE_LEVEL[piece]}`);
+  if (p.barracks < HIRE_LEVEL[piece]) return no(p.barracks ? `needs barracks level ${HIRE_LEVEL[piece]} — upgrade it in your city` : 'build barracks in your city first: tap the city, then Build barracks');
   const price = piecePrice(s, pid, piece);
   if (p.res.gold < price) return no('not enough gold');
   const next = { ...g.army, [piece]: g.army[piece] + 1 };
-  if (!formationOk(next)) return no(`needs ${PAWNS_REQUIRED[piece]} pawns in the army`);
+  if (!formationOk(next)) return no(`this army needs ${PAWNS_REQUIRED[piece]} pawns first`);
   p.res.gold -= price;
   g.army = next;
   return ok;

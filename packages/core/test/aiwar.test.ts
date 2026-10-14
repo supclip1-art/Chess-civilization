@@ -8,16 +8,16 @@ import {
 
 const play = (aggr: Aggression[], turns: number) => {
   const s = newGame(europeMap(), (['italy', 'germany', 'france', 'spain'] as const).map((n, i) => ({ nation: n, ai: { aggression: aggr[i], ruler: 'x' } })), { elo: 1200, seed: 7 });
-  const vs: { turn: number; who: string; aggr: Aggression; neutral: boolean }[] = [];
+  const vs: { turn: number; who: string; aggr: Aggression; neutral: boolean; defense?: boolean }[] = [];
   for (let t = 0; t < turns * 4; t++) {
     const pid = s.order[s.current];
     aiEconomyTurn(s, pid);
     for (const a of aiMilitaryTurn(s, pid)) {
       const r = attack(s, a.gid, a.target);
-      if (r.kind === 'siege') vs.push({ turn: s.turn, who: pid, aggr: s.players[pid].ai!.aggression, neutral: false });
+      if (r.kind === 'siege') vs.push({ turn: s.turn, who: pid, aggr: s.players[pid].ai!.aggression, neutral: false, defense: a.defense });
       if (r.kind !== 'battle') continue;
       const att = s.generals[r.attacker], def = s.generals[r.defender];
-      vs.push({ turn: s.turn, who: pid, aggr: s.players[pid].ai!.aggression, neutral: !!s.neutrals[def.owner] });
+      vs.push({ turn: s.turn, who: pid, aggr: s.players[pid].ai!.aggression, neutral: !!s.neutrals[def.owner], defense: a.defense });
       const win = next(s.rng) * (power(att) + power(def)) < power(att);
       resolveBattle(s, r.attacker, r.defender, { end: 'mate', mateWinner: win ? 'white' : 'black', white: { ...att.army }, black: { ...def.army } });
     }
@@ -31,7 +31,7 @@ test('ИИ захватывает нейтралов, воинственный �
   const captured = s.log.filter((e) => / is captured$/.test(e.text) && s.players[e.player!]).length;
   assert.ok(captured >= 4, `захватов: ${captured}`);
   assert.ok(vs.some((v) => v.aggr === 'warlike' && !v.neutral), 'воинственный атакует игроков');
-  const peaceful = vs.filter((v) => v.aggr === 'peaceful' && !v.neutral).map((v) => v.turn);
+  const peaceful = vs.filter((v) => v.aggr === 'peaceful' && !v.neutral && !v.defense).map((v) => v.turn); // отбиться можно всегда
   assert.ok(peaceful.every((t) => t >= 25), 'миролюбивый — не раньше 25-го хода');
   assert.ok(peaceful.every((t, i) => i === 0 || t - peaceful[i - 1] >= 8 || t === peaceful[i - 1]), 'и не чаще раза в 8 ходов');
   assert.ok(!vs.some((v) => v.aggr === 'moderate' && !v.neutral && v.turn < 15), 'умеренный — не раньше 15-го хода');

@@ -34,6 +34,8 @@ export const MAX_RESOURCE_LEVEL = 5;
 
 // ---- Ратуша и строители ----
 export const TOWN_HALL_MAX_LEVEL = 3;
+/** Каждый город сам даёт немного дерева в ход — чтобы не застрять без дерева до первой лесопилки. */
+export const CITY_WOOD = 5;
 /** Улучшение ратуши до ур.2 и ур.3. */
 export const TOWN_HALL_UPGRADE: Record<2 | 3, { cost: Res; turns: number }> = {
   2: { cost: res(40, 30), turns: 1 },

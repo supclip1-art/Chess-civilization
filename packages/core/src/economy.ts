@@ -2,7 +2,7 @@
 // доход, содержание и голод.
 
 import {
-  ARMY_UPKEEP_RATE, BARRACKS, BUILDER_HIRE_FOOD, BUILDER_UPKEEP_FOOD, BUILD_TURNS, ELO_PER_RESEARCH,
+  ARMY_UPKEEP_RATE, BARRACKS, CITY_WOOD, BUILDER_HIRE_FOOD, BUILDER_UPKEEP_FOOD, BUILD_TURNS, ELO_PER_RESEARCH,
   GENERAL_UPKEEP_FOOD, MAX_RESOURCE_LEVEL, PAWNS_REQUIRED, PIECE_PRICE, RESEARCH, RESOURCE_COST, RESOURCE_OF,
   RESOURCE_OUTPUT, TAVERN, TOWN_HALL_FOUND, TOWN_HALL_MAX_LEVEL, TOWN_HALL_UPGRADE,
   type Piece, type Res, type ResourceBuilding,
@@ -243,6 +243,7 @@ export const income = (s: GameState, pid: string): Res => {
     const o = buildingOutput(s, pid, c);
     inc.wood += o.wood; inc.food += o.food; inc.gold += o.gold;
   }
+  inc.wood += CITY_WOOD * playerHalls(s, pid).length; // базовый доход города
   const perCity = mods(s, pid).goldPerCity ?? 0;
   if (perCity) inc.gold += perCity * Math.max(0, playerHalls(s, pid).length - 1);
   return inc;

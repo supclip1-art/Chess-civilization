@@ -144,7 +144,10 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
         html += `<p class="muted">White: ${esc(g.white)} · vs 1.e4: ${esc(g.vsE4)} · vs 1.d4: ${esc(g.vsD4)}</p>
           <p class="muted">${g.attacked ? 'Has acted this turn' : `Moves left: ${g.moveLeft}`}</p>`;
         if (cell.owner === ME) {
-          html += `<div class="acts">${PIECES.map((x) => btn(`hire:${g.id}:${x}`, PIECE_NAME[x], `${amount('gold', piecePrice(s, ME, x))}${p.barracks < HIRE_LEVEL[x] ? ` · barracks ${HIRE_LEVEL[x]}` : ''}`, p.barracks >= HIRE_LEVEL[x] && p.res.gold >= piecePrice(s, ME, x))).join('')}</div>`;
+          // кнопки найма не отключаем: нажатие объясняет, чего не хватает (казарма, золото, пешки)
+          html += `<p class="muted hirehead">Hire pieces into this army${p.barracks ? '' : ' — first build <b>barracks</b> in your city'}:</p>
+            <div class="acts">${PIECES.map((x) => btn(`hire:${g.id}:${x}`, PIECE_NAME[x], `${amount('gold', piecePrice(s, ME, x))}${p.barracks < HIRE_LEVEL[x] ? ` · barracks ${HIRE_LEVEL[x]}` : ''}`)
+              .replace('class="act"', `class="act${p.barracks >= HIRE_LEVEL[x] && p.res.gold >= piecePrice(s, ME, x) ? '' : ' off'}"`)).join('')}</div>`;
         }
         if (!cell.owner && cell.terrain !== 'water' && cell.terrain !== 'mountain') {
           const m = NATIONS[p.nation].mods;
