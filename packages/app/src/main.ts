@@ -2,7 +2,7 @@
 // Карта и бои появятся на этапах 3–4.
 
 import {
-  NATIONS, income, newGame, playerGenerals, sandboxMap, upkeep, type Aggression, type GameState, type NationId,
+  NATIONS, armiesFromFen, income, insufficientMaterial, newGame, playerGenerals, sandboxMap, upkeep, type Aggression, type GameState, type NationId,
 } from '../../core/src/index.ts';
 import { Engine, profile } from './engine.ts';
 import { initTelegram, platformLabel, setBack, tap, userName } from './tg.ts';
@@ -172,6 +172,9 @@ const run = async (log: (t: string) => void) => {
       break;
     }
     moves.push(r.best);
+    const after = await engine.inspect(`fen ${START_ARMIES} moves ${moves.join(' ')}`);
+    const { white, black } = armiesFromFen(after.fen);
+    if (insufficientMaterial(white, black)) { end = 'draw, neither side can mate'; break; }
   }
   const { fen } = await engine.inspect(`fen ${START_ARMIES}${moves.length ? ` moves ${moves.join(' ')}` : ''}`);
   const secs = (performance.now() - tb) / 1000;

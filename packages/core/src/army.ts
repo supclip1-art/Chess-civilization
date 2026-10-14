@@ -77,9 +77,32 @@ export type BattleOutcome = { winner: 'attacker' | 'defender' | null; note: stri
 
 export const material = (a: Army): number => PIECES.reduce((sum, p) => sum + a[p] * PIECE_VALUE[p], 0);
 
-/** Кто победил: мат; на 150-м полуходе — материал; ничья — по правилу из настроек. */
+/** Может ли сторона поставить мат против одинокого короля. Не может: голый король, король с конём,
+ *  король со слоном, король с двумя конями. Пешка, ладья, ферзь, два слона или слон с конём — могут. */
+export const canForceMate = (a: Army): boolean =>
+  a.p > 0 || a.r > 0 || a.q > 0 || a.b >= 2 || (a.b >= 1 && a.n >= 1);
+
+/** Ни одна сторона не может поставить мат — партия сразу заканчивается ничьей. */
+export const insufficientMaterial = (white: Army, black: Army): boolean => !canForceMate(white) && !canForceMate(black);
+
+/** Фигуры на доске по FEN (без королей). */
+export const armiesFromFen = (fen: string): { white: Army; black: Army } => {
+  const white = emptyArmy(), black = emptyArmy();
+  for (const ch of fen.split(' ')[0]) {
+    const lower = ch.toLowerCase() as Piece;
+    if (!PIECES.includes(lower)) continue;
+    (ch === lower ? black : white)[lower]++;
+  }
+  return { white, black };
+};
+
+/** Кто победил: мат; нет матующего материала у обеих сторон — ничья; на 150-м полуходе — материал;
+ *  остальные ничьи — по правилу из настроек. */
 export const judge = (r: BattleReport, drawRule: 'repel' | 'material' = 'repel'): BattleOutcome => {
   if (r.end === 'mate') return { winner: r.mateWinner === 'white' ? 'attacker' : 'defender', note: 'мат' };
+  if (r.end === 'insufficient' || insufficientMaterial(r.white, r.black)) {
+    return { winner: null, note: 'ничья — ни одна сторона не может поставить мат' };
+  }
   const mw = material(r.white), mb = material(r.black);
   if (r.end === 'limit' || drawRule === 'material') {
     if (mw !== mb) return { winner: mw > mb ? 'attacker' : 'defender', note: `по материалу ${mw}:${mb}` };

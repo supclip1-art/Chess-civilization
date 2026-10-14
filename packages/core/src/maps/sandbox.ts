@@ -33,7 +33,8 @@ export const sandboxMap = (seed = 2026): MapDef => {
   }
   for (const n of NEUTRALS) {
     t.set(key(n), 'field');
-    range(n, 1).filter((h) => distance(h, n) === 1).forEach((h, i) => t.set(key(h), ['field', 'forest', 'deposit', 'tundra', 'desert', 'tundra'][i]));
+    const ring: Terrain[] = ['field', 'forest', 'deposit', 'tundra', 'desert', 'tundra'];
+    range(n, 1).filter((h) => distance(h, n) === 1).forEach((h, i) => t.set(key(h), ring[i]));
   }
   return {
     name: 'Sandbox',

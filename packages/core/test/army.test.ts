@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
-  attack, emptyArmy, endTurn, formationOk, hireGeneral, hirePiece, judge, move, newGame, playerHalls,
+  armiesFromFen, canForceMate, insufficientMaterial, attack, emptyArmy, endTurn, formationOk, hireGeneral, hirePiece, judge, move, newGame, playerHalls,
   reachable, resolveBattle, returning, visible, winner, key, upgradeBarracks, type GameState, type Army,
 } from '../src/index.ts';
 import { NEUTRAL, SPAWN_A, SPAWN_B, testMap } from './helpers.ts';
@@ -50,6 +50,26 @@ test('исход боя: мат, материал на лимите, ничья 
   assert.equal(judge({ end: 'limit', white: army({ n: 1 }), black: army({ p: 3 }) }).winner, null);
   assert.equal(judge({ end: 'repetition', white: army({ p: 5 }), black: army({ p: 1 }) }).winner, null);
   assert.equal(judge({ end: 'repetition', white: army({ p: 5 }), black: army({ p: 1 }) }, 'material').winner, 'attacker');
+});
+
+test('нет матующего материала — ничья сразу, даже если материала больше', () => {
+  assert.ok(!canForceMate(army({ n: 1 })));
+  assert.ok(!canForceMate(army({ b: 1 })));
+  assert.ok(!canForceMate(army({ n: 2 })));
+  assert.ok(canForceMate(army({ b: 1, n: 1 })));
+  assert.ok(canForceMate(army({ b: 2 })));
+  assert.ok(canForceMate(army({ p: 1 })));
+  assert.ok(insufficientMaterial(army({ n: 1 }), army({})));
+  assert.ok(insufficientMaterial(army({ n: 1 }), army({ b: 1 })));
+  assert.ok(!insufficientMaterial(army({ n: 1 }), army({ p: 1 })));
+  // раньше на лимите король с конём против голого короля засчитывался как победа по материалу
+  assert.equal(judge({ end: 'limit', white: army({ n: 1 }), black: army({}) }).winner, null);
+  assert.equal(judge({ end: 'limit', white: army({ b: 1 }), black: army({ n: 1 }) }).winner, null);
+});
+
+test('фигуры на доске по FEN', () => {
+  assert.deepEqual(armiesFromFen('8/8/8/3k2K1/6N1/4n3/8/8 w - - 48 76'), { white: army({ n: 1 }), black: army({ n: 1 }) });
+  assert.deepEqual(armiesFromFen('1n2k3/2pppp2/8/8/8/8/2PPPP2/1N2K3 w - - 0 1'), { white: army({ p: 4, n: 1 }), black: army({ p: 4, n: 1 }) });
 });
 
 test('возврат фигур: казарма решает, стартовый конь возвращается всегда', () => {
