@@ -130,7 +130,8 @@ export const resolveSieges = (s: GameState, pid: string): void => {
   for (const h of Object.values(s.halls)) {
     const g = h.siege && s.generals[h.siege.by];
     if (!h.siege || !g || g.owner !== pid) continue;
-    if (s.turn < h.siege.since + SIEGE_TURNS) continue;
+    const castles = s.players[h.owner] && NATIONS[s.players[h.owner].nation].mods.castles;
+    if (s.turn < h.siege.since + SIEGE_TURNS + (castles ? 1 : 0)) continue; // японский замок держится 2 хода
     if (distance(g.hex, h.hex) > 1) { h.siege = undefined; continue; }
     if (defenderAt(s, h.hex, pid)) { h.siege = undefined; say(s, `reinforcements lifted the siege`, pid); continue; }
     capture(s, h.id, pid);
@@ -155,7 +156,7 @@ export const capture = (s: GameState, hallId: string, newOwner: string): void =>
     oldPlayer.jobs = oldPlayer.jobs.filter((j) =>
       !(j.kind === 'resource' && s.cells[key(j.hex)]?.hall === hallId) && !(j.kind === 'townhall' && j.hallId === hallId));
   }
-  h.level = Math.max(1, h.level - 1);
+  if (!(oldPlayer && NATIONS[oldPlayer.nation].mods.castles)) h.level = Math.max(1, h.level - 1); // японский замок уровень не теряет
   h.owner = newOwner;
   h.siege = undefined;
   if (s.neutrals[old]) {

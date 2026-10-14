@@ -4,7 +4,7 @@ import {
   ELO_PER_WIN, GENERAL_HIRE_GOLD, HIRE_LEVEL, MAX_GENERALS, MAX_STARS, PAWNS_REQUIRED, PIECES, PIECE_PRICE,
   PIECE_VALUE, type Piece,
 } from './config.ts';
-import { type Result, mods, playerGenerals, playerHalls, recruitElo } from './economy.ts';
+import { type Result, mods, piecePrice, playerGenerals, playerHalls, recruitElo } from './economy.ts';
 import { distance, key } from './hex.ts';
 import { type Army, type GameState, emptyArmy, makeGeneral, say } from './state.ts';
 
@@ -25,10 +25,11 @@ export const hirePiece = (s: GameState, pid: string, gid: string, piece: Piece):
   if (!g || g.owner !== pid) return no('not your general');
   if (!inOwnTerritory(s, pid, gid)) return no('the general must stand on your land');
   if (p.barracks < HIRE_LEVEL[piece]) return no(`needs barracks level ${HIRE_LEVEL[piece]}`);
-  if (p.res.gold < PIECE_PRICE[piece]) return no('not enough gold');
+  const price = piecePrice(s, pid, piece);
+  if (p.res.gold < price) return no('not enough gold');
   const next = { ...g.army, [piece]: g.army[piece] + 1 };
   if (!formationOk(next)) return no(`needs ${PAWNS_REQUIRED[piece]} pawns in the army`);
-  p.res.gold -= PIECE_PRICE[piece];
+  p.res.gold -= price;
   g.army = next;
   return ok;
 };

@@ -104,8 +104,10 @@ export type MapDef = {
   cells: { q: number; r: number; terrain: Terrain }[];
   /** Стартовые точки наций (по порядку выбора). Невыбранные становятся нейтралами. */
   spawns: Hex[];
-  /** Нация каждой стартовой точки (карты по реальной географии): игрок стартует у себя на родине. */
+  /** Нация каждой стартовой точки — только для старых карт; на новых нации расставляются случайно (randomSpawns). */
   spawnNations?: NationId[];
+  /** Расставить игроков по стартовым точкам случайно (по зерну партии). */
+  randomSpawns?: boolean;
   /** Ратуши слаборазвитых нейтральных государств. */
   neutrals: Hex[];
   /** Названия городов по клеткам («q,r»): нейтралы и свободные столицы получают исторические имена. */
@@ -124,10 +126,16 @@ export const say = (s: GameState, text: string, player?: string): void => {
   s.log.push({ turn: s.turn, player, text });
 };
 
-export const hallRadius = (h: TownHall): number => TOWN_HALL_RADIUS[Math.min(h.level, TOWN_HALL_RADIUS.length) - 1];
+/** Радиус территории города: по уровню; у Казахстана город 1-го уровня охватывает больше. */
+export const hallRadius = (h: TownHall, s?: GameState): number => {
+  const base = TOWN_HALL_RADIUS[Math.min(h.level, TOWN_HALL_RADIUS.length) - 1];
+  const p = s?.players[h.owner];
+  const first = p ? NATIONS[p.nation].mods.firstLevelRadius : undefined;
+  return h.level === 1 && first ? Math.max(base, first) : base;
+};
 
 /** Пересчитать, чьи клетки чьи: каждая ратуша красит свой радиус, спорную клетку держит более ранняя. */
-export const recomputeTerritory = (s: GameState, radiusOf: (h: TownHall) => number = hallRadius): void => {
+export const recomputeTerritory = (s: GameState, radiusOf: (h: TownHall) => number = (h) => hallRadius(h, s)): void => {
   for (const c of Object.values(s.cells)) { c.owner = undefined; c.hall = undefined; }
   const halls = Object.values(s.halls).sort((a, b) => a.order - b.order);
   for (const h of halls) {
@@ -190,18 +198,27 @@ export const createGame = (map: MapDef, setup: PlayerSetup[], opts: { elo: numbe
   };
   for (const c of map.cells) s.cells[key(c)] = { hex: { q: c.q, r: c.r }, terrain: c.terrain };
   // на географической карте игрок стартует на родине своей нации, иначе — по порядку
-  const spawnOf = setup.map((p, i) => {
-    if (!map.spawnNations) return i;
-    const at = map.spawnNations.indexOf(p.nation);
-    if (at < 0) throw new Error(`no spawn for ${p.nation} on ${map.name}`);
-    return at;
-  });
+  // стартовые точки: случайно (карты наций не привязаны к местам), по нации или по порядку
+  let spawnOf: number[];
+  if (map.randomSpawns) {
+    const idx = map.spawns.map((_, i) => i);
+    for (let i = idx.length - 1; i > 0; i--) { const j = int(s.rng, 0, i); [idx[i], idx[j]] = [idx[j], idx[i]]; }
+    spawnOf = setup.map((_, i) => idx[i]);
+  } else {
+    spawnOf = setup.map((p, i) => {
+      if (!map.spawnNations) return i;
+      const at = map.spawnNations.indexOf(p.nation);
+      if (at < 0) throw new Error(`no spawn for ${p.nation} on ${map.name}`);
+      return at;
+    });
+  }
   setup.forEach((p, i) => {
     const id = `p${i + 1}`;
     const hex = map.spawns[spawnOf[i]];
     s.order.push(id);
     s.players[id] = {
-      id, nation: p.nation, ai: p.ai, res: { ...START_RESOURCES }, builders: 1, barracks: 0, tavern: 0,
+      id, nation: p.nation, ai: p.ai, builders: 1, barracks: 0, tavern: 0,
+      res: { wood: START_RESOURCES.wood + (NATIONS[p.nation].mods.startBonus?.wood ?? 0), food: START_RESOURCES.food + (NATIONS[p.nation].mods.startBonus?.food ?? 0), gold: START_RESOURCES.gold + (NATIONS[p.nation].mods.startBonus?.gold ?? 0) },
       research: { done: 0 }, jobs: [], starterKnight: true, alive: true,
     };
     addHall(s, id, hex, 1);
@@ -209,6 +226,6 @@ export const createGame = (map: MapDef, setup: PlayerSetup[], opts: { elo: numbe
   });
   map.spawns.forEach((h, i) => { if (!spawnOf.includes(i)) addNeutral(s, h, map.names?.[key(h)]); });
   map.neutrals.forEach((h) => addNeutral(s, h, map.names?.[key(h)]));
-  recomputeTerritory(s, hallRadius);
+  recomputeTerritory(s);
   return s;
 };

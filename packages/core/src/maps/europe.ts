@@ -59,7 +59,8 @@ export const europeMap = (): MapDef => ({
   name: 'Europe',
   cells: ROWS.flatMap(([q0, row], r) => [...row].map((ch, i) => ({ q: q0 + i, r, terrain: T[ch] }))),
   spawns: [{ q: 14, r: 29 }, { q: 26, r: 8 }, { q: 8, r: 16 }, { q: -7, r: 33 }],
-  spawnNations: ['italy', 'germany', 'france', 'spain'],
+  // столицы: Rome, Berlin, Paris, Madrid — нации расставляются по ним случайно
+  randomSpawns: true,
   neutrals: [{ q: -16, r: 36 }, { q: 8, r: 10 }, { q: 15, r: 9 }, { q: 28, r: 1 }, { q: 25, r: 13 }, { q: 25, r: 18 }, { q: 35, r: 9 }, { q: 28, r: 19 }, { q: 17, r: 23 }, { q: 15, r: 33 }, { q: 27, r: 24 }, { q: 24, r: 39 }, { q: 5, r: 41 }, { q: -4, r: 42 }, { q: 13, r: 20 }, { q: 6, r: 27 }, { q: 0, r: 31 }, { q: 23, r: 6 }, { q: 9, r: 1 }, { q: 28, r: 29 }, { q: 32, r: 13 }],
   names: {
     '14,29': 'Rome',

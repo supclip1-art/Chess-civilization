@@ -436,7 +436,8 @@ with open(OUT, 'w') as f:
     f.write("  name: 'Europe',\n")
     f.write('  cells: ROWS.flatMap(([q0, row], r) => [...row].map((ch, i) => ({ q: q0 + i, r, terrain: T[ch] }))),\n')
     f.write('  spawns: [' + ', '.join(f'{{ q: {h[0]}, r: {h[1]} }}' for _, _, h in spawns) + '],\n')
-    f.write('  spawnNations: [' + ', '.join(f"'{n}'" for n, _, _ in spawns) + '],\n')
+    f.write('  // столицы: ' + ', '.join(nm for _, nm, _ in spawns) + ' — нации расставляются по ним случайно\n')
+    f.write('  randomSpawns: true,\n')
     f.write('  neutrals: [' + ', '.join(f'{{ q: {h[0]}, r: {h[1]} }}' for _, h in neutrals) + '],\n')
     f.write('  names: {\n')
     for n, nm, h in spawns:

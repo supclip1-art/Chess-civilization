@@ -7,10 +7,10 @@ import {
   RESOURCE_OUTPUT, TAVERN, TOWN_HALL_FOUND, TOWN_HALL_MAX_LEVEL, TOWN_HALL_UPGRADE,
   type Piece, type Res, type ResourceBuilding,
 } from './config.ts';
-import { type Hex, key } from './hex.ts';
+import { type Hex, key, neighbors } from './hex.ts';
 import { NATIONS, type Mods } from './nations.ts';
 import {
-  BUILDING_TERRAIN, PASSABLE, type Army, type GameState, type General, type Player, cityName, newId, recomputeTerritory, say,
+  BUILDING_TERRAIN, PASSABLE, type Army, type Cell, type GameState, type General, type Player, cityName, newId, recomputeTerritory, say,
 } from './state.ts';
 
 export type Result = { ok: true } | { ok: false; reason: string };
@@ -29,6 +29,47 @@ const pay = (p: Player, cost: Res): void => {
 const scale = (c: Res, m: number): Res => ({
   wood: Math.ceil(c.wood * m), food: Math.ceil(c.food * m), gold: Math.ceil(c.gold * m),
 });
+
+// ---------- Цены и правила с учётом бонусов наций ----------
+
+const RES_KINDS = Object.keys(RESOURCE_COST) as ResourceBuilding[];
+const nearWater = (s: GameState, hex: Hex): boolean => neighbors(hex).some((n) => s.cells[key(n)]?.terrain === 'water');
+const nearLand = (s: GameState, hex: Hex): boolean => neighbors(hex).some((n) => { const c = s.cells[key(n)]; return !!c && c.terrain !== 'water'; });
+
+/** Какие ресурсные здания нация может поставить на клетку и до какого уровня. */
+export const buildOptions = (s: GameState, pid: string, cell: Cell): { kind: ResourceBuilding; maxLevel: number }[] => {
+  const out = RES_KINDS.filter((k) => BUILDING_TERRAIN[k] === cell.terrain).map((kind) => ({ kind, maxLevel: MAX_RESOURCE_LEVEL }));
+  for (const x of mods(s, pid).extraTerrain ?? []) {
+    if (x.terrain !== cell.terrain || out.some((o) => o.kind === x.kind)) continue;
+    if (x.coastal && !nearLand(s, cell.hex)) continue;
+    out.push({ kind: x.kind, maxLevel: x.maxLevel });
+  }
+  return out;
+};
+export const maxLevelAt = (s: GameState, pid: string, cell: Cell, kind: ResourceBuilding): number =>
+  buildOptions(s, pid, cell).find((o) => o.kind === kind)?.maxLevel ?? 0;
+
+/** Цена постройки (level 1) или улучшения ресурсного здания до level. */
+export const resourceCost = (s: GameState, pid: string, kind: ResourceBuilding, level: number): Res => {
+  const m = mods(s, pid);
+  return scale(RESOURCE_COST[kind][level - 1], (m.buildCostMult?.[kind] ?? 1) * (level >= 2 ? m.upgradeCostMult?.[kind] ?? 1 : 1));
+};
+export const barracksCost = (s: GameState, pid: string, level: 1 | 2 | 3 | 4 | 5): Res => scale(BARRACKS[level].cost, mods(s, pid).barracksCostMult ?? 1);
+export const researchCost = (s: GameState, pid: string, step: number): Res => scale(RESEARCH[step].cost, mods(s, pid).researchCostMult ?? 1);
+export const researchTurns = (s: GameState, pid: string, step: number): number => Math.max(1, RESEARCH[step].turns - (mods(s, pid).researchTurnsMinus ?? 0));
+export const piecePrice = (s: GameState, pid: string, piece: Piece): number => mods(s, pid).piecePrice?.[piece] ?? PIECE_PRICE[piece];
+
+/** Выработка одного ресурсного здания с бонусами нации. */
+export const buildingOutput = (s: GameState, pid: string, cell: Cell): Res => {
+  const out: Res = { wood: 0, food: 0, gold: 0 };
+  if (!cell.building) return out;
+  const { kind, level } = cell.building;
+  const m = mods(s, pid);
+  out[RESOURCE_OF[kind]] += RESOURCE_OUTPUT[kind][level - 1];
+  for (const b of m.output ?? []) if (b.kind === kind && level >= b.from && level <= b.to) out[b.res] += b.amount;
+  if (m.farmNearWater && kind === 'farm' && cell.terrain === 'field' && nearWater(s, cell.hex)) out.food += m.farmNearWater;
+  return out;
+};
 
 /** Цена улучшения города до уровня level с учётом бонуса нации. */
 export const cityUpgradeCost = (s: GameState, pid: string, level: 2 | 3): Res =>
@@ -77,10 +118,10 @@ export const build = (s: GameState, pid: string, hex: Hex, kind: ResourceBuildin
   const c = s.cells[key(hex)];
   if (!c) return no('no such cell');
   if (c.owner !== pid) return no('this land is not yours');
-  if (c.terrain !== BUILDING_TERRAIN[kind]) return no('wrong terrain for this building');
+  if (!maxLevelAt(s, pid, c, kind)) return no('wrong terrain for this building');
   if (c.building || c.reserved || isHallCell(s, hex)) return no('the cell is taken');
   if (freeBuilders(p) < 1) return no('no free builder');
-  const cost = RESOURCE_COST[kind][0];
+  const cost = resourceCost(s, pid, kind, 1);
   if (!canAfford(p.res, cost)) return no('not enough resources');
   pay(p, cost);
   c.reserved = true;
@@ -92,11 +133,11 @@ export const upgrade = (s: GameState, pid: string, hex: Hex): Result => {
   const p = s.players[pid];
   const c = s.cells[key(hex)];
   if (!c?.building || c.owner !== pid) return no('no building of yours here');
-  if (c.building.level >= MAX_RESOURCE_LEVEL) return no('already at the top level');
+  if (c.building.level >= Math.min(MAX_RESOURCE_LEVEL, maxLevelAt(s, pid, c, c.building.kind) || MAX_RESOURCE_LEVEL)) return no('already at the top level');
   if (p.jobs.some((j) => j.kind === 'resource' && key(j.hex) === key(hex))) return no('already being upgraded');
   if (freeBuilders(p) < 1) return no('no free builder');
   const level = c.building.level + 1;
-  const cost = RESOURCE_COST[c.building.kind][level - 1];
+  const cost = resourceCost(s, pid, c.building.kind, level);
   if (!canAfford(p.res, cost)) return no('not enough resources');
   pay(p, cost);
   p.jobs.push({ kind: 'resource', hex, building: c.building.kind, level, finish: s.turn + turnsFor(s, pid, level) });
@@ -148,8 +189,9 @@ export const upgradeBarracks = (s: GameState, pid: string): Result => {
   if (freeBuilders(p) < 1) return no('no free builder');
   const level = p.barracks + 1;
   const b = BARRACKS[level as 1 | 2 | 3 | 4 | 5];
-  if (!canAfford(p.res, b.cost)) return no('not enough resources');
-  pay(p, b.cost);
+  const cost = barracksCost(s, pid, level as 1 | 2 | 3 | 4 | 5);
+  if (!canAfford(p.res, cost)) return no('not enough resources');
+  pay(p, cost);
   p.jobs.push({ kind: 'barracks', level, finish: s.turn + b.turns });
   return ok;
 };
@@ -175,10 +217,10 @@ export const startResearch = (s: GameState, pid: string): Result => {
   if (p.research.active) return no('research is already in progress');
   const step = p.research.done;
   if (step >= RESEARCH.length) return no('all Tactics research is done');
-  const r = RESEARCH[step];
-  if (!canAfford(p.res, r.cost)) return no('not enough resources');
-  pay(p, r.cost);
-  p.research.active = { step, finish: s.turn + r.turns };
+  const cost = researchCost(s, pid, step);
+  if (!canAfford(p.res, cost)) return no('not enough resources');
+  pay(p, cost);
+  p.research.active = { step, finish: s.turn + researchTurns(s, pid, step) };
   return ok;
 };
 
@@ -196,12 +238,13 @@ export const playerGenerals = (s: GameState, pid: string): General[] =>
 
 export const income = (s: GameState, pid: string): Res => {
   const inc: Res = { wood: 0, food: 0, gold: 0 };
-  const bonus = mods(s, pid).mineLowLevelBonus ?? 0;
   for (const c of Object.values(s.cells)) {
     if (c.owner !== pid || !c.building) continue;
-    const { kind, level } = c.building;
-    inc[RESOURCE_OF[kind]] += RESOURCE_OUTPUT[kind][level - 1] + (kind === 'mine' ? bonus : 0);
+    const o = buildingOutput(s, pid, c);
+    inc.wood += o.wood; inc.food += o.food; inc.gold += o.gold;
   }
+  const perCity = mods(s, pid).goldPerCity ?? 0;
+  if (perCity) inc.gold += perCity * Math.max(0, playerHalls(s, pid).length - 1);
   return inc;
 };
 

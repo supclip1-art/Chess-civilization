@@ -144,3 +144,34 @@ test('рыбный промысел: только на своей морской
   round(s);
   assert.equal(income(s, 'p1').food - before, RESOURCE_OUTPUT.fishery[0]);
 });
+
+test('бонусы новых наций работают', async () => {
+  const { NATIONS, NATION_ORDER, buildingOutput, resourceCost, piecePrice, hallRadius, maxLevelAt } = await import('../src/index.ts');
+  assert.equal(NATION_ORDER.length, 26);
+  for (const id of NATION_ORDER) {
+    const n = NATIONS[id];
+    assert.ok(n.cities.length >= 12 && n.effect && n.rulers.warlike && n.rulers.peaceful, id);
+  }
+  const g = (nation: any) => newGame(testMap(), [{ nation }, { nation: 'france' }], { elo: 1200, seed: 7 });
+  // Бангладеш: стартовый бонус
+  assert.deepEqual(g('bangladesh').players.p1.res, { wood: 80, food: 70, gold: 0 });
+  // Польша: рудник на 25% дешевле
+  assert.deepEqual(resourceCost(g('poland'), 'p1', 'mine', 1), { wood: 23, food: 23, gold: 0 });
+  // Вьетнам: пешка 7
+  assert.equal(piecePrice(g('vietnam'), 'p1', 'p'), 7);
+  // Казахстан: город 1-го уровня — радиус 2
+  const kz = g('kazakhstan');
+  assert.equal(hallRadius(playerHalls(kz, 'p1')[0], kz), 2);
+  assert.equal(Object.values(kz.cells).filter((c) => c.owner === 'p1').length, 19);
+  // Украина: ферма 1-го уровня +10 еды
+  const ua = g('ukraine');
+  const field = Object.values(ua.cells).find((c) => c.owner === 'p1' && c.terrain === 'field')!;
+  field.building = { kind: 'farm', level: 1 };
+  assert.equal(buildingOutput(ua, 'p1', field).food, 30);
+  // Персия: ферма на пустыне до 3-го уровня
+  const pe = g('persia');
+  const cell = Object.values(pe.cells).find((c) => c.owner === 'p1' && c.terrain === 'field')!;
+  cell.terrain = 'desert';
+  assert.equal(maxLevelAt(pe, 'p1', cell, 'farm'), 3);
+  assert.equal(maxLevelAt(g('france'), 'p1', cell, 'farm'), 0);
+});

@@ -4,7 +4,7 @@ import { iconSvg, iconsReady } from './icons.ts';
 import { startTutorial } from './tutorial.ts';
 import {
   BARRACKS, BUILD_TURNS, BUILDING_TERRAIN, GENERAL_HIRE_GOLD, HIRE_LEVEL, NATIONS, PIECE_PRICE, RESEARCH, RESOURCE_COST,
-  RESOURCE_OUTPUT, TAVERN, TOWN_HALL_FOUND, TOWN_HALL_UPGRADE, BUILDER_HIRE_FOOD, BUILDER_UPKEEP_FOOD, GENERAL_UPKEEP_FOOD, cityUpgradeCost, tavernCost, PIECES, aiEconomyTurn, aiMilitaryTurn, attack, endTurn, say,
+  RESOURCE_OUTPUT, TAVERN, TOWN_HALL_FOUND, TOWN_HALL_UPGRADE, BUILDER_HIRE_FOOD, BUILDER_UPKEEP_FOOD, GENERAL_UPKEEP_FOOD, cityUpgradeCost, tavernCost, PIECES, barracksCost, buildOptions, buildingOutput, maxLevelAt, piecePrice, researchCost, researchTurns, resourceCost, aiEconomyTurn, aiMilitaryTurn, attack, endTurn, say,
   foundTownHall, freeBuilders, hireBuilder, hireGeneral, hirePiece, income, key, maxBuilders, move, playerGenerals,
   reachable, recruitElo, resolveBattle, startResearch, upgrade, upgradeBarracks, upgradeTavern, upgradeTownHall,
   remember, upkeep, visible, winner, build, type GameState, type Hex, type Piece, type Res, type ResourceBuilding,
@@ -144,7 +144,7 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
         html += `<p class="muted">White: ${esc(g.white)} · vs 1.e4: ${esc(g.vsE4)} · vs 1.d4: ${esc(g.vsD4)}</p>
           <p class="muted">${g.attacked ? 'Has acted this turn' : `Moves left: ${g.moveLeft}`}</p>`;
         if (cell.owner === ME) {
-          html += `<div class="acts">${PIECES.map((x) => btn(`hire:${g.id}:${x}`, PIECE_NAME[x], `${amount('gold', PIECE_PRICE[x])}${p.barracks < HIRE_LEVEL[x] ? ` · barracks ${HIRE_LEVEL[x]}` : ''}`, p.barracks >= HIRE_LEVEL[x] && p.res.gold >= PIECE_PRICE[x])).join('')}</div>`;
+          html += `<div class="acts">${PIECES.map((x) => btn(`hire:${g.id}:${x}`, PIECE_NAME[x], `${amount('gold', piecePrice(s, ME, x))}${p.barracks < HIRE_LEVEL[x] ? ` · barracks ${HIRE_LEVEL[x]}` : ''}`, p.barracks >= HIRE_LEVEL[x] && p.res.gold >= piecePrice(s, ME, x))).join('')}</div>`;
         }
         if (!cell.owner && cell.terrain !== 'water' && cell.terrain !== 'mountain') {
           const m = NATIONS[p.nation].mods;
@@ -170,9 +170,9 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
         <div class="acts">
           ${thUp ? btn(`th:${hall.id}`, `City → ${hall.level + 1}`, `${cost(cityUpgradeCost(s, ME, (hall.level + 1) as 2 | 3))} · ${thUp.turns} turn · +1 builder slot, wider land`) : ''}
           ${nb <= maxBuilders(s, ME) ? btn('builder', `Hire builder ${nb}`, `${NATIONS[p.nation].mods.freeBuilderHire ? 'free' : `${amount('food', BUILDER_HIRE_FOOD[nb as 2 | 3])}`} · ${NATIONS[p.nation].mods.freeBuilderUpkeep ? 'eats nothing' : `eats ${amount('food', BUILDER_UPKEEP_FOOD)}/turn`}`) : ''}
-          ${barNext ? btn('barracks', p.barracks ? `Barracks → ${p.barracks + 1}` : 'Build barracks', `${cost(barNext.cost)} · ${barNext.turns} turn${barNext.turns > 1 ? 's' : ''} · unlocks ${PIECE_NAME[PIECES[p.barracks]].toLowerCase()}s`) : ''}
+          ${barNext ? btn('barracks', p.barracks ? `Barracks → ${p.barracks + 1}` : 'Build barracks', `${cost(barracksCost(s, ME, (p.barracks + 1) as 1 | 2 | 3 | 4 | 5))} · ${barNext.turns} turn${barNext.turns > 1 ? 's' : ''} · unlocks ${PIECE_NAME[PIECES[p.barracks]].toLowerCase()}s`) : ''}
           ${tavNext ? btn('tavern', p.tavern ? `Tavern → ${p.tavern + 1}` : 'Build tavern', `${cost(tavernCost(s, ME, (p.tavern + 1) as 1 | 2 | 3 | 4))} · ${tavNext.turns} turn${tavNext.turns > 1 ? 's' : ''} · ${p.tavern + 2} generals`) : ''}
-          ${res && !p.research.active ? btn('research', `Tactics ${p.research.done + 1}/5`, `${cost(res.cost)} · ${res.turns} turn${res.turns > 1 ? 's' : ''} · new generals +25 ELO`) : ''}
+          ${res && !p.research.active ? btn('research', `Tactics ${p.research.done + 1}/5`, `${cost(researchCost(s, ME, p.research.done))} · ${researchTurns(s, ME, p.research.done)} turn${researchTurns(s, ME, p.research.done) > 1 ? 's' : ''} · new generals +25 ELO`) : ''}
           ${gCount < Math.min(5, p.tavern + 1) ? btn('general', 'Hire a general', `${amount('gold', gCost)} · ELO ${recruitElo(s, ME)} · eats ${amount('food', GENERAL_UPKEEP_FOOD)}/turn`) : ''}
         </div>
         <p class="muted">Barracks ${p.barracks} · Tavern ${p.tavern} · Tactics ${p.research.done}/5${p.research.active ? ' (researching)' : ''}</p>
@@ -183,17 +183,18 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
 
     // ресурсное здание
     if (!hall && cell.owner === ME) {
-      const kinds = (Object.keys(BUILDING_TERRAIN) as ResourceBuilding[]).filter((b) => BUILDING_TERRAIN[b] === cell.terrain);
+      const kinds = buildOptions(s, ME, cell).map((o) => o.kind);
+      const top = cell.building ? maxLevelAt(s, ME, cell, cell.building.kind) || 5 : 5;
       if (cell.building) {
         const b = cell.building;
         const busy = p.jobs.some((j) => j.kind === 'resource' && key(j.hex) === k);
         const out = RESOURCE_OUTPUT[b.kind];
-        parts.push(`<div class="card"><div class="row"><b class="withico">${iconSvg(b.kind, 20)}${BUILDING_NAME[b.kind]} · level ${b.level}</b><span>+${amount(RES_OF[b.kind], out[b.level - 1])} per turn</span></div>
-          ${b.level < 5 ? `<div class="acts">${btn(`up:${k}`, `Upgrade → ${b.level + 1}`, busy ? 'in progress' : `${cost(RESOURCE_COST[b.kind][b.level])} · ${BUILD_TURNS[b.level]} turn${BUILD_TURNS[b.level] > 1 ? 's' : ''} · +${amount(RES_OF[b.kind], out[b.level] - out[b.level - 1])}/turn`, !busy)}</div>` : '<p class="muted">Top level</p>'}</div>`);
+        parts.push(`<div class="card"><div class="row"><b class="withico">${iconSvg(b.kind, 20)}${BUILDING_NAME[b.kind]} · level ${b.level}</b><span>${(['food', 'wood', 'gold'] as const).filter((r) => buildingOutput(s, ME, cell)[r]).map((r) => `+${amount(r, buildingOutput(s, ME, cell)[r])}`).join(' ')} per turn</span></div>
+          ${b.level < top ? `<div class="acts">${btn(`up:${k}`, `Upgrade → ${b.level + 1}`, busy ? 'in progress' : `${cost(resourceCost(s, ME, b.kind, b.level + 1))} · ${BUILD_TURNS[b.level]} turn${BUILD_TURNS[b.level] > 1 ? 's' : ''} · +${amount(RES_OF[b.kind], out[b.level] - out[b.level - 1])}/turn`, !busy)}</div>` : '<p class="muted">Top level</p>'}</div>`);
       } else if (cell.reserved) {
         parts.push(`<div class="card"><p class="muted">Construction in progress</p></div>`);
       } else if (kinds.length) {
-        parts.push(`<div class="acts">${kinds.map((b) => btn(`build:${k}:${b}`, `Build ${BUILDING_NAME[b].toLowerCase()}`, `${cost(RESOURCE_COST[b][0])} · 1 turn · +${amount(RES_OF[b], RESOURCE_OUTPUT[b][0])}/turn`)).join('')}</div>`);
+        parts.push(`<div class="acts">${kinds.map((b) => btn(`build:${k}:${b}`, `Build ${BUILDING_NAME[b].toLowerCase()}`, `${cost(resourceCost(s, ME, b, 1))} · 1 turn · +${amount(RES_OF[b], RESOURCE_OUTPUT[b][0])}/turn`)).join('')}</div>`);
       } else {
         parts.push(`<p class="muted">Nothing can be built on ${TERRAIN_NAME[cell.terrain].toLowerCase()}.</p>`);
       }

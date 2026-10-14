@@ -4,14 +4,20 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { PASSABLE, distance, europeMap, key, neighbors, newGame, playerHalls, type Hex } from '../src/index.ts';
 
-test('Европа: игрок стартует на родине, свободные столицы становятся нейтралами со своим именем', () => {
-  const s = newGame(europeMap(), [{ nation: 'spain' }, { nation: 'italy' }], { elo: 1200, seed: 1 });
-  assert.equal(playerHalls(s, 'p1')[0].name, 'Madrid');
-  assert.equal(playerHalls(s, 'p2')[0].name, 'Rome');
+test('Европа: любая нация на любой точке, места случайные, свободные столицы — нейтралы со своим именем', () => {
+  const s = newGame(europeMap(), [{ nation: 'japan' }, { nation: 'usa' }], { elo: 1200, seed: 1 });
+  assert.equal(playerHalls(s, 'p1')[0].name, 'Kyoto');
+  assert.equal(playerHalls(s, 'p2')[0].name, 'Washington');
   const names = Object.values(s.halls).map((h) => h.name);
-  assert.ok(names.includes('Paris') && names.includes('Berlin'), 'Париж и Берлин — нейтралы');
+  assert.equal(names.filter((n) => ['Rome', 'Berlin', 'Paris', 'Madrid'].includes(n)).length, 2, 'две свободные столицы стали нейтралами');
   assert.equal(new Set(names).size, names.length, 'имена городов не повторяются');
-  assert.throws(() => newGame(europeMap(), [{ nation: 'russia' }, { nation: 'italy' }], { elo: 1200, seed: 1 }));
+  const m = europeMap();
+  const starts = new Set<string>();
+  for (let seed = 1; seed <= 12; seed++) {
+    const g = newGame(m, [{ nation: 'italy' }, { nation: 'spain' }], { elo: 1200, seed });
+    starts.add(key(playerHalls(g, 'p1')[0].hex));
+  }
+  assert.ok(starts.size >= 3, 'стартовая точка игрока меняется от партии к партии');
 });
 
 test('Европа: все столицы и нейтралы связаны сушей, дома есть 3 поля, 3 леса, 2 месторождения', () => {

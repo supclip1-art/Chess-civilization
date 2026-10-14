@@ -5,7 +5,7 @@
 import { ARMY_UPKEEP_RATE, BARRACKS, PIECES, PIECE_PRICE, HIRE_LEVEL, RESOURCE_COST, RESOURCE_OUTPUT, type Piece, type ResourceBuilding } from './config.ts';
 import { hireGeneral, hirePiece } from './army.ts';
 import {
-  build, freeBuilders, hireBuilder, income, playerGenerals, playerHalls, startResearch, upgrade, upgradeBarracks,
+  build, buildOptions, freeBuilders, mods, resourceCost, hireBuilder, income, playerGenerals, playerHalls, startResearch, upgrade, upgradeBarracks,
   upgradeTavern, upgradeTownHall, upkeep,
 } from './economy.ts';
 import { key } from './hex.ts';
@@ -40,10 +40,10 @@ export const aiEconomyTurn = (s: GameState, pid: string): void => {
     for (const c of Object.values(s.cells)) {
       if (c.owner !== pid || c.reserved || halls.has(key(c.hex))) continue;
       if (c.building && p.jobs.some((j) => j.kind === 'resource' && key(j.hex) === key(c.hex))) continue;
-      for (const kind of Object.keys(BUILDING_TERRAIN) as ResourceBuilding[]) {
-        const level = c.building ? (c.building.kind === kind ? c.building.level + 1 : 0) : c.terrain === BUILDING_TERRAIN[kind] ? 1 : 0;
-        if (!level || level > 5) continue;
-        const cost = RESOURCE_COST[kind][level - 1];
+      for (const { kind, maxLevel } of buildOptions(s, pid, c)) {
+        const level = c.building ? (c.building.kind === kind ? c.building.level + 1 : 0) : 1;
+        if (!level || level > maxLevel) continue;
+        const cost = resourceCost(s, pid, kind, level);
         if (p.res.wood < cost.wood || p.res.food < cost.food) continue;
         const food = kind === 'farm' || kind === 'fishery';
         const hungry = food && foodNet < 10;
@@ -61,7 +61,7 @@ export const aiEconomyTurn = (s: GameState, pid: string): void => {
   }
   if (g) {
     for (const piece of PIECES) {
-      while (g.army[piece] < FULL_ARMY[piece] && income(s, pid).food >= upkeep(s, pid) + PIECE_PRICE[piece] * ARMY_UPKEEP_RATE) {
+      while (g.army[piece] < FULL_ARMY[piece] && income(s, pid).food >= upkeep(s, pid) + PIECE_PRICE[piece] * (mods(s, pid).armyUpkeepRate ?? ARMY_UPKEEP_RATE)) {
         if (!hirePiece(s, pid, g.id, piece).ok) break;
       }
     }
