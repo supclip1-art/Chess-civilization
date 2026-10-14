@@ -70,7 +70,7 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
     app.querySelector('#res')!.innerHTML = `
       <span><i class="dot wood"></i>${fmt(p.res.wood)}<small>+${inc.wood}</small></span>
       <span><i class="dot food"></i>${fmt(p.res.food)}<small class="${food < 0 ? 'neg' : ''}">${food >= 0 ? '+' : ''}${fmt(food)}</small></span>
-      <span><i class="dot gold"></i>${fmt(p.res.gold)}<small>+${inc.gold}</small></span>
+      <span><i class="dot gold"></i>${fmt(p.res.gold)}<small>+${fmt(inc.gold)}</small></span>
       <span class="turn">Turn ${s.turn}</span>`;
   };
 

@@ -22,7 +22,7 @@ export const RESOURCE_COST: Record<ResourceBuilding, readonly Res[]> = {
 export const RESOURCE_OUTPUT: Record<ResourceBuilding, readonly number[]> = {
   farm: [2, 3, 5, 7, 10],
   sawmill: [2, 3, 5, 7, 10],
-  mine: [1, 1, 2, 2, 3],
+  mine: [0.5, 1, 1.5, 2, 2.5], // золото дробное: фигуры дешёвые (пешка 1), поэтому шаг 0,5
 };
 
 export const RESOURCE_OF: Record<ResourceBuilding, keyof Res> = { farm: 'food', sawmill: 'wood', mine: 'gold' };
