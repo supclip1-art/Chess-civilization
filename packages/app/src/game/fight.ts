@@ -50,6 +50,7 @@ export const playManual = (
   let pending: ((a: HumanAction) => void) | null = null;
   let lastCheck = false;
   let note = ''; // какой дебют играют генералы
+  let delay = 450; // пауза перед ходом генерала, чтобы ответ было видно
 
   const draw = (fen: string, marks: Parameters<BoardView['render']>[1] = {}) => {
     board.render(fen, { last: moves[moves.length - 1], check: lastCheck, ...marks });
@@ -61,11 +62,18 @@ export const playManual = (
 
   el.querySelector('.acts')!.addEventListener('click', (e) => {
     const b = (e.target as HTMLElement).closest<HTMLButtonElement>('button[data-f]');
-    if (!b || !pending) return;
+    if (!b) return;
+    if (b.dataset.f === 'skip') { tap(); delay = 0; b.disabled = true; status('Playing out the rest…'); return; }
+    if (!pending) return;
     tap();
     const f = pending; pending = null;
     if (b.dataset.f === 'resign') f({ resign: true });
-    else { f({ auto: true }); status('Your general is playing…'); el.querySelectorAll<HTMLButtonElement>('.acts button').forEach((x) => { x.disabled = true; }); }
+    else {
+      f({ auto: true });
+      delay = 150;
+      status('Your general is playing…');
+      el.querySelector('.acts')!.innerHTML = act('skip', 'Skip to the result', 'play the rest instantly');
+    }
   });
 
   const promote = (white: boolean): Promise<string> => new Promise((resolve) => {
@@ -112,7 +120,7 @@ export const playManual = (
     try {
       const rec = await runBattle(s, attackerId, defenderId, {
         human,
-        minDelayMs: 450,
+        minDelayMs: () => delay,
         onPly: (t) => {
           moves.push(t.moves[t.moves.length - 1]);
           fens.push(t.fen);

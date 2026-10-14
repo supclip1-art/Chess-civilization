@@ -4,7 +4,9 @@
 const FILES = 'abcdefgh';
 // сплошные знаки для обеих сторон, цвет задаёт CSS; ︎ — текстовое, а не эмодзи-начертание (iOS)
 const GLYPH: Record<string, string> = { k: '♚', q: '♛', r: '♜', b: '♝', n: '♞', p: '♟' };
-const VS = '︎';
+const VS = '\uFE0E';
+// контурные знаки — поверх белой заливки, чтобы белые фигуры были белыми с чёрным контуром
+const OUTLINE: Record<string, string> = { k: '♔', q: '♕', r: '♖', b: '♗', n: '♘', p: '♙' };
 
 export type Squares = Map<string, string>; // "e4" -> "N" (заглавная — белые)
 
@@ -82,6 +84,7 @@ export class BoardView {
       const pc = d.querySelector<HTMLElement>('.pc')!;
       pc.textContent = p ? GLYPH[p.toLowerCase()] + VS : '';
       pc.className = `pc ${p ? (isWhite(p) ? 'w' : 'b') : ''}`;
+      if (p && isWhite(p)) pc.dataset.o = OUTLINE[p.toLowerCase()] + VS; else delete pc.dataset.o;
       d.classList.toggle('last', last.includes(sq));
       d.classList.toggle('sel', marks.selected === sq);
       d.classList.toggle('check', !!marks.check && p === (toMoveWhite ? 'K' : 'k'));

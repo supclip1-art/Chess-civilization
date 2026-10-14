@@ -87,7 +87,7 @@
     .fside { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 14px; }
     .fside .mat { font-size: 16px; letter-spacing: 1px; white-space: nowrap; }
     #boardhost { display: flex; justify-content: center; }
-    .board { display: grid; grid-template-columns: repeat(8, 1fr); width: min(100%, 58vh); aspect-ratio: 1; border-radius: 6px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,.25); user-select: none; -webkit-user-select: none; touch-action: manipulation; }
+    .board { display: grid; grid-template-columns: repeat(8, 1fr); grid-template-rows: repeat(8, 1fr); width: min(100%, 58vh); aspect-ratio: 1; border-radius: 6px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,.25); user-select: none; -webkit-user-select: none; touch-action: manipulation; }
     .sq { position: relative; display: flex; align-items: center; justify-content: center; }
     .sq.l { background: #eadfc8; } .sq.d { background: #a9825f; }
     .sq.last::before { content: ''; position: absolute; inset: 0; background: rgba(240, 200, 40, .38); }
@@ -99,7 +99,8 @@
     .sq .cf { right: 2px; bottom: 1px; } .sq .cr { left: 2px; top: 1px; }
     .sq.l .cf, .sq.l .cr { color: #a9825f; } .sq.d .cf, .sq.d .cr { color: #eadfc8; }
     .pc { position: relative; z-index: 1; font-size: var(--pc, 32px); line-height: 1; font-family: "Segoe UI Symbol", "Apple Symbols", "Noto Sans Symbols 2", "DejaVu Sans", serif; pointer-events: none; }
-    .pc.w { color: #fbfaf5; -webkit-text-stroke: 1.3px #2b2b28; text-shadow: 0 1px 1px rgba(0,0,0,.25); }
+    .pc.w { color: #fbfaf5; text-shadow: 0 1px 1px rgba(0,0,0,.2); }
+    .pc.w::after { content: attr(data-o); position: absolute; left: 0; top: 0; color: #2b2b28; text-shadow: none; } /* контур белой фигуры */
     .pc.b { color: #262624; text-shadow: 0 1px 0 rgba(255,255,255,.25); }
     .fstatus { min-height: 20px; font-size: 14px; margin: 0; }
     .fmoves { min-height: 18px; font-size: 13px; color: var(--muted); margin: 0; font-variant-numeric: tabular-nums; }

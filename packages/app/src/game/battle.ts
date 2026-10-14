@@ -34,7 +34,7 @@ export type BattleHooks = {
   /** После каждого полухода. */
   onPly?: (t: { fen: string; moves: string[]; inCheck: boolean; book: boolean }) => void;
   /** Ход генерала не быстрее этого — чтобы игрок успевал увидеть ответ. */
-  minDelayMs?: number;
+  minDelayMs?: number | (() => number);
 };
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -91,7 +91,8 @@ export const runBattle = async (s: GameState, attackerId: string, defenderId: st
     } else {
       const started = performance.now();
       ({ move, book } = await generalMove(e, s, white ? att : def, startFen, moves, white, legal, pos()));
-      if (hooks.minDelayMs) await sleep(Math.max(0, hooks.minDelayMs - (performance.now() - started)));
+      const delay = typeof hooks.minDelayMs === 'function' ? hooks.minDelayMs() : hooks.minDelayMs ?? 0;
+      if (delay) await sleep(Math.max(0, delay - (performance.now() - started)));
     }
     if (book) bookPlies++;
     moves.push(move);
