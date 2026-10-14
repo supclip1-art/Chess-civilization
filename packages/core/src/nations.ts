@@ -19,9 +19,10 @@ export type Mods = {
   townHallFoundCostMult?: number; // Россия
   townHallFoundTurns?: number; // Россия
   highUpgradeTurnsMinus?: number; // Германия: улучшения ресурсных зданий до ур.4–5 быстрее (казарма и таверна — нет)
-  freeBuilderHire?: boolean; // Франция
+  freeBuilderHire?: boolean; // Франция: найм 2-го и 3-го строителя бесплатно
+  freeBuilderUpkeep?: boolean; // Франция: строители не едят
   armyUpkeepRate?: number; // Британия
-  mineLowLevelBonus?: number; // Испания: рудники ур.1–2 дают +N золота
+  mineLowLevelBonus?: number; // Испания: рудники ур.1 дают +N золота
   generalHireDiscount?: number; // Турция
   upgradeDiscount?: number; // Италия: улучшения города и таверны дешевле на эту долю
 };
@@ -43,10 +44,10 @@ export const NATIONS: Record<NationId, Nation> = {
   },
   france: {
     id: 'france', name: 'France', bonus: 'Cathedral Builders',
-    effect: 'Hiring the 2nd and 3rd builder is free.',
+    effect: 'The 2nd and 3rd builders are free to hire and eat no food.',
     rulers: { warlike: 'Napoleon', moderate: 'Louis XIV', peaceful: 'Henry IV' },
     cities: ['Paris', 'Lyon', 'Marseille', 'Bordeaux', 'Toulouse', 'Orléans', 'Reims', 'Rouen', 'Nantes', 'Strasbourg', 'Lille', 'Avignon'],
-    mods: { freeBuilderHire: true },
+    mods: { freeBuilderHire: true, freeBuilderUpkeep: true },
   },
   britain: {
     id: 'britain', name: 'Britain', bonus: 'Trading Companies',
@@ -57,7 +58,7 @@ export const NATIONS: Record<NationId, Nation> = {
   },
   spain: {
     id: 'spain', name: 'Spain', bonus: 'New World Silver',
-    effect: 'Gold mines at levels 1–2 produce +5 gold per turn.',
+    effect: 'Level 1 gold mines produce +5 gold per turn (10 instead of 5).',
     rulers: { warlike: 'Philip II', moderate: 'Isabella I', peaceful: 'Charles III' },
     cities: ['Madrid', 'Toledo', 'Seville', 'Barcelona', 'Valencia', 'Granada', 'Córdoba', 'Zaragoza', 'Salamanca', 'Bilbao', 'Málaga', 'Burgos'],
     mods: { mineLowLevelBonus: 5 },

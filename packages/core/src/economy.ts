@@ -200,7 +200,7 @@ export const income = (s: GameState, pid: string): Res => {
   for (const c of Object.values(s.cells)) {
     if (c.owner !== pid || !c.building) continue;
     const { kind, level } = c.building;
-    inc[RESOURCE_OF[kind]] += RESOURCE_OUTPUT[kind][level - 1] + (kind === 'mine' && level <= 2 ? bonus : 0);
+    inc[RESOURCE_OF[kind]] += RESOURCE_OUTPUT[kind][level - 1] + (kind === 'mine' && level === 1 ? bonus : 0);
   }
   return inc;
 };
@@ -210,7 +210,8 @@ export const upkeep = (s: GameState, pid: string): number => {
   const gens = playerGenerals(s, pid);
   const rate = mods(s, pid).armyUpkeepRate ?? ARMY_UPKEEP_RATE;
   const army = Math.ceil(gens.reduce((sum, g) => sum + armyValue(g.army), 0) * rate);
-  return army + (p.builders - 1) * BUILDER_UPKEEP_FOOD + Math.max(0, gens.length - 1) * GENERAL_UPKEEP_FOOD;
+  const builderFood = mods(s, pid).freeBuilderUpkeep ? 0 : BUILDER_UPKEEP_FOOD;
+  return army + (p.builders - 1) * builderFood + Math.max(0, gens.length - 1) * GENERAL_UPKEEP_FOOD;
 };
 
 /** Какую фигуру армия теряет следующей при голоде, не нарушая правило строя:
