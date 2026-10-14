@@ -8,6 +8,8 @@ import { openGame } from './game/screen.ts';
 import { clearSave, loadGame, saveGame } from './game/save.ts';
 import { initTelegram, platformLabel, setBack, tap, userName } from './tg.ts';
 
+declare const __BUILD__: string; // подставляет сборка: короткий хеш коммита
+
 const app = document.getElementById('app')!;
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]!));
 const render = (html: string) => { app.innerHTML = html; };
@@ -26,7 +28,7 @@ const home = () => {
     ${alive ? `<button id="continue">Continue · ${esc(NATIONS[saved!.players.p1.nation].name)}, turn ${saved!.turn}</button>` : ''}
     <button id="new" ${alive ? 'class="ghost"' : ''}>New game</button>
     <button id="bench" class="ghost">Engine speed test</button>
-    <p class="muted">Early build · ${esc(platformLabel())}</p>
+    <p class="muted">Build ${esc(__BUILD__)} · ${esc(platformLabel())}</p>
     <p class="muted">Chess engine: <a href="https://github.com/official-stockfish/Stockfish" target="_blank" rel="noopener">Stockfish</a> (GPL-3.0).</p>`);
   on('continue', () => { if (saved) openGame(app, saved, home); });
   on('new', setup);

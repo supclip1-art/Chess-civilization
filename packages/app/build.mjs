@@ -20,11 +20,14 @@ const result = await build({
   outdir: dist,
   entryNames: '[name].[hash]',
   metafile: true,
+  define: { __BUILD__: JSON.stringify((process.env.GITHUB_SHA ?? 'local').slice(0, 7)) },
 });
 const bundle = Object.keys(result.metafile.outputs).find((f) => f.endsWith('.js'));
 const bundleName = bundle.split('/').pop();
-const html = readFileSync(join(here, 'index.html'), 'utf8').replace('./app.js', `./${bundleName}`);
+const html = readFileSync(join(here, 'index.html'), 'utf8').replace('./app.js', `./${bundleName}`).replace('__BUNDLE__', bundleName);
 writeFileSync(join(dist, 'index.html'), html);
+// Telegram держит старый index.html в кеше: страница сверяет свой бандл с version.json и перезагружается на новую версию
+writeFileSync(join(dist, 'version.json'), JSON.stringify({ bundle: bundleName }));
 
 // Stockfish: при установке через npm (workspaces кладут пакеты в корневой node_modules)
 const candidates = [join(here, 'node_modules/stockfish/bin'), join(here, '../../node_modules/stockfish/bin')];

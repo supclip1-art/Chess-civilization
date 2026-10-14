@@ -111,6 +111,19 @@
     .promo div { display: flex; gap: 10px; }
     .promo button { --pc: 44px; width: 64px; height: 64px; border-radius: 12px; background: #eadfc8; border: 0; display: flex; align-items: center; justify-content: center; pointer-events: auto; font-size: 44px; }
   </style>
+  <script>
+    // Автообновление: если вышла новая версия, а Telegram показал старую страницу из кеша — перезагрузить
+    (function () {
+      var cur = '__BUNDLE__';
+      fetch('version.json', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (v) {
+        if (!v.bundle || v.bundle === cur) return;
+        var key = 'cc-reload-' + v.bundle;
+        try { if (sessionStorage.getItem(key)) return; sessionStorage.setItem(key, '1'); } catch (e) { return; }
+        var q = new URLSearchParams(location.search); q.set('v', v.bundle);
+        location.replace(location.pathname + '?' + q.toString() + location.hash);
+      }).catch(function () {});
+    })();
+  </script>
 </head>
 <body>
   <main id="app" class="stack"><p class="muted">Loading…</p></main>
