@@ -104,6 +104,12 @@
     .pc.w { color: #fbfaf5; text-shadow: 0 1px 1px rgba(0,0,0,.2); }
     .pc.w::after { content: attr(data-o); position: absolute; left: 0; top: 0; color: #2b2b28; text-shadow: none; } /* контур белой фигуры */
     .pc.b { color: #262624; text-shadow: 0 1px 0 rgba(255,255,255,.25); }
+    .tutorial { position: fixed; left: 10px; right: 10px; top: 58px; z-index: 5; background: var(--bg); border: 1.5px solid var(--accent); border-radius: 12px; padding: 10px 12px; box-shadow: 0 4px 14px rgba(0,0,0,.25); font-size: 14px; }
+    .tutorial p { margin: 0 0 8px; }
+    .trow { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+    .tbtn { width: auto; padding: 6px 12px; font-size: 13px; margin-left: 6px; }
+    .ptask { margin: 0; font-size: 15px; }
+    .good { color: #2e7d4f; }
     .fstatus { min-height: 20px; font-size: 14px; margin: 0; }
     .fmoves { min-height: 18px; font-size: 13px; color: var(--muted); margin: 0; font-variant-numeric: tabular-nums; }
     .fight.replay .acts { grid-template-columns: repeat(5, 1fr) 1.6fr; }

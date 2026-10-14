@@ -5,6 +5,8 @@ import {
 } from '../../core/src/index.ts';
 import { Engine, profile } from './engine.ts';
 import { openGame } from './game/screen.ts';
+import { showPuzzle } from './game/puzzle.ts';
+import { resetTutorial } from './game/tutorial.ts';
 import { clearSave, loadGame, saveGame } from './game/save.ts';
 import { initTelegram, platformLabel, setBack, tap, userName } from './tg.ts';
 
@@ -27,12 +29,19 @@ const home = () => {
     ${name ? `<p>Welcome, ${esc(name)}.</p>` : ''}
     ${alive ? `<button id="continue">Continue · ${esc(NATIONS[saved!.players.p1.nation].name)}, turn ${saved!.turn}</button>` : ''}
     <button id="new" ${alive ? 'class="ghost"' : ''}>New game</button>
+    <button id="puzzle" class="ghost">Warm-up puzzle</button>
+    <button id="howto" class="ghost">How to play</button>
     <button id="bench" class="ghost">Engine speed test</button>
     <p class="muted">Build ${esc(__BUILD__)} · ${esc(platformLabel())}</p>
     <p class="muted">Chess engine: <a href="https://github.com/official-stockfish/Stockfish" target="_blank" rel="noopener">Stockfish</a> (GPL-3.0).</p>`);
   on('continue', () => { if (saved) openGame(app, saved, home); });
   on('new', setup);
   on('bench', bench);
+  on('howto', () => {
+    resetTutorial();
+    if (alive && saved) openGame(app, saved, home); else setup();
+  });
+  on('puzzle', async () => { setBack(null); await showPuzzle(app, 'Back to menu'); home(); });
 };
 
 // ---------- Новая партия ----------
@@ -45,6 +54,8 @@ const AGGR: Aggression[] = ['warlike', 'moderate', 'peaceful'];
 const setup = () => {
   setBack(home);
   let nation: NationId = MVP_NATIONS[0];
+  let warmup = true;
+  try { warmup = localStorage.getItem('chessciv.warmup') !== '0'; } catch { /* ничего */ }
   const draw = () => {
     render(`
       <h1>New game</h1>
@@ -56,11 +67,12 @@ const setup = () => {
         <div class="row"><span>Players</span><select id="players">${[2, 3, 4].map((n) => `<option ${n === 4 ? 'selected' : ''}>${n}</option>`).join('')}</select></div>
         <div class="row" style="margin-top:10px"><span>Generals' ELO</span><select id="elo">${[800, 1000, 1200, 1400, 1600, 1800, 2000].map((e) => `<option ${e === 1200 ? 'selected' : ''}>${e}</option>`).join('')}</select></div>
         <p class="muted" style="margin-top:10px">One ELO for every general in the game, yours and the AI's.</p>
+        <label class="row" style="margin-top:10px"><span>Warm-up puzzle before the game</span><input type="checkbox" id="warmup" ${warmup ? 'checked' : ''}></label>
       </div>
       <button id="start">Start</button>`);
     app.querySelectorAll<HTMLButtonElement>('[data-n]').forEach((b) =>
       b.addEventListener('click', () => { tap(); nation = b.dataset.n as NationId; draw(); }));
-    on('start', () => {
+    on('start', async () => {
       const players = Number((document.getElementById('players') as HTMLSelectElement).value);
       const elo = Number((document.getElementById('elo') as HTMLSelectElement).value);
       const seed = Math.floor(Math.random() * 1e9);
@@ -74,6 +86,9 @@ const setup = () => {
       ], { elo, seed });
       clearSave();
       saveGame(s);
+      const wantPuzzle = (document.getElementById('warmup') as HTMLInputElement).checked;
+      try { localStorage.setItem('chessciv.warmup', wantPuzzle ? '1' : '0'); } catch { /* ничего */ }
+      if (wantPuzzle) { setBack(null); await showPuzzle(app); }
       openGame(app, s, home);
     });
   };

@@ -1,6 +1,7 @@
 // Экран партии: карта, верхняя панель (казна, ход), нижняя панель действий, бои, ход ИИ.
 
 import { iconSvg, iconsReady } from './icons.ts';
+import { startTutorial } from './tutorial.ts';
 import {
   BARRACKS, BUILD_TURNS, BUILDING_TERRAIN, GENERAL_HIRE_GOLD, HIRE_LEVEL, NATIONS, PIECE_PRICE, RESEARCH, RESOURCE_COST,
   RESOURCE_OUTPUT, TAVERN, TOWN_HALL_FOUND, TOWN_HALL_UPGRADE, BUILDER_HIRE_FOOD, BUILDER_UPKEEP_FOOD, GENERAL_UPKEEP_FOOD, cityUpgradeCost, tavernCost, PIECES, aiEconomyTurn, aiMilitaryTurn, attack, endTurn, say,
@@ -427,7 +428,8 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
   canvas.addEventListener('pointercancel', (e) => pointers.delete(e.pointerId));
   canvas.addEventListener('wheel', (e) => { e.preventDefault(); view.zoomAt(e.deltaY < 0 ? 1.12 : 1 / 1.12, e.offsetX, e.offsetY); draw(); }, { passive: false });
 
-  const refresh = () => { bar(); sheet(); draw(); };
+  const tut = startTutorial(app, s, ME);
+  const refresh = () => { bar(); sheet(); draw(); tut.update(); };
   window.addEventListener('resize', () => draw());
 
   const capital = Object.values(s.halls).filter((h) => h.owner === ME).sort((a, b) => a.order - b.order)[0];

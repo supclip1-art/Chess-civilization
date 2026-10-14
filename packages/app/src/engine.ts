@@ -80,6 +80,21 @@ export class Engine {
     return [...moves.entries()].sort((a, b) => a[0] - b[0]).map(([, m]) => m);
   }
 
+  /** Анализ на глубину: лучший ход и оценка. mate > 0 — сторона на ходу ставит мат за mate ходов, < 0 — получает мат. */
+  async analyse(position: string, depth = 12): Promise<{ best: string; mate?: number; cp?: number }> {
+    let mate: number | undefined, cp: number | undefined;
+    const tap = (l: string) => {
+      const m = l.match(/\bscore (cp|mate) (-?\d+)/);
+      if (m && /\bmultipv 1\b|^info depth/.test(l)) { if (m[1] === 'mate') { mate = +m[2]; cp = undefined; } else { cp = +m[2]; mate = undefined; } }
+    };
+    this.listeners.push(tap);
+    this.send(`position ${position}`);
+    this.send(`go depth ${depth}`);
+    const line = await this.waitFor((l) => l.startsWith('bestmove'), 20000);
+    this.listeners = this.listeners.filter((x) => x !== tap);
+    return { best: line?.split(/\s+/)[1] ?? '(none)', mate, cp };
+  }
+
   /** Все легальные ходы в позиции (UCI) — через "go perft 1": движок печатает по строке на ход. */
   async legalMoves(position: string): Promise<string[]> {
     const moves: string[] = [];
