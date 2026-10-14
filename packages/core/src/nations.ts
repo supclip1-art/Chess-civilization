@@ -7,6 +7,7 @@ export type Nation = {
   id: NationId;
   name: string; // название в игре (английский интерфейс)
   bonus: string;
+  effect: string; // что даёт бонус, для экрана выбора нации
   rulers: Record<Aggression, string>;
   /** Названия городов: первый — столица, дальше по порядку основания. */
   cities: string[];
@@ -27,36 +28,42 @@ export type Mods = {
 export const NATIONS: Record<NationId, Nation> = {
   russia: {
     id: 'russia', name: 'Russia', bonus: 'Vast Lands',
+    effect: 'Founding a city costs 30% less and takes 1 turn instead of 2.',
     rulers: { warlike: 'Ivan the Terrible', moderate: 'Peter the Great', peaceful: 'Elizabeth of Russia' },
     cities: ['Moscow', 'Saint Petersburg', 'Novgorod', 'Kazan', 'Smolensk', 'Tver', 'Yaroslavl', 'Vladimir', 'Pskov', 'Tula', 'Ryazan', 'Rostov'],
     mods: { townHallFoundCostMult: 0.7, townHallFoundTurns: 1 },
   },
   germany: {
     id: 'germany', name: 'Germany', bonus: 'School of Engineering',
+    effect: 'Upgrades to building levels 4 and 5 finish 1 turn faster.',
     rulers: { warlike: 'Frederick the Great', moderate: 'Otto von Bismarck', peaceful: 'Frederick III' },
     cities: ['Berlin', 'Hamburg', 'Munich', 'Cologne', 'Frankfurt', 'Nuremberg', 'Dresden', 'Leipzig', 'Bremen', 'Stuttgart', 'Hanover', 'Königsberg'],
     mods: { highUpgradeTurnsMinus: 1 },
   },
   france: {
     id: 'france', name: 'France', bonus: 'Cathedral Builders',
+    effect: 'Hiring the 2nd and 3rd builder is free.',
     rulers: { warlike: 'Napoleon', moderate: 'Louis XIV', peaceful: 'Henry IV' },
     cities: ['Paris', 'Lyon', 'Marseille', 'Bordeaux', 'Toulouse', 'Orléans', 'Reims', 'Rouen', 'Nantes', 'Strasbourg', 'Lille', 'Avignon'],
     mods: { freeBuilderHire: true },
   },
   britain: {
     id: 'britain', name: 'Britain', bonus: 'Trading Companies',
+    effect: 'Army upkeep is 20% lower: 0.2 food per gold of army value instead of 0.25.',
     rulers: { warlike: 'Henry V', moderate: 'Elizabeth I', peaceful: 'Alfred the Great' },
     cities: ['London', 'York', 'Manchester', 'Liverpool', 'Bristol', 'Birmingham', 'Edinburgh', 'Canterbury', 'Oxford', 'Cambridge', 'Nottingham', 'Plymouth'],
     mods: { armyUpkeepRate: 0.2 },
   },
   spain: {
     id: 'spain', name: 'Spain', bonus: 'New World Silver',
+    effect: 'Gold mines at levels 1–2 produce +5 gold per turn.',
     rulers: { warlike: 'Philip II', moderate: 'Isabella I', peaceful: 'Charles III' },
     cities: ['Madrid', 'Toledo', 'Seville', 'Barcelona', 'Valencia', 'Granada', 'Córdoba', 'Zaragoza', 'Salamanca', 'Bilbao', 'Málaga', 'Burgos'],
     mods: { mineLowLevelBonus: 5 },
   },
   turkey: {
     id: 'turkey', name: 'Turkey', bonus: 'Grand Bazaar',
+    effect: 'Hiring a general costs 20 gold less.',
     rulers: { warlike: 'Selim I', moderate: 'Suleiman the Magnificent', peaceful: 'Ahmed III' },
     cities: ['Istanbul', 'Ankara', 'Bursa', 'Izmir', 'Edirne', 'Konya', 'Trabzon', 'Antalya', 'Adana', 'Sinop', 'Kayseri', 'Erzurum'],
     mods: { generalHireDiscount: 20 },

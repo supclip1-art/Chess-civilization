@@ -45,7 +45,7 @@ const setup = () => {
     render(`
       <h1>New game</h1>
       <div class="card"><h2>Your nation</h2><div class="grid">
-        ${MVP_NATIONS.map((id) => `<button class="nation ${id === nation ? 'on' : ''}" data-n="${id}"><b>${NATIONS[id].name}</b><span>${esc(NATIONS[id].bonus)}</span></button>`).join('')}
+        ${MVP_NATIONS.map((id) => `<button class="nation ${id === nation ? 'on' : ''}" data-n="${id}"><b>${NATIONS[id].name}</b><span>${esc(NATIONS[id].bonus)}</span><small>${esc(NATIONS[id].effect)}</small></button>`).join('')}
       </div></div>
       <div class="card">
         <div class="row"><span>Players</span><select id="players">${[2, 3, 4, 5, 6].map((n) => `<option ${n === 4 ? 'selected' : ''}>${n}</option>`).join('')}</select></div>

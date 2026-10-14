@@ -1,5 +1,6 @@
-// Порядок хода: все ходят по очереди. Начало хода — завершаются стройки и осады, армии готовы;
-// конец хода — доход, содержание, голод; передача хода следующему живому игроку.
+// Порядок хода: все ходят по очереди. Начало хода — завершаются стройки, затем доход, содержание и голод
+// (новое здание приносит ресурсы уже в ход, когда достроено), осады, армии готовы.
+// Конец хода — передача хода следующему живому игроку.
 
 import { ARMY_MOVE } from './config.ts';
 import { completeJobs, settleEconomy } from './economy.ts';
@@ -11,6 +12,7 @@ export const currentPlayer = (s: GameState): string => s.order[s.current];
 export const startTurn = (s: GameState): void => {
   const pid = currentPlayer(s);
   completeJobs(s, pid);
+  if (s.turn > 1) settleEconomy(s, pid); // в 1-й ход доходов ещё нет
   for (const g of Object.values(s.generals)) {
     if (g.owner === pid) { g.moveLeft = ARMY_MOVE; g.attacked = false; }
   }
@@ -25,7 +27,6 @@ export const newGame = (...args: Parameters<typeof createGame>): GameState => {
 };
 
 export const endTurn = (s: GameState): void => {
-  settleEconomy(s, currentPlayer(s));
   do {
     s.current = (s.current + 1) % s.order.length;
     if (s.current === 0) s.turn++;
