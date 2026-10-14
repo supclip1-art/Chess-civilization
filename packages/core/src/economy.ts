@@ -45,12 +45,12 @@ export const maxBuilders = (s: GameState, pid: string): number =>
 export const hireBuilder = (s: GameState, pid: string): Result => {
   const p = s.players[pid];
   const n = p.builders + 1;
-  if (n > maxBuilders(s, pid)) return no('нужна ратуша выше уровнем');
+  if (n > maxBuilders(s, pid)) return no('upgrade your town hall first');
   const food = mods(s, pid).freeBuilderHire ? 0 : BUILDER_HIRE_FOOD[n as 2 | 3];
-  if (p.res.food < food) return no('не хватает еды');
+  if (p.res.food < food) return no('not enough food');
   p.res.food -= food;
   p.builders = n;
-  say(s, `нанят строитель ${n}`, pid);
+  say(s, `builder ${n} hired`, pid);
   return ok;
 };
 
@@ -68,13 +68,13 @@ const isHallCell = (s: GameState, hex: Hex): boolean =>
 export const build = (s: GameState, pid: string, hex: Hex, kind: ResourceBuilding): Result => {
   const p = s.players[pid];
   const c = s.cells[key(hex)];
-  if (!c) return no('нет такой клетки');
-  if (c.owner !== pid) return no('клетка не ваша');
-  if (c.terrain !== BUILDING_TERRAIN[kind]) return no('не та местность');
-  if (c.building || c.reserved || isHallCell(s, hex)) return no('клетка занята');
-  if (freeBuilders(p) < 1) return no('нет свободного строителя');
+  if (!c) return no('no such cell');
+  if (c.owner !== pid) return no('this land is not yours');
+  if (c.terrain !== BUILDING_TERRAIN[kind]) return no('wrong terrain for this building');
+  if (c.building || c.reserved || isHallCell(s, hex)) return no('the cell is taken');
+  if (freeBuilders(p) < 1) return no('no free builder');
   const cost = RESOURCE_COST[kind][0];
-  if (!canAfford(p.res, cost)) return no('не хватает ресурсов');
+  if (!canAfford(p.res, cost)) return no('not enough resources');
   pay(p, cost);
   c.reserved = true;
   p.jobs.push({ kind: 'resource', hex, building: kind, level: 1, finish: s.turn + turnsFor(s, pid, 1) });
@@ -84,13 +84,13 @@ export const build = (s: GameState, pid: string, hex: Hex, kind: ResourceBuildin
 export const upgrade = (s: GameState, pid: string, hex: Hex): Result => {
   const p = s.players[pid];
   const c = s.cells[key(hex)];
-  if (!c?.building || c.owner !== pid) return no('здесь нет вашего здания');
-  if (c.building.level >= MAX_RESOURCE_LEVEL) return no('максимальный уровень');
-  if (p.jobs.some((j) => j.kind === 'resource' && key(j.hex) === key(hex))) return no('уже улучшается');
-  if (freeBuilders(p) < 1) return no('нет свободного строителя');
+  if (!c?.building || c.owner !== pid) return no('no building of yours here');
+  if (c.building.level >= MAX_RESOURCE_LEVEL) return no('already at the top level');
+  if (p.jobs.some((j) => j.kind === 'resource' && key(j.hex) === key(hex))) return no('already being upgraded');
+  if (freeBuilders(p) < 1) return no('no free builder');
   const level = c.building.level + 1;
   const cost = RESOURCE_COST[c.building.kind][level - 1];
-  if (!canAfford(p.res, cost)) return no('не хватает ресурсов');
+  if (!canAfford(p.res, cost)) return no('not enough resources');
   pay(p, cost);
   p.jobs.push({ kind: 'resource', hex, building: c.building.kind, level, finish: s.turn + turnsFor(s, pid, level) });
   return ok;
@@ -101,12 +101,12 @@ export const upgrade = (s: GameState, pid: string, hex: Hex): Result => {
 export const upgradeTownHall = (s: GameState, pid: string, hallId: string): Result => {
   const p = s.players[pid];
   const h = s.halls[hallId];
-  if (!h || h.owner !== pid) return no('это не ваша ратуша');
-  if (h.level >= TOWN_HALL_MAX_LEVEL) return no('максимальный уровень');
-  if (p.jobs.some((j) => j.kind === 'townhall' && j.hallId === hallId)) return no('уже улучшается');
-  if (freeBuilders(p) < 1) return no('нет свободного строителя');
+  if (!h || h.owner !== pid) return no('not your town hall');
+  if (h.level >= TOWN_HALL_MAX_LEVEL) return no('already at the top level');
+  if (p.jobs.some((j) => j.kind === 'townhall' && j.hallId === hallId)) return no('already being upgraded');
+  if (freeBuilders(p) < 1) return no('no free builder');
   const u = TOWN_HALL_UPGRADE[(h.level + 1) as 2 | 3];
-  if (!canAfford(p.res, u.cost)) return no('не хватает ресурсов');
+  if (!canAfford(p.res, u.cost)) return no('not enough resources');
   pay(p, u.cost);
   p.jobs.push({ kind: 'townhall', hallId, level: h.level + 1, finish: s.turn + u.turns });
   return ok;
@@ -116,15 +116,15 @@ export const upgradeTownHall = (s: GameState, pid: string, hallId: string): Resu
 export const foundTownHall = (s: GameState, pid: string, generalId: string): Result => {
   const p = s.players[pid];
   const g = s.generals[generalId];
-  if (!g || g.owner !== pid) return no('это не ваш генерал');
-  if (g.attacked) return no('армия уже действовала в этот ход');
+  if (!g || g.owner !== pid) return no('not your general');
+  if (g.attacked) return no('this army has already acted this turn');
   const c = s.cells[key(g.hex)];
-  if (!c || !PASSABLE[c.terrain]) return no('здесь нельзя строить');
-  if (c.owner) return no('земля уже чья-то');
-  if (p.jobs.some((j) => j.kind === 'found' && key(j.hex) === key(g.hex))) return no('здесь уже строится ратуша');
+  if (!c || !PASSABLE[c.terrain]) return no('you cannot build here');
+  if (c.owner) return no('this land already belongs to someone');
+  if (p.jobs.some((j) => j.kind === 'found' && key(j.hex) === key(g.hex))) return no('a town hall is already being founded here');
   const m = mods(s, pid);
   const cost = scale(TOWN_HALL_FOUND.cost, m.townHallFoundCostMult ?? 1);
-  if (!canAfford(p.res, cost)) return no('не хватает ресурсов');
+  if (!canAfford(p.res, cost)) return no('not enough resources');
   pay(p, cost);
   g.attacked = true;
   p.jobs.push({ kind: 'found', hex: { ...g.hex }, general: g.id, finish: s.turn + (m.townHallFoundTurns ?? TOWN_HALL_FOUND.turns) });
@@ -135,12 +135,12 @@ export const foundTownHall = (s: GameState, pid: string, generalId: string): Res
 
 export const upgradeBarracks = (s: GameState, pid: string): Result => {
   const p = s.players[pid];
-  if (p.barracks >= 5) return no('максимальный уровень');
-  if (p.jobs.some((j) => j.kind === 'barracks')) return no('уже строится');
-  if (freeBuilders(p) < 1) return no('нет свободного строителя');
+  if (p.barracks >= 5) return no('already at the top level');
+  if (p.jobs.some((j) => j.kind === 'barracks')) return no('already under construction');
+  if (freeBuilders(p) < 1) return no('no free builder');
   const level = p.barracks + 1;
   const b = BARRACKS[level as 1 | 2 | 3 | 4 | 5];
-  if (!canAfford(p.res, b.cost)) return no('не хватает ресурсов');
+  if (!canAfford(p.res, b.cost)) return no('not enough resources');
   pay(p, b.cost);
   p.jobs.push({ kind: 'barracks', level, finish: s.turn + Math.max(1, b.turns - (level >= 4 ? (mods(s, pid).highUpgradeTurnsMinus ?? 0) : 0)) });
   return ok;
@@ -148,12 +148,12 @@ export const upgradeBarracks = (s: GameState, pid: string): Result => {
 
 export const upgradeTavern = (s: GameState, pid: string): Result => {
   const p = s.players[pid];
-  if (p.tavern >= 4) return no('максимальный уровень');
-  if (p.jobs.some((j) => j.kind === 'tavern')) return no('уже строится');
-  if (freeBuilders(p) < 1) return no('нет свободного строителя');
+  if (p.tavern >= 4) return no('already at the top level');
+  if (p.jobs.some((j) => j.kind === 'tavern')) return no('already under construction');
+  if (freeBuilders(p) < 1) return no('no free builder');
   const level = p.tavern + 1;
   const t = TAVERN[level as 1 | 2 | 3 | 4];
-  if (!canAfford(p.res, t.cost)) return no('не хватает ресурсов');
+  if (!canAfford(p.res, t.cost)) return no('not enough resources');
   pay(p, t.cost);
   p.jobs.push({ kind: 'tavern', level, finish: s.turn + Math.max(1, t.turns - (level >= 4 ? (mods(s, pid).highUpgradeTurnsMinus ?? 0) : 0)) });
   return ok;
@@ -163,11 +163,11 @@ export const upgradeTavern = (s: GameState, pid: string): Result => {
 
 export const startResearch = (s: GameState, pid: string): Result => {
   const p = s.players[pid];
-  if (p.research.active) return no('исследование уже идёт');
+  if (p.research.active) return no('research is already in progress');
   const step = p.research.done;
-  if (step >= RESEARCH.length) return no('ветка изучена');
+  if (step >= RESEARCH.length) return no('all Tactics research is done');
   const r = RESEARCH[step];
-  if (!canAfford(p.res, r.cost)) return no('не хватает ресурсов');
+  if (!canAfford(p.res, r.cost)) return no('not enough resources');
   pay(p, r.cost);
   p.research.active = { step, finish: s.turn + r.turns };
   return ok;
@@ -229,10 +229,10 @@ const famine = (s: GameState, pid: string, foodIncome: number): void => {
       lost.push(piece);
       continue;
     }
-    if (p.builders > 1) { p.builders--; lost.push('строитель'); continue; }
+    if (p.builders > 1) { p.builders--; lost.push('builder'); continue; }
     break; // последний строитель и генералы не уходят никогда
   }
-  if (lost.length) say(s, `голод: ушли ${lost.join(', ')}`, pid);
+  if (lost.length) say(s, `famine: lost ${lost.join(', ')}`, pid);
 };
 
 /** Завершить стройки и исследования, срок которых наступил (начало хода игрока). */
@@ -253,7 +253,7 @@ export const completeJobs = (s: GameState, pid: string): void => {
         const id = newId(s, 'h');
         s.halls[id] = { id, hex: j.hex, owner: pid, level: 1, order: s.nextId };
         recomputeTerritory(s);
-        say(s, 'основана новая ратуша', pid);
+        say(s, 'a new town hall is founded', pid);
       }
     } else if (j.kind === 'barracks') p.barracks = j.level;
     else if (j.kind === 'tavern') p.tavern = j.level;

@@ -24,17 +24,18 @@ export const sandboxMap = (seed = 2026): MapDef => {
     t.set(key(h), terrain);
   }
   for (const h of range({ q: 0, r: 0 }, 1)) t.set(key(h), 'mountain'); // хребет в центре
-  for (const c of SPAWNS) {
-    const ring1 = range(c, 1).filter((h) => distance(h, c) === 1);
-    const ring2 = range(c, 2).filter((h) => distance(h, c) === 2);
-    t.set(key(c), 'field');
-    ring1.forEach((h, i) => t.has(key(h)) && t.set(key(h), HOME_RING1[i]));
-    ring2.forEach((h, i) => t.has(key(h)) && t.set(key(h), i === 0 ? 'field' : i === 6 ? 'forest' : i % 2 ? 'tundra' : 'desert'));
-  }
+  // сначала нейтралы, потом столицы: дом нации важнее и не должен терять клетки
   for (const n of NEUTRALS) {
-    t.set(key(n), 'field');
+    t.set(key(n), 'tundra');
     const ring: Terrain[] = ['field', 'forest', 'deposit', 'tundra', 'desert', 'tundra'];
     range(n, 1).filter((h) => distance(h, n) === 1).forEach((h, i) => t.set(key(h), ring[i]));
+  }
+  for (const c of SPAWNS) {
+    const ring1 = range(c, 1).filter((h) => distance(h, c) === 1);
+    const ring2 = range(c, 2).filter((h) => distance(h, c) === 2 && t.has(key(h)));
+    t.set(key(c), 'tundra'); // на клетке ратуши зданий не бывает
+    ring1.forEach((h, i) => t.has(key(h)) && t.set(key(h), HOME_RING1[i]));
+    ring2.forEach((h, i) => t.set(key(h), i === 0 ? 'field' : i === 6 ? 'forest' : i % 2 ? 'tundra' : 'desert'));
   }
   return {
     name: 'Sandbox',

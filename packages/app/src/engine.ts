@@ -63,6 +63,23 @@ export class Engine {
     return { best: line?.split(/\s+/)[1] ?? '(none)', nodes: seen, ms: performance.now() - t };
   }
 
+  /** Несколько лучших ходов (MultiPV) — для «ошибок» слабых генералов: они берут не лучший ход. */
+  async searchMulti(position: string, nodes: number, k: number): Promise<string[]> {
+    const moves = new Map<number, string>();
+    const tap = (l: string) => {
+      const m = l.match(/\bmultipv (\d+)\b.*\bpv (\S+)/);
+      if (m) moves.set(+m[1], m[2]);
+    };
+    this.listeners.push(tap);
+    this.send(`setoption name MultiPV value ${k}`);
+    this.send(`position ${position}`);
+    this.send(`go nodes ${nodes}`);
+    await this.waitFor((l) => l.startsWith('bestmove'), 60000);
+    this.listeners = this.listeners.filter((x) => x !== tap);
+    this.send('setoption name MultiPV value 1');
+    return [...moves.entries()].sort((a, b) => a[0] - b[0]).map(([, m]) => m);
+  }
+
   /** Текущая позиция и шахи — через отладочную команду "d". */
   async inspect(position: string): Promise<{ fen: string; inCheck: boolean }> {
     this.send(`position ${position}`);

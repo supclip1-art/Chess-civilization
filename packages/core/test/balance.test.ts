@@ -67,7 +67,7 @@ test('темп развития дома на настоящих правила�
     if (s.players.p1.barracks >= 5 && !marks.barracks5) marks.barracks5 = t;
     endTurn(s); endTurn(s);
   }
-  const famine = s.log.some((e) => e.player === 'p1' && e.text.startsWith('голод'));
+  const famine = s.log.some((e) => e.player === 'p1' && e.text.startsWith('famine'));
   console.log('вехи:', marks, '| ресурсы на 40-м ходу:', s.players.p1.res, '| голод:', famine);
   assert.ok(!famine, 'бот не должен голодать');
   assert.ok(marks.half && marks.half <= 30, 'половина армии к 30-му ходу');

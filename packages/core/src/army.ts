@@ -22,12 +22,12 @@ const inOwnTerritory = (s: GameState, pid: string, gid: string): boolean =>
 export const hirePiece = (s: GameState, pid: string, gid: string, piece: Piece): Result => {
   const p = s.players[pid];
   const g = s.generals[gid];
-  if (!g || g.owner !== pid) return no('это не ваш генерал');
-  if (!inOwnTerritory(s, pid, gid)) return no('генерал должен быть на своей территории');
-  if (p.barracks < HIRE_LEVEL[piece]) return no(`нужна казарма ${HIRE_LEVEL[piece]}-го уровня`);
-  if (p.res.gold < PIECE_PRICE[piece]) return no('не хватает золота');
+  if (!g || g.owner !== pid) return no('not your general');
+  if (!inOwnTerritory(s, pid, gid)) return no('the general must stand on your land');
+  if (p.barracks < HIRE_LEVEL[piece]) return no(`needs barracks level ${HIRE_LEVEL[piece]}`);
+  if (p.res.gold < PIECE_PRICE[piece]) return no('not enough gold');
   const next = { ...g.army, [piece]: g.army[piece] + 1 };
-  if (!formationOk(next)) return no(`не хватает пешек: нужно ${PAWNS_REQUIRED[piece]}`);
+  if (!formationOk(next)) return no(`needs ${PAWNS_REQUIRED[piece]} pawns in the army`);
   p.res.gold -= PIECE_PRICE[piece];
   g.army = next;
   return ok;
@@ -37,14 +37,14 @@ export const hirePiece = (s: GameState, pid: string, gid: string, piece: Piece):
 export const hireGeneral = (s: GameState, pid: string): Result => {
   const p = s.players[pid];
   const count = playerGenerals(s, pid).length;
-  if (count >= Math.min(MAX_GENERALS, p.tavern + 1)) return no('нужна таверна выше уровнем');
+  if (count >= Math.min(MAX_GENERALS, p.tavern + 1)) return no('upgrade your tavern first');
   const gold = Math.max(0, GENERAL_HIRE_GOLD[(count + 1) as 2 | 3 | 4 | 5] - (mods(s, pid).generalHireDiscount ?? 0));
-  if (p.res.gold < gold) return no('не хватает золота');
+  if (p.res.gold < gold) return no('not enough gold');
   const capital = playerHalls(s, pid).sort((a, b) => a.order - b.order)[0];
-  if (!capital) return no('нет ратуши');
+  if (!capital) return no('no town hall');
   p.res.gold -= gold;
   const g = makeGeneral(s, pid, { ...capital.hex }, recruitElo(s, pid), emptyArmy(), 'General');
-  say(s, `нанят генерал ${g.id} (ELO ${g.elo}, ${g.white})`, pid);
+  say(s, `new general hired (ELO ${g.elo}, ${g.white})`, pid);
   return ok;
 };
 
@@ -52,16 +52,16 @@ export const hireGeneral = (s: GameState, pid: string): Result => {
 export const transfer = (s: GameState, pid: string, fromId: string, toId: string, pieces: Partial<Army>): Result => {
   const a = s.generals[fromId];
   const b = s.generals[toId];
-  if (!a || !b || a.owner !== pid || b.owner !== pid) return no('это не ваши генералы');
-  if (distance(a.hex, b.hex) > 1) return no('генералы должны стоять рядом');
+  if (!a || !b || a.owner !== pid || b.owner !== pid) return no('these are not your generals');
+  if (distance(a.hex, b.hex) > 1) return no('the generals must stand next to each other');
   const from = { ...a.army };
   const to = { ...b.army };
   for (const p of PIECES) {
     const n = pieces[p] ?? 0;
-    if (n < 0 || n > from[p]) return no('столько фигур нет');
+    if (n < 0 || n > from[p]) return no('not that many pieces');
     from[p] -= n; to[p] += n;
   }
-  if (!formationOk(from) || !formationOk(to)) return no('после обмена нарушится правило строя');
+  if (!formationOk(from) || !formationOk(to)) return no('the exchange would break the formation rule');
   a.army = from; b.army = to;
   return ok;
 };
@@ -99,18 +99,18 @@ export const armiesFromFen = (fen: string): { white: Army; black: Army } => {
 /** Кто победил: мат; нет матующего материала у обеих сторон — ничья; на 150-м полуходе — материал;
  *  остальные ничьи — по правилу из настроек. */
 export const judge = (r: BattleReport, drawRule: 'repel' | 'material' = 'repel'): BattleOutcome => {
-  if (r.end === 'mate') return { winner: r.mateWinner === 'white' ? 'attacker' : 'defender', note: 'мат' };
+  if (r.end === 'mate') return { winner: r.mateWinner === 'white' ? 'attacker' : 'defender', note: 'checkmate' };
   if (r.end === 'insufficient' || insufficientMaterial(r.white, r.black)) {
-    return { winner: null, note: 'ничья — ни одна сторона не может поставить мат' };
+    return { winner: null, note: 'draw: neither side can checkmate' };
   }
   const mw = material(r.white), mb = material(r.black);
   if (r.end === 'limit' || drawRule === 'material') {
     // по материалу побеждает только сторона, которая сама способна поставить мат
     const ahead = mw > mb ? r.white : r.black;
-    if (mw !== mb && canForceMate(ahead)) return { winner: mw > mb ? 'attacker' : 'defender', note: `по материалу ${mw}:${mb}` };
-    if (mw !== mb) return { winner: null, note: `ничья — у стороны с перевесом ${Math.max(mw, mb)}:${Math.min(mw, mb)} нет матующего материала` };
+    if (mw !== mb && canForceMate(ahead)) return { winner: mw > mb ? 'attacker' : 'defender', note: `won on material ${mw}:${mb}` };
+    if (mw !== mb) return { winner: null, note: `draw: the side ahead ${Math.max(mw, mb)}:${Math.min(mw, mb)} cannot checkmate` };
   }
-  return { winner: null, note: 'ничья — атака отбита' };
+  return { winner: null, note: 'draw: the attack is repelled' };
 };
 
 /** Какие фигуры вернутся на карту: только те, что умеет нанимать казарма; стартовый конь — всегда. */
@@ -138,7 +138,7 @@ export const applyBattle = (s: GameState, attackerId: string, defenderId: string
     winner.stars++;
     winner.elo += ELO_PER_WIN;
   }
-  say(s, `бой ${att.id} против ${def.id}: ${out.note}${winner ? `, победа ${winner.id}` : ''}`, att.owner);
+  say(s, `battle: ${out.note}`, att.owner);
   const loser = out.winner === 'attacker' ? def : out.winner === 'defender' ? att : null;
   if (loser) defeat(s, loser.id);
   for (const pid of [att.owner, def.owner]) {
@@ -153,11 +153,11 @@ export const defeat = (s: GameState, gid: string): void => {
   const g = s.generals[gid];
   if (!s.players[g.owner] || playerGenerals(s, g.owner).length > 1) {
     delete s.generals[gid];
-    say(s, `генерал ${gid} погиб`, g.owner);
+    say(s, `a general fell in battle`, g.owner);
     return;
   }
   const capital = playerHalls(s, g.owner).sort((a, b) => a.order - b.order)[0];
   if (capital) g.hex = { ...capital.hex };
   g.moveLeft = 0;
-  say(s, `генерал ${gid} отступил в столицу`, g.owner);
+  say(s, `the defeated general retreated to the capital`, g.owner);
 };

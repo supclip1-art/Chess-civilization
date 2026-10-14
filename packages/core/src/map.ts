@@ -47,9 +47,9 @@ export const reachable = (s: GameState, gid: string): Map<string, number> => {
 
 export const move = (s: GameState, gid: string, to: Hex): Result => {
   const g = s.generals[gid];
-  if (!g) return no('нет такого генерала');
+  if (!g) return no('no such general');
   const d = reachable(s, gid).get(key(to));
-  if (d === undefined || d === 0) return no('туда не дойти за этот ход');
+  if (d === undefined || d === 0) return no('too far for this turn');
   g.hex = { ...to };
   g.moveLeft -= d;
   for (const h of Object.values(s.halls)) if (h.siege?.by === gid && distance(h.hex, g.hex) > 1) h.siege = undefined;
@@ -77,20 +77,20 @@ export type AttackStart =
 /** Атака соседней клетки: там армия — бой; там пустая чужая ратуша — осада на один полный ход. */
 export const attack = (s: GameState, gid: string, target: Hex): AttackStart => {
   const g = s.generals[gid];
-  if (!g || !s.players[g.owner]) return { kind: 'error', reason: 'нет такого генерала' };
-  if (g.attacked) return { kind: 'error', reason: 'армия уже атаковала в этот ход' };
-  if (armyValue(g.army) === 0) return { kind: 'error', reason: 'в армии нет фигур' };
-  if (distance(g.hex, target) !== 1) return { kind: 'error', reason: 'атаковать можно только соседнюю клетку' };
+  if (!g || !s.players[g.owner]) return { kind: 'error', reason: 'no such general' };
+  if (g.attacked) return { kind: 'error', reason: 'this army has already attacked this turn' };
+  if (armyValue(g.army) === 0) return { kind: 'error', reason: 'the army has no pieces' };
+  if (distance(g.hex, target) !== 1) return { kind: 'error', reason: 'you can only attack a neighbouring cell' };
   const def = defenderAt(s, target, g.owner);
   if (def) return { kind: 'battle', attacker: gid, defender: def.id };
   const h = hallAt(s, target);
   if (h && h.owner !== g.owner) {
     h.siege = { by: gid, since: s.turn };
     g.attacked = true;
-    say(s, `осада ратуши ${h.id}`, g.owner);
+    say(s, `siege of a town hall begins`, g.owner);
     return { kind: 'siege', hall: h.id };
   }
-  return { kind: 'error', reason: 'здесь некого атаковать' };
+  return { kind: 'error', reason: 'nothing to attack here' };
 };
 
 /** Итог боя на карте: армии по правилам боя; при победе над гарнизоном нейтрала — сразу захват,
@@ -115,7 +115,7 @@ export const resolveSieges = (s: GameState, pid: string): void => {
     if (!h.siege || !g || g.owner !== pid) continue;
     if (s.turn < h.siege.since + SIEGE_TURNS) continue;
     if (distance(g.hex, h.hex) > 1) { h.siege = undefined; continue; }
-    if (defenderAt(s, h.hex, pid)) { h.siege = undefined; say(s, `к ратуше ${h.id} подошло подкрепление`, pid); continue; }
+    if (defenderAt(s, h.hex, pid)) { h.siege = undefined; say(s, `reinforcements lifted the siege`, pid); continue; }
     capture(s, h.id, pid);
     g.hex = { ...h.hex };
   }
@@ -146,11 +146,11 @@ export const capture = (s: GameState, hallId: string, newOwner: string): void =>
     for (const g of Object.values(s.generals)) if (g.owner === old) delete s.generals[g.id];
   }
   recomputeTerritory(s);
-  say(s, `ратуша ${hallId} захвачена`, newOwner);
+  say(s, `a town hall is captured`, newOwner);
   if (oldPlayer && playerHalls(s, old).length === 0) {
     oldPlayer.alive = false;
     for (const g of Object.values(s.generals)) if (g.owner === old) delete s.generals[g.id];
-    say(s, `страна ${old} выбыла из игры`, newOwner);
+    say(s, `${old} is out of the game`, newOwner);
   }
 };
 

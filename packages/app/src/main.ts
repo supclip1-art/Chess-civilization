@@ -1,10 +1,11 @@
-// Каркас Mini App (этап 1): главный экран, создание партии на ядре правил и замер Stockfish.
-// Карта и бои появятся на этапах 3–4.
+// Mini App: главное меню, новая партия, партия на карте (этап 3) и замер Stockfish.
 
 import {
-  NATIONS, armiesFromFen, income, insufficientMaterial, newGame, playerGenerals, sandboxMap, upkeep, type Aggression, type GameState, type NationId,
+  NATIONS, armiesFromFen, insufficientMaterial, newGame, sandboxMap, type Aggression, type NationId,
 } from '../../core/src/index.ts';
 import { Engine, profile } from './engine.ts';
+import { openGame } from './game/screen.ts';
+import { clearSave, loadGame, saveGame } from './game/save.ts';
 import { initTelegram, platformLabel, setBack, tap, userName } from './tg.ts';
 
 const app = document.getElementById('app')!;
@@ -17,13 +18,17 @@ const on = (id: string, fn: () => void) => document.getElementById(id)?.addEvent
 const home = () => {
   setBack(null);
   const name = userName();
+  const saved = loadGame();
+  const alive = saved && saved.players?.p1?.alive && saved.order.filter((id) => saved.players[id].alive).length > 1;
   render(`
     <div><h1>Chess Civilization</h1><p class="muted">Build an empire. Every war is a real chess game.</p></div>
     ${name ? `<p>Welcome, ${esc(name)}.</p>` : ''}
-    <button id="new">New game</button>
+    ${alive ? `<button id="continue">Continue · ${esc(NATIONS[saved!.players.p1.nation].name)}, turn ${saved!.turn}</button>` : ''}
+    <button id="new" ${alive ? 'class="ghost"' : ''}>New game</button>
     <button id="bench" class="ghost">Engine speed test</button>
     <p class="muted">Early build · ${esc(platformLabel())}</p>
     <p class="muted">Chess engine: <a href="https://github.com/official-stockfish/Stockfish" target="_blank" rel="noopener">Stockfish</a> (GPL-3.0).</p>`);
+  on('continue', () => { if (saved) openGame(app, saved, home); });
   on('new', setup);
   on('bench', bench);
 };
@@ -62,33 +67,12 @@ const setup = () => {
           return { nation: n, ai: { aggression, ruler: NATIONS[n].rulers[aggression] } };
         }),
       ], { elo, seed });
-      created(s);
+      clearSave();
+      saveGame(s);
+      openGame(app, s, home);
     });
   };
   draw();
-};
-
-const created = (s: GameState) => {
-  setBack(setup);
-  const me = s.players.p1;
-  const g = playerGenerals(s, 'p1')[0];
-  const inc = income(s, 'p1');
-  render(`
-    <h1>${NATIONS[me.nation].name}</h1>
-    <p class="muted">${esc(NATIONS[me.nation].bonus)} · turn ${s.turn}</p>
-    <div class="card"><h2>Your general</h2>
-      <p>ELO ${g.elo} · ${'★'.repeat(g.stars) || 'no stars yet'}</p>
-      <p class="muted">White: ${esc(g.white)} · vs 1.e4: ${esc(g.vsE4)} · vs 1.d4: ${esc(g.vsD4)}</p>
-      <p>Army: king, ${g.army.p} pawns, ${g.army.n} knight</p></div>
-    <div class="card"><h2>Treasury</h2>
-      <p>Wood ${me.res.wood} · Food ${me.res.food} · Gold ${me.res.gold}</p>
-      <p class="muted">Income ${inc.wood}/${inc.food}/${inc.gold} per turn, army upkeep ${upkeep(s, 'p1')} food</p></div>
-    <div class="card"><h2>Rivals</h2><table>
-      ${s.order.slice(1).map((id) => { const p = s.players[id]; return `<tr><td>${NATIONS[p.nation].name}</td><td>${esc(p.ai!.ruler)}</td><td class="muted">${p.ai!.aggression}</td></tr>`; }).join('')}
-    </table><p class="muted" style="margin-top:8px">${Object.keys(s.neutrals).length} neutral states on the map.</p></div>
-    <p class="muted">The map arrives in the next build. This screen checks that the rules core runs inside Telegram.</p>
-    <button id="again" class="ghost">Back to menu</button>`);
-  on('again', home);
 };
 
 // ---------- Замер движка ----------
