@@ -173,7 +173,9 @@ export const aiMilitaryTurn = (s: GameState, pid: string): AiAttack[] => {
   const capital = playerHalls(s, pid).sort((a, b) => a.order - b.order)[0];
   const attacks: AiAttack[] = [];
   // дипломатия: мир при проигрыше, коалиции против агрессора, объявление войны по характеру
-  aiDiplomacy(s, pid, { wantsWar: s.turn >= ch.playersFrom && s.turn - (p.ai.lastWar ?? -Infinity) >= ch.peace });
+  if (!p.overlord) aiDiplomacy(s, pid, { wantsWar: s.turn >= ch.playersFrom && s.turn - (p.ai.lastWar ?? -Infinity) >= ch.peace });
+  // вассал «в экономику» армий не водит; «оборона» — только у своих стен, без походов и поселенцев
+  const stance = p.overlord ? p.stance : undefined;
   // враг — разбойники и страны, с которыми идёт война
   const hostile = (owner: string) => owner !== pid && !s.neutrals[owner] && (owner === 'bandits' || atWar(s, pid, owner));
   const gens = playerGenerals(s, pid).sort((a, b) => Number(a.id.slice(1)) - Number(b.id.slice(1)));
@@ -255,6 +257,8 @@ export const aiMilitaryTurn = (s: GameState, pid: string): AiAttack[] => {
     const prowl = capital && Object.values(s.generals).some((x) => hostile(x.owner) && !x.settler
       && armyValue(x.army) > 0 && distance(x.hex, capital.hex) <= 10);
     if (capital && key(g.hex) === key(capital.hex) && !relief && prowl && s.turn >= 6) leash = Math.min(leash, 1);
+    if (stance === 'defend') leash = Math.min(leash, 3);
+    if (stance === 'economy') continue;
     const near = capital ? targets.filter((t) => distance(t.hex, capital.hex) <= leash) : targets;
     const goal = near.find((t) => t.kind === 'intruder') ?? (strongEnough ? near[0] : undefined);
     if (goal) {
@@ -282,7 +286,7 @@ export const aiMilitaryTurn = (s: GameState, pid: string): AiAttack[] => {
   // новые города основывают поселенцы: нанимаем одного в столице и ведём к хорошему месту
   const settlers = playerSettlers(s, pid);
   const cost = settlerCost(s, pid);
-  if (capital && !settlers.length && playerHalls(s, pid).length < ch.wantCities
+  if (capital && stance !== 'defend' && !settlers.length && playerHalls(s, pid).length < ch.wantCities
     && p.res.wood >= cost.wood + 40 && p.res.food >= cost.food + 40) hireSettler(s, pid, capital.id);
   for (const st of settlers) {
     if (p.jobs.some((j) => j.kind === 'found' && j.general === st.id)) continue;

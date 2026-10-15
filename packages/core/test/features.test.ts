@@ -106,3 +106,40 @@ test('дипломатия: в мире на чужую землю не ступ
   assert.equal(relation(s, 'p1', 'p3').state, 'war');
   void capB;
 });
+
+test('вассалы: своя страна с экономикой и ИИ, четверть дохода сюзерену, союз и общие войны, мятеж сильнейшего', async () => {
+  const { makeVassal, vassalsOf, setStance, relation, declareWar, capture, endTurn, income, checkRebellion, winner } = await import('../src/index.ts');
+  const s = game();
+  const n = Object.values(s.halls).find((h) => s.neutrals[h.owner])!;
+  capture(s, n.id, 'p1');
+  const vid = makeVassal(s, 'p1', n.id, 'economy')!;
+  assert.ok(vid && s.players[vid].alive);
+  assert.equal(s.halls[n.id].owner, vid);
+  assert.deepEqual(vassalsOf(s, 'p1'), [vid]);
+  assert.equal(relation(s, 'p1', vid).state, 'alliance');
+  // войны сюзерена — его войны
+  declareWar(s, 'p1', 'p2');
+  assert.equal(relation(s, vid, 'p2').state, 'war');
+  // четверть дохода
+  const lord = s.players.p1;
+  while (s.order[s.current] !== vid) endTurn(s);
+  const before = lord.res.gold + lord.res.wood + lord.res.food;
+  s.players[vid].res = { wood: 1000, food: 1000, gold: 1000 };
+  const inc = income(s, vid);
+  const { payOverlord } = await import('../src/index.ts');
+  payOverlord(s, vid);
+  const share = ['wood', 'food', 'gold'].reduce((a, r) => a + Math.floor(Math.max(0, (inc as any)[r]) * 0.25), 0);
+  assert.equal(lord.res.gold + lord.res.wood + lord.res.food - before, share);
+  assert.ok(setStance(s, 'p1', vid, 'expand'));
+  assert.equal(s.players[vid].ai!.aggression, 'warlike');
+  // вассалы победителя не мешают победе
+  s.players.p2.alive = false;
+  assert.equal(winner(s), 'p1');
+  s.players.p2.alive = true;
+  // мятеж: вассал сильнее сюзерена
+  for (const g of Object.values(s.generals)) if (g.owner === 'p1') g.army = { p: 1, n: 0, b: 0, r: 0, q: 0 };
+  Object.values(s.generals).find((g) => g.owner === vid)!.army = { p: 8, n: 2, b: 2, r: 2, q: 1 };
+  assert.equal(checkRebellion(s, 'p1'), vid);
+  assert.equal(s.players[vid].overlord, undefined);
+  assert.equal(relation(s, 'p1', vid).state, 'war');
+});

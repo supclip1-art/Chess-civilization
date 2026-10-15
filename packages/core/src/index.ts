@@ -19,3 +19,4 @@ export * from './bandits.ts';
 export * from './chest.ts';
 export * from './events.ts';
 export * from './diplomacy.ts';
+export * from './vassals.ts';

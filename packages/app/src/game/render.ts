@@ -15,6 +15,8 @@ export const ownerColor = (s: GameState, owner?: string): string | null => {
   if (!owner) return null;
   const i = s.order.indexOf(owner);
   if (owner === 'bandits') return BANDIT_COLOR;
+  const lord = s.players[owner]?.overlord; // вассал — светлый оттенок цвета сюзерена
+  if (lord && lord !== owner) { const c = ownerColor(s, lord); return c ? shade(c, 0.45) : NEUTRAL_COLOR; }
   return i >= 0 ? PLAYER_COLORS[i % PLAYER_COLORS.length] : NEUTRAL_COLOR;
 };
 

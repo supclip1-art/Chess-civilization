@@ -43,6 +43,8 @@ export type TownHall = {
   haltWhy?: string;
   /** Ход, когда город взяли силой (для бунтов). */
   takenAt?: number;
+  /** Игрок уже решил, присоединить город или сделать вассалом. */
+  decided?: boolean;
 };
 
 export type General = {
@@ -102,6 +104,9 @@ export type Player = {
   event?: import('./events.ts').PendingEvent;
   /** Предложение ИИ игроку: мир с выплатой ему или требование дани. */
   offer?: { from: string; kind: 'peace' | 'tribute'; gold: number };
+  /** Вассал: чей он и какой курс задал сюзерен. */
+  overlord?: string;
+  stance?: 'expand' | 'defend' | 'economy';
   starterKnight: boolean; // стартовый конь жив и всегда возвращается после боя
   alive: boolean;
 };

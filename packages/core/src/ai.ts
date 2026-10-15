@@ -113,6 +113,7 @@ export const aiEconomyTurn = (s: GameState, pid: string): void => {
   };
   const byAge = () => playerGenerals(s, pid).sort((a, b) => Number(a.id.slice(1)) - Number(b.id.slice(1)));
   const MIN_GUARD: Record<Piece, number> = { p: 4, n: 0, b: 0, r: 0, q: 0 };
+  if (p.stance === 'economy') { if (p.res.gold >= 50) startResearch(s, pid); return; } // вассал «в экономику»: без армий
   for (const guard of byAge().slice(1)) feed(guard.id, MIN_GUARD); // сначала хоть какой-то гарнизон
   if (g) feed(g.id, FULL_ARMY);
   for (const guard of byAge().slice(1)) feed(guard.id, GUARD_ARMY);

@@ -21,12 +21,15 @@ const nameOf = (s: GameState, id: string) => (s.players[id] ? NATIONS[s.players[
 export const TRUCE_TURNS = 5;
 export const BREAK_COOLDOWN = 2;
 
+/** Вассал во внешней политике — часть сюзерена: те же союзы и войны. */
+const top = (s: GameState, id: string) => s.players[id]?.overlord ?? id;
 export const relation = (s: GameState, a: string, b: string): Relation => {
+  if (!isNation(s, a) || !isNation(s, b)) return a === b ? { state: 'alliance', since: 0 } : { state: 'war', since: 0, warFrom: 0 }; // нейтралы и разбойники
+  a = top(s, a); b = top(s, b);
   if (a === b) return { state: 'alliance', since: 0 };
-  if (!isNation(s, a) || !isNation(s, b)) return { state: 'war', since: 0, warFrom: 0 }; // нейтралы и разбойники
   return s.diplo?.[pairKey(a, b)] ?? { state: 'peace', since: 0 };
 };
-const setRelation = (s: GameState, a: string, b: string, r: Relation) => { (s.diplo ??= {})[pairKey(a, b)] = r; };
+const setRelation = (s: GameState, a: string, b: string, r: Relation) => { (s.diplo ??= {})[pairKey(top(s, a), top(s, b))] = r; };
 
 /** Можно ли сейчас воевать (атаковать, входить на землю, осаждать). */
 export const atWar = (s: GameState, a: string, b: string): boolean => {
@@ -54,6 +57,7 @@ export const aggression = (s: GameState, pid: string): number => s.aggro?.[pid] 
 export const addAggression = (s: GameState, pid: string, v: number): void => { (s.aggro ??= {})[pid] = aggression(s, pid) + v; };
 
 export const declareWar = (s: GameState, a: string, b: string, why = ''): string | null => {
+  a = top(s, a); b = top(s, b);
   const blocked = warBlocked(s, a, b);
   if (blocked) return blocked;
   setRelation(s, a, b, { state: 'war', since: s.turn, warFrom: s.turn + 1 });

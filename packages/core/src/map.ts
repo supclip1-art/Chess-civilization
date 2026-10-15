@@ -390,6 +390,7 @@ export const capture = (s: GameState, hallId: string, newOwner: string): void =>
   h.owner = newOwner;
   h.siege = undefined;
   h.takenAt = s.turn;
+  h.decided = undefined;
   h.haltUntil = undefined;
   if (s.neutrals[old]) {
     delete s.neutrals[old];
@@ -399,6 +400,7 @@ export const capture = (s: GameState, hallId: string, newOwner: string): void =>
   say(s, `${h.name} is captured`, newOwner);
   if (oldPlayer && playerHalls(s, old).length === 0) {
     oldPlayer.alive = false;
+    for (const v of Object.values(s.players)) if (v.overlord === old) { v.overlord = undefined; v.stance = undefined; } // вассалы павшей страны свободны
     for (const g of Object.values(s.generals)) if (g.owner === old) delete s.generals[g.id];
     say(s, `${NATIONS[oldPlayer.nation].name} is out of the game`, newOwner);
   }
@@ -406,6 +408,7 @@ export const capture = (s: GameState, hallId: string, newOwner: string): void =>
 
 /** Победитель — когда в игре остался один игрок. */
 export const winner = (s: GameState): string | null => {
-  const alive = s.order.filter((id) => s.players[id].alive);
-  return alive.length === 1 ? alive[0] : null;
+  // вассалы победителя — не соперники
+  const heads = new Set(s.order.filter((id) => s.players[id].alive).map((id) => s.players[id].overlord ?? id));
+  return heads.size === 1 ? [...heads][0] : null;
 };

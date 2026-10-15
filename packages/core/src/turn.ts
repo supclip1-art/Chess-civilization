@@ -6,6 +6,7 @@ import { armyMove, completeJobs, settleEconomy } from './economy.ts';
 import { resolveSieges } from './map.ts';
 import { spawnBandits } from './bandits.ts';
 import { rollEvent } from './events.ts';
+import { checkRebellion, payOverlord } from './vassals.ts';
 import { recordHistory } from './stats.ts';
 import { type GameState, createGame } from './state.ts';
 
@@ -15,6 +16,8 @@ export const startTurn = (s: GameState): void => {
   const pid = currentPlayer(s);
   completeJobs(s, pid);
   if (s.turn > 1) settleEconomy(s, pid); // в 1-й ход доходов ещё нет
+  if (s.turn > 1 && s.players[pid]?.overlord) payOverlord(s, pid); // вассал отдаёт четверть дохода
+  checkRebellion(s, pid);
   for (const g of Object.values(s.generals)) {
     if (g.owner === pid) { g.moveLeft = (g.pinnedUntil ?? 0) > s.turn ? 0 : armyMove(s, pid); g.attacked = false; }
     // поселенец, который основывает город, стоит на месте

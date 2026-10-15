@@ -10,7 +10,7 @@ import {
   RESOURCE_OUTPUT, TAVERN, TOWN_HALL_FOUND, TOWN_HALL_UPGRADE, BUILDER_HIRE_FOOD, BUILDER_UPKEEP_FOOD, GENERAL_UPKEEP_FOOD, cityUpgradeCost, tavernCost, PIECES, barracksCost, buildOptions, buildingOutput, maxLevelAt, piecePrice, researchCost, researchTurns, resourceCost, aiEconomyTurn, aiMilitaryTurn, attack, endTurn, say,
   foundTownHall, freeBuilders, hireBuilder, hireGeneral, hirePiece, income, key, maxBuilders, move, playerGenerals,
   reachable, recruitElo, resolveBattle, startResearch, upgrade, upgradeBarracks, upgradeTavern, upgradeTownHall,
-  remember, upkeep, visible, winner, relation, warBlocked, declareWar, acceptsAlliance, makeAlliance, acceptsPeace, makePeace, breakAlliance, answerOffer, aggression, TRUCE_TURNS, BREAK_COOLDOWN, answerEvent, canSuppress, MERCENARY_GOLD, type EventKind, TECHS, chestText, type ChestReward, trainGeneral, trainingFor, hasTech, build, enqueue, cancelQueued, ELO_PER_RESEARCH, ARMY_MAX, startTech, type TechId, playerHalls, hasMet, jobHall, hallBuilders, banditsTurn, recordHistory, hireSettler, settlerCost, findPath, runOrders, armyMove, startMarch, MARCH_RESEARCH, ARMY_MOVE_MARCH, BUILDING_SLOTS, citySlots, generalLimit, nationStats, type QueueOrder, type Job, type GameState, type Hex, type Piece, type Res, type ResourceBuilding,
+  remember, upkeep, visible, winner, vassalsOf, makeVassal, setStance, nationMight, vassalMight, VASSAL_SHARE, type VassalStance, relation, warBlocked, declareWar, acceptsAlliance, makeAlliance, acceptsPeace, makePeace, breakAlliance, answerOffer, aggression, TRUCE_TURNS, BREAK_COOLDOWN, answerEvent, canSuppress, MERCENARY_GOLD, type EventKind, TECHS, chestText, type ChestReward, trainGeneral, trainingFor, hasTech, build, enqueue, cancelQueued, ELO_PER_RESEARCH, ARMY_MAX, startTech, type TechId, playerHalls, hasMet, jobHall, hallBuilders, banditsTurn, recordHistory, hireSettler, settlerCost, findPath, runOrders, armyMove, startMarch, MARCH_RESEARCH, ARMY_MOVE_MARCH, BUILDING_SLOTS, citySlots, generalLimit, nationStats, type QueueOrder, type Job, type GameState, type Hex, type Piece, type Res, type ResourceBuilding,
 } from '../../../core/src/index.ts';
 import { autobattle, type BattleRecord } from './battle.ts';
 import { playManual, showReplay } from './fight.ts';
@@ -84,7 +84,7 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
       <button id="end" class="end">End turn</button>
     </header>
     <div class="mapwrap"><canvas id="map"></canvas><button id="tactics" class="tacbtn"></button>
-      <div class="soon" id="soon" hidden></div><div class="rmenu"><button id="gensbtn" class="tacbtn"></button><button id="citiesbtn" class="tacbtn"></button></div></div>
+      <div class="soon" id="soon" hidden></div><button id="vassalsbtn" class="tacbtn vasbtn" hidden></button><div class="rmenu"><button id="gensbtn" class="tacbtn"></button><button id="citiesbtn" class="tacbtn"></button></div></div>
     <section class="sheet" id="sheet"></section>
     <div class="toast" id="toast" hidden></div><div class="aibanner" id="aibanner" hidden></div>
     <div class="veil" id="veil" hidden><div class="veilcard"><p class="veilturn" id="veilturn"></p><div class="veilflags" id="veilflags"></div><p id="veilmsg"></p><div class="veilbar"><i></i></div></div></div>
@@ -156,6 +156,49 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
     const r = p.research;
     app.querySelector('#tactics')!.innerHTML = `${iconSvg(r.active || r.tech ? 'clock' : 'tactics', 18)}<b>Technology tree</b>${r.active ? `<small>${left(r.active.finish)}</small>` : r.tech ? `<small>${left(r.tech.finish)}</small>` : ''}`;
     soon();
+    const vs = vassalsOf(s, ME);
+    const vb = app.querySelector<HTMLElement>('#vassalsbtn')!;
+    vb.hidden = !vs.length;
+    if (vs.length) vb.innerHTML = `${CASTLE}<b>Vassals ${vs.length}</b>`;
+  };
+
+  // ---------- Вассалы ----------
+  const STANCES: [VassalStance, string, string][] = [['expand', 'Expand', 'conquer and settle'], ['defend', 'Defend', 'guard its land'], ['economy', 'Economy', 'no armies, all into the economy']];
+  const vassalsMenu = async () => {
+    for (;;) {
+      const vs = vassalsOf(s, ME);
+      if (!vs.length) { modal(null); return; }
+      const mine = nationMight(s, ME), theirs = vassalMight(s, ME);
+      modal(`<h2>Vassals</h2><p class="muted">Each vassal runs its own economy and gives you ${Math.round(VASSAL_SHARE * 100)}% of its income. Choose its course. If your vassals together grow stronger than you (now ${Math.round(theirs)} against your ${Math.round(mine)}), the strongest rises against you.</p>
+        ${vs.map((id) => { const v = s.players[id]; const st = nationStats(s, id); const inc = income(s, id);
+          return `<div class="card vassal"><div class="row">${flagSvg(v.nation, 26)}<b>${esc(NATIONS[v.nation].name)}</b><span class="muted">${st.cities} cit${st.cities === 1 ? 'y' : 'ies'} · army ${st.military}</span></div>
+            <p class="muted withico">Pays you ${amount('wood', Math.floor(Math.max(0, inc.wood) * VASSAL_SHARE))} ${amount('food', Math.floor(Math.max(0, inc.food) * VASSAL_SHARE))} ${amount('gold', Math.floor(Math.max(0, inc.gold) * VASSAL_SHARE))} per turn</p>
+            <div class="seg wide">${STANCES.map(([k, l, d]) => `<button data-a="stance:${id}:${k}" class="${v.stance === k ? 'on' : ''}" title="${d}">${l}</button>`).join('')}</div></div>`; }).join('')}
+        <div class="acts">${btn('close', 'Close', '')}</div>`);
+      const c = await ask();
+      if (!c.startsWith('stance:')) { modal(null); return; }
+      const [, vid, st] = c.split(':');
+      setStance(s, ME, vid, st as VassalStance);
+      saveGame(s);
+    }
+  };
+  app.querySelector('#vassalsbtn')!.addEventListener('click', () => { if (!busy) void vassalsMenu(); });
+
+  /** Только что взятый город: присоединить или сделать вассалом. */
+  const annexPrompt = async () => {
+    for (const h of Object.values(s.halls)) {
+      if (h.owner !== ME || h.takenAt !== s.turn || h.decided) continue;
+      h.decided = true;
+      if (playerHalls(s, ME).length <= 1) continue; // единственный город вассалом не отдают
+      glideTo(h.hex);
+      modal(`<h2>${esc(h.name)} is yours</h2><p>Annex the city, or leave it its own ruler as a vassal state? A vassal builds and grows by itself, gives you ${Math.round(VASSAL_SHARE * 100)}% of its income and fights your enemies — but strong vassals may rebel.</p>
+        <div class="acts">${btn('annex', 'Annex', 'the city and its land are yours')}${STANCES.map(([k, l, d]) => btn(`vassal:${k}`, `Vassal · ${l}`, d)).join('')}</div>`);
+      const c = await ask();
+      modal(null);
+      if (c.startsWith('vassal:')) { const vid = makeVassal(s, ME, h.id, c.slice(7) as VassalStance); if (vid) toast(`${h.name} is now ${NATIONS[s.players[vid].nation].name}, your vassal.`); }
+      saveGame(s);
+      refresh();
+    }
   };
 
   /** «Ещё один ход»: лента над картой — что закончится в ближайшие 1–2 хода. Незавершённое тянет сделать ещё ход. */
@@ -762,6 +805,7 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
     busy = true;
     await fightBattle(attackerId, defenderId, false);
     busy = false;
+    await annexPrompt();
     sel = { hex: s.generals[attackerId]?.hex, gid: s.generals[attackerId] ? attackerId : undefined };
     refresh();
     checkEnd();
@@ -888,7 +932,7 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
     sel = { hex: sel.hex, gid: sel.gid && s.generals[sel.gid] ? sel.gid : undefined };
     refresh();
     checkEnd();
-    void eventCard().then(offerCard);
+    void eventCard().then(offerCard).then(annexPrompt);
   });
 
   /** Событие хода: карточка с рисунком и вариантами. Беды без выбора — просто сообщение. */
@@ -1050,7 +1094,7 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
     if (capital) view.centerOn(capital.hex);
     draw();
     checkEnd();
-    void eventCard().then(offerCard);
+    void eventCard().then(offerCard).then(annexPrompt);
   });
   (window as unknown as { __cc?: unknown }).__cc = { view, state: s, chest: chestScreen }; // для автотестов в браузере
 };
