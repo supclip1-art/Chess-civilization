@@ -20,3 +20,4 @@ export * from './chest.ts';
 export * from './events.ts';
 export * from './diplomacy.ts';
 export * from './vassals.ts';
+export * from './deals.ts';

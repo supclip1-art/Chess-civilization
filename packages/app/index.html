@@ -80,6 +80,12 @@
     #vassalsbtn { top: calc(60px + var(--toast, 0px)); padding: 6px 12px 6px 9px; }
     .vassal .row { justify-content: flex-start; gap: 8px; } .vassal .row .muted { margin-left: auto; font-size: 12px; }
     .seg.wide { width: 100%; } .seg.wide button { flex: 1; }
+    .dres { display: flex; align-items: center; gap: 6px; margin: 4px 0; } .dres b { min-width: 34px; } .dres small { flex: 1; font-size: 11.5px; }
+    .dres span { display: flex; gap: 4px; } button.mini { width: auto; padding: 4px 7px; font-size: 12px; font-weight: 600; background: var(--card); color: var(--ink); border: 1px solid var(--line); border-radius: 7px; }
+    .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+    button.chip { width: auto; padding: 5px 10px; font-size: 12.5px; font-weight: 500; border-radius: 999px; background: var(--card); color: var(--ink); border: 1px solid var(--line); }
+    button.chip.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+    .dchance { margin: 10px 0 4px; } .dchance .good { color: #2d8a4e; } .dchance .mid { color: #c48a12; } .dchance .bad { color: #c0392b; }
     .seg { display: flex; gap: 0; border: 1px solid var(--line); border-radius: 9px; overflow: hidden; }
     .seg button { width: auto; border-radius: 0; padding: 7px 14px; background: var(--bg); color: var(--ink); font-weight: 500; }
     .seg button.on { background: var(--accent); color: var(--accent-ink); font-weight: 600; }

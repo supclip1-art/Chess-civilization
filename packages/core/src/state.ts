@@ -103,7 +103,7 @@ export type Player = {
   nextEvent?: number;
   event?: import('./events.ts').PendingEvent;
   /** Предложение ИИ игроку: мир с выплатой ему или требование дани. */
-  offer?: { from: string; kind: 'peace' | 'tribute'; gold: number };
+  offer?: { from: string; kind: 'peace' | 'tribute'; terms: import('./deals.ts').Terms };
   /** Вассал: чей он и какой курс задал сюзерен. */
   overlord?: string;
   stance?: 'expand' | 'defend' | 'economy';

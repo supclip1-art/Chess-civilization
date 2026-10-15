@@ -100,7 +100,7 @@ test('дипломатия: в мире на чужую землю не ступ
   s.turn += 2;
   assert.equal(warBlocked(s, 'p2', 'p3'), null);
   // дань: отказ — война
-  s.players.p1.offer = { from: 'p3', kind: 'tribute', gold: 50 };
+  s.players.p1.offer = { from: 'p3', kind: 'tribute', terms: { res: { wood: 0, food: 0, gold: 50 }, cities: [], techs: [] } };
   s.diplo!['p1|p3'] = { state: 'peace', since: 0 };
   answerOffer(s, 'p1', false);
   assert.equal(relation(s, 'p1', 'p3').state, 'war');
@@ -142,4 +142,38 @@ test('вассалы: своя страна с экономикой и ИИ, ч�
   assert.equal(checkRebellion(s, 'p1'), vid);
   assert.equal(s.players[vid].overlord, undefined);
   assert.equal(relation(s, 'p1', vid).state, 'war');
+});
+
+test('сделки: ресурсы, города и технологии; город по договору не теряет построек; ИИ оценивает шанс', async () => {
+  const { acceptChance, executeDeal, emptyTerms, tradableTechs, capture, declareWar, relation, neediest } = await import('../src/index.ts');
+  const s = newGame(europeMap(), [{ nation: 'spain' }, { nation: 'italy' }], { elo: 1200, seed: 4, });
+  s.players.p1.res = { wood: 500, food: 500, gold: 500 };
+  s.players.p2.res = { wood: 500, food: 500, gold: 500 };
+  // у p2 есть второй город с постройками
+  const n = Object.values(s.halls).find((h) => s.neutrals[h.owner])!;
+  capture(s, n.id, 'p2');
+  const c = Object.values(s.cells).find((x) => x.hall === n.id && x.terrain === 'field' && !(x.hex.q === n.hex.q && x.hex.r === n.hex.r))!;
+  c.building = { kind: 'farm', level: 3 };
+  s.halls[n.id].level = 2;
+  // технологию можно отдать, только если у получателя её нет
+  s.players.p1.research.techs = { guilds: true };
+  assert.deepEqual(tradableTechs(s, 'p1', 'p2'), ['guilds']);
+  assert.deepEqual(tradableTechs(s, 'p2', 'p1'), []);
+  // щедрое предложение вероятнее, жадное — нет
+  const gift = { give: { ...emptyTerms(), res: { wood: 0, food: 0, gold: 300 } }, take: emptyTerms(), peace: false };
+  const greedy = { give: emptyTerms(), take: { ...emptyTerms(), cities: [n.id] }, peace: false };
+  assert.ok(acceptChance(s, 'p1', 'p2', gift) > 0.9);
+  assert.ok(acceptChance(s, 'p1', 'p2', greedy) < 0.1);
+  // мир: проигрывающий соглашается охотнее
+  declareWar(s, 'p1', 'p2'); s.turn++;
+  for (const g of Object.values(s.generals)) if (g.owner === 'p2') g.army = { p: 1, n: 0, b: 0, r: 0, q: 0 };
+  const peace = { give: emptyTerms(), take: { ...emptyTerms(), cities: [n.id] }, peace: true };
+  assert.ok(acceptChance(s, 'p1', 'p2', peace) > acceptChance(s, 'p1', 'p2', { ...peace, peace: false }));
+  executeDeal(s, 'p1', 'p2', { give: { ...emptyTerms(), techs: ['guilds'] }, take: { ...emptyTerms(), cities: [n.id], res: { wood: 0, food: 100, gold: 0 } }, peace: true });
+  assert.equal(s.halls[n.id].owner, 'p1');
+  assert.equal(s.halls[n.id].level, 2, 'город не потерял уровень');
+  assert.equal(c.building?.level, 3, 'и здания целы');
+  assert.ok(s.players.p2.research.techs?.guilds);
+  assert.equal(relation(s, 'p1', 'p2').state, 'peace');
+  assert.ok(['wood', 'food', 'gold'].includes(neediest(s, 'p2')));
 });

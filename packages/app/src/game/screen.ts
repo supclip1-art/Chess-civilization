@@ -10,7 +10,7 @@ import {
   RESOURCE_OUTPUT, TAVERN, TOWN_HALL_FOUND, TOWN_HALL_UPGRADE, BUILDER_HIRE_FOOD, BUILDER_UPKEEP_FOOD, GENERAL_UPKEEP_FOOD, cityUpgradeCost, tavernCost, PIECES, barracksCost, buildOptions, buildingOutput, maxLevelAt, piecePrice, researchCost, researchTurns, resourceCost, aiEconomyTurn, aiMilitaryTurn, attack, endTurn, say,
   foundTownHall, freeBuilders, hireBuilder, hireGeneral, hirePiece, income, key, maxBuilders, move, playerGenerals,
   reachable, recruitElo, resolveBattle, startResearch, upgrade, upgradeBarracks, upgradeTavern, upgradeTownHall,
-  remember, upkeep, visible, winner, vassalsOf, makeVassal, setStance, nationMight, vassalMight, VASSAL_SHARE, type VassalStance, relation, warBlocked, declareWar, acceptsAlliance, makeAlliance, acceptsPeace, makePeace, breakAlliance, answerOffer, aggression, TRUCE_TURNS, BREAK_COOLDOWN, answerEvent, canSuppress, MERCENARY_GOLD, type EventKind, TECHS, chestText, type ChestReward, trainGeneral, trainingFor, hasTech, build, enqueue, cancelQueued, ELO_PER_RESEARCH, ARMY_MAX, startTech, type TechId, playerHalls, hasMet, jobHall, hallBuilders, banditsTurn, recordHistory, hireSettler, settlerCost, findPath, runOrders, armyMove, startMarch, MARCH_RESEARCH, ARMY_MOVE_MARCH, BUILDING_SLOTS, citySlots, generalLimit, nationStats, type QueueOrder, type Job, type GameState, type Hex, type Piece, type Res, type ResourceBuilding,
+  remember, upkeep, visible, winner, acceptChance, proposeDeal, emptyTerms, tradableCities, tradableTechs, termsText, type Deal, vassalsOf, makeVassal, setStance, nationMight, vassalMight, VASSAL_SHARE, type VassalStance, relation, warBlocked, declareWar, acceptsAlliance, makeAlliance, acceptsPeace, makePeace, breakAlliance, answerOffer, aggression, TRUCE_TURNS, BREAK_COOLDOWN, answerEvent, canSuppress, MERCENARY_GOLD, type EventKind, TECHS, chestText, type ChestReward, trainGeneral, trainingFor, hasTech, build, enqueue, cancelQueued, ELO_PER_RESEARCH, ARMY_MAX, startTech, type TechId, playerHalls, hasMet, jobHall, hallBuilders, banditsTurn, recordHistory, hireSettler, settlerCost, findPath, runOrders, armyMove, startMarch, MARCH_RESEARCH, ARMY_MOVE_MARCH, BUILDING_SLOTS, citySlots, generalLimit, nationStats, type QueueOrder, type Job, type GameState, type Hex, type Piece, type Res, type ResourceBuilding,
 } from '../../../core/src/index.ts';
 import { autobattle, type BattleRecord } from './battle.ts';
 import { playManual, showReplay } from './fight.ts';
@@ -523,8 +523,9 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
     const blocked = warBlocked(s, ME, pid);
     const acts = r.state === 'peace'
       ? btn('dip:war', 'Declare war', blocked ?? 'attacks begin next turn').replace('class="act"', `class="act${blocked ? ' off' : ''}"`) + btn('dip:ally', 'Propose an alliance', 'they decide at once')
-      : r.state === 'war' ? btn('dip:peace', 'Propose peace', `${TRUCE_TURNS} turns of truce`) + btn('dip:peacegold', 'Peace for 50 gold', 'sweeten the offer')
-        : btn('dip:break', 'Break the alliance', `no war with them for ${BREAK_COOLDOWN} turns after`);
+        + btn('dip:trade', 'Trade…', 'resources, cities, technologies')
+      : r.state === 'war' ? btn('dip:peace', 'Negotiate peace…', `what you give and ask · ${TRUCE_TURNS} turns of truce`)
+        : btn('dip:break', 'Break the alliance', `no war with them for ${BREAK_COOLDOWN} turns after`) + btn('dip:trade', 'Trade…', 'resources, cities, technologies');
     return `<div class="row"><h3>Relations</h3>${stanceChip(pid)}</div><div class="acts">${acts}</div>`;
   };
   const diploAction = async (pid: string, a: string) => {
@@ -538,30 +539,67 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
     } else if (a === 'ally') {
       if (acceptsAlliance(s, pid, ME)) { makeAlliance(s, ME, pid); toast(`${name} accepts the alliance.`); }
       else toast(`${name} declines: they see no common enemy${aggression(s, ME) >= 6 ? ' — and they fear your conquests' : ''}.`);
-    } else if (a === 'peace' || a === 'peacegold') {
-      const gold = a === 'peacegold' ? 50 : 0;
-      if (gold && s.players[ME].res.gold < gold) { toast('Not enough gold.'); return; }
-      if (acceptsPeace(s, pid, ME, gold)) { s.players[ME].res.gold -= gold; s.players[pid].res.gold += gold; makePeace(s, ME, pid); toast(`${name} accepts peace.`); }
-      else toast(`${name} refuses: they think they are winning.`);
+    } else if (a === 'peace' || a === 'trade') {
+      await dealWindow(pid, a === 'peace');
     } else if (a === 'break') {
       breakAlliance(s, ME, pid); toast(`The alliance with ${name} is over.`);
     }
     saveGame(s);
     refresh();
   };
+  /** Окно сделки: что отдаём и что просим (ресурсы, города, технологии) и шанс, что ИИ согласится. */
+  const dealWindow = async (pid: string, peace: boolean) => {
+    const name = NATIONS[s.players[pid].nation].name;
+    const d: Deal = { give: emptyTerms(), take: emptyTerms(), peace };
+    const RES = ['gold', 'wood', 'food'] as const;
+    for (;;) {
+      const side = (who: 'give' | 'take') => {
+        const owner = who === 'give' ? ME : pid, other = who === 'give' ? pid : ME;
+        const t = d[who];
+        const rows = RES.map((r) => `<div class="dres">${iconSvg(r, 16)}<b>${t.res[r]}</b><small class="muted">of ${s.players[owner].res[r]}</small>
+          <span>${[-50, -10, 10, 50].map((n) => `<button data-a="d:${who}:${r}:${n}" class="mini">${n > 0 ? '+' : ''}${n}</button>`).join('')}</span></div>`).join('');
+        const cities = tradableCities(s, owner).map((id) => `<button data-a="d:${who}:city:${id}" class="chip ${t.cities.includes(id) ? 'on' : ''}">${esc(s.halls[id].name)}</button>`).join('');
+        const techs = tradableTechs(s, owner, other).map((id) => `<button data-a="d:${who}:tech:${id}" class="chip ${t.techs.includes(id) ? 'on' : ''}">${esc(TECHS[id].name)}</button>`).join('');
+        return `${rows}${cities ? `<div class="chips">${cities}</div>` : ''}${techs ? `<div class="chips">${techs}</div>` : ''}`;
+      };
+      const chance = Math.round(acceptChance(s, ME, pid, d) * 100);
+      modal(`<h2>${peace ? `Peace with ${esc(name)}` : `Deal with ${esc(name)}`}</h2>
+        <h3>You give</h3>${side('give')}
+        <h3>You ask</h3>${side('take')}
+        <p class="dchance">Chance they agree: <b class="${chance >= 60 ? 'good' : chance >= 30 ? 'mid' : 'bad'}">${chance}%</b></p>
+        <div class="acts">${btn('d:propose', peace ? 'Offer peace' : 'Propose', '')}${btn('d:cancel', 'Cancel', '')}</div>`);
+      const c = await ask();
+      if (c === 'd:cancel') return;
+      if (c === 'd:propose') {
+        modal(null);
+        if (proposeDeal(s, ME, pid, d)) toast(`${name} agrees${peace ? ': the war is over' : ''}.`);
+        else toast(`${name} rejects the offer.`);
+        saveGame(s); refresh();
+        return;
+      }
+      const [, who, kind, val] = c.split(':') as [string, 'give' | 'take', string, string];
+      const owner = who === 'give' ? ME : pid;
+      if (kind === 'city') { const l = d[who].cities; d[who].cities = l.includes(val) ? l.filter((x) => x !== val) : [...l, val]; }
+      else if (kind === 'tech') { const l = d[who].techs; const id = val as TechId; d[who].techs = l.includes(id) ? l.filter((x) => x !== id) : [...l, id]; }
+      else { const r = kind as 'gold' | 'wood' | 'food'; d[who].res[r] = Math.max(0, Math.min(s.players[owner].res[r], d[who].res[r] + Number(val))); }
+    }
+  };
+
   /** Предложение ИИ в начале хода: мир с данью игроку или требование дани. */
   const offerCard = async () => {
     const o = s.players[ME]?.offer;
     if (!o || !s.players[o.from]) return;
     const name = NATIONS[s.players[o.from].nation].name;
     const flag = flagSvg(s.players[o.from].nation, 44);
-    if (o.kind === 'peace') modal(`<div class="evcard"><div class="evart">${flag}</div><h2>${esc(name)} asks for peace</h2><p>They offer ${o.gold} gold to end the war.</p></div>
-      <div class="acts">${btn('yes', 'Accept peace', `+${o.gold} gold, ${TRUCE_TURNS} turns of truce`)}${btn('no', 'Fight on', '')}</div>`);
-    else modal(`<div class="evcard"><div class="evart">${flag}</div><h2>${esc(name)} demands tribute</h2><p>Pay ${o.gold} gold, or they march on you.</p></div>
-      <div class="acts">${btn('yes', `Pay ${o.gold} gold`, 'peace for 8 turns').replace('class="act"', `class="act${s.players[ME].res.gold >= o.gold ? '' : ' off'}"`)}${btn('no', 'Refuse', 'this means war')}</div>`);
+    const what = termsText(s, o.terms);
+    const canPay = (['wood', 'food', 'gold'] as const).every((r) => s.players[ME].res[r] >= o.terms.res[r]);
+    if (o.kind === 'peace') modal(`<div class="evcard"><div class="evart">${flag}</div><h2>${esc(name)} asks for peace</h2><p>To end the war they offer: <b>${esc(what)}</b>.</p></div>
+      <div class="acts">${btn('yes', 'Accept peace', `${TRUCE_TURNS} turns of truce`)}${btn('no', 'Fight on', '')}</div>`);
+    else modal(`<div class="evcard"><div class="evart">${flag}</div><h2>${esc(name)} demands tribute</h2><p>Give them <b>${esc(what)}</b>, or they march on you.</p></div>
+      <div class="acts">${btn('yes', 'Pay the tribute', 'no attack from them for 8 turns').replace('class="act"', `class="act${canPay ? '' : ' off'}"`)}${btn('no', 'Refuse', 'this means war')}</div>`);
     const yes = (await ask()) === 'yes';
     modal(null);
-    if (yes && o.kind === 'tribute' && s.players[ME].res.gold < o.gold) { toast('Not enough gold — they take it as a refusal.'); }
+    if (yes && o.kind === 'tribute' && !canPay) { toast('You cannot pay — they take it as a refusal.'); }
     const res = answerOffer(s, ME, yes);
     if (res) toast(`${res[0].toUpperCase()}${res.slice(1)}.`);
     saveGame(s);

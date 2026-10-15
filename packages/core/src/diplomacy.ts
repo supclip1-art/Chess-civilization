@@ -10,6 +10,7 @@
 import { NATIONS } from './nations.ts';
 import { distance } from './hex.ts';
 import { type GameState, say } from './state.ts';
+import { cityValue, emptyTerms, executeDeal, neediest, termsText, tradableCities } from './deals.ts';
 
 export type Stance = 'peace' | 'war' | 'alliance';
 export type Relation = { state: Stance; since: number; warFrom?: number; noWarUntil?: number };
@@ -149,8 +150,13 @@ export const aiDiplomacy = (s: GameState, pid: string, opts: { wantsWar: boolean
     if (me < 0.6 * might(s, x) && s.turn - relation(s, pid, x).since >= 3) {
       if (s.players[x].ai) { if (acceptsPeace(s, x, pid)) makePeace(s, pid, x); }
       else if (!s.players[x].offer) {
-        const gold = Math.min(p.res.gold, 30 + Math.round(me * 0.1));
-        s.players[x].offer = { from: pid, kind: 'peace', gold };
+        // за мир предлагает золото и то, чего у него в избытке; в отчаянии — ещё и город
+        const terms = emptyTerms();
+        terms.res.gold = Math.min(p.res.gold, 30 + Math.round(me * 0.1));
+        for (const r of ['wood', 'food'] as const) if (p.res[r] > 120) terms.res[r] = Math.round(p.res[r] / 3 / 10) * 10;
+        const cities = tradableCities(s, pid).sort((a, b) => cityValue(s, a) - cityValue(s, b));
+        if (me < 0.4 * might(s, x) && cities.length) terms.cities = [cities[0]];
+        s.players[x].offer = { from: pid, kind: 'peace', terms };
       }
     }
   }
@@ -173,7 +179,11 @@ export const aiDiplomacy = (s: GameState, pid: string, opts: { wantsWar: boolean
       // слабый живой игрок рядом — сначала требуем дань
       if (!s.players[prey.x].ai && !s.players[prey.x].offer && might(s, prey.x) < 0.8 * me && (p.ai.tributeAt ?? -99) + 10 <= s.turn) {
         p.ai.tributeAt = s.turn;
-        s.players[prey.x].offer = { from: pid, kind: 'tribute', gold: 40 + Math.round(s.turn * 1.5) };
+        // дань — в том ресурсе, которого ИИ не хватает
+        const r = neediest(s, pid);
+        const terms = emptyTerms();
+        terms.res[r] = Math.round(((40 + s.turn * 1.5) * (r === 'gold' ? 1 : 3)) / 10) * 10;
+        s.players[prey.x].offer = { from: pid, kind: 'tribute', terms };
       } else declareWar(s, pid, prey.x);
     }
   }
@@ -188,17 +198,18 @@ export const answerOffer = (s: GameState, pid: string, accept: boolean): string 
   const from = s.players[o.from];
   if (!from?.alive) return '';
   if (o.kind === 'peace') {
-    if (!accept || !atWar(s, pid, o.from)) return 'the war goes on';
-    const gold = Math.min(o.gold, from.res.gold);
-    from.res.gold -= gold; p.res.gold += gold;
-    makePeace(s, pid, o.from);
-    return `peace — and ${gold} gold from ${nameOf(s, o.from)}`;
+    if (!accept || relation(s, pid, o.from).state !== 'war') return 'the war goes on';
+    // что ИИ ещё может отдать (ресурсы могли потратиться, город — пасть)
+    const t = o.terms;
+    for (const r of ['wood', 'food', 'gold'] as const) t.res[r] = Math.min(t.res[r], from.res[r]);
+    t.cities = t.cities.filter((id) => s.halls[id]?.owner === o.from);
+    executeDeal(s, o.from, pid, { give: t, take: emptyTerms(), peace: true });
+    return `peace — ${nameOf(s, o.from)} gives ${termsText(s, t)}`;
   }
-  if (accept && p.res.gold >= o.gold) {
-    p.res.gold -= o.gold; from.res.gold += o.gold;
+  if (accept && (['wood', 'food', 'gold'] as const).every((r) => p.res[r] >= o.terms.res[r])) {
+    executeDeal(s, pid, o.from, { give: o.terms, take: emptyTerms(), peace: false });
     setRelation(s, pid, o.from, { ...relation(s, pid, o.from), noWarUntil: s.turn + 8 });
-    say(s, `you paid ${o.gold} gold of tribute to ${nameOf(s, o.from)}`, pid);
-    return `tribute paid: ${nameOf(s, o.from)} keeps the peace for 8 turns`;
+    return `tribute paid: ${nameOf(s, o.from)} will not attack for 8 turns`;
   }
   declareWar(s, o.from, pid, ' after the tribute was refused');
   return `${nameOf(s, o.from)} declared war`;
