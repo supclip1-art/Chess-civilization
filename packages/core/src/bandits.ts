@@ -78,7 +78,8 @@ export const banditsTurn = (s: GameState): BanditAttack[] => {
     const prey: { hex: Hex; d: number; hallId?: string }[] = [];
     if (s.turn >= CALM_UNTIL) for (const x of Object.values(s.generals)) {
       if (!s.players[x.owner] || distance(x.hex, b.hex) > HUNT_RANGE) continue;
-      if (x.settler || (armyValue(x.army) > 0 && power(b) >= power(x)) // армии равной силы или слабее) prey.push({ hex: x.hex, d: distance(x.hex, b.hex) });
+      // поселенцы и армии равной силы или слабее
+      if (x.settler || (armyValue(x.army) > 0 && power(b) >= power(x))) prey.push({ hex: x.hex, d: distance(x.hex, b.hex) });
     }
     for (const h of Object.values(s.halls)) {
       if (s.turn < RAIDS_FROM || !s.players[h.owner] || distance(h.hex, b.hex) > HUNT_RANGE) continue;
