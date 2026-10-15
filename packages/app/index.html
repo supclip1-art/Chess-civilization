@@ -54,6 +54,22 @@
     .soundrow button { flex: 1; }
     .soon { position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); z-index: 2; max-width: calc(100% - 20px); display: flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 999px; background: rgba(20,20,20,.74); color: #fff; font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; box-shadow: 0 1px 4px rgba(0,0,0,.3); }
     .soon[hidden] { display: none; } .soon b { color: #f3d27a; font-weight: 600; } .soon svg { flex: none; }
+    /* сундук трофеев */
+    .chest { position: relative; isolation: isolate; overflow: hidden; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 8px 0 4px; text-align: center; }
+    .chestbox { position: relative; animation: chestshake .55s ease-in-out; }
+    .chestbox::before { content: ''; position: absolute; left: 50%; top: 40%; width: 230px; height: 230px; transform: translate(-50%, -50%) scale(0); border-radius: 50%;
+      background: radial-gradient(circle, rgba(255,226,140,.95) 0%, rgba(255,210,90,.35) 40%, rgba(255,210,90,0) 70%); animation: chestglow .7s .5s ease-out forwards; z-index: -1; }
+    .chest.rare .chestbox::before { background: radial-gradient(circle, rgba(170,210,255,.95) 0%, rgba(120,170,255,.35) 40%, rgba(120,170,255,0) 70%); }
+    .chest.epic .chestbox::before { background: radial-gradient(circle, rgba(220,170,255,.95) 0%, rgba(190,120,255,.4) 40%, rgba(190,120,255,0) 70%); }
+    .chestbox .lid { transform-origin: 18px 46px; animation: chestlid .45s .5s ease-out forwards; }
+    .chestprize { display: flex; flex-direction: column; align-items: center; gap: 4px; opacity: 0; transform: translateY(10px) scale(.9); animation: chestprize .45s .85s ease-out forwards; }
+    .chestprize .prizeico { display: inline-flex; gap: 6px; align-items: center; } .chestprize b { font-size: 18px; } .chestprize small { color: var(--muted); text-transform: uppercase; letter-spacing: .08em; font-size: 11px; }
+    .chest.rare .chestprize small { color: #3d7bd6; } .chest.epic .chestprize small { color: #8e44d6; }
+    .chestpiece { font-size: 44px; line-height: 1; }
+    @keyframes chestshake { 0%, 100% { transform: rotate(0); } 20% { transform: rotate(-6deg); } 40% { transform: rotate(5deg); } 60% { transform: rotate(-4deg); } 80% { transform: rotate(3deg); } }
+    @keyframes chestlid { to { transform: rotate(-38deg) translate(-4px, -6px); } }
+    @keyframes chestglow { to { transform: translate(-50%, -50%) scale(1); } }
+    @keyframes chestprize { to { opacity: 1; transform: none; } }
     .seg { display: flex; gap: 0; border: 1px solid var(--line); border-radius: 9px; overflow: hidden; }
     .seg button { width: auto; border-radius: 0; padding: 7px 14px; background: var(--bg); color: var(--ink); font-weight: 500; }
     .seg button.on { background: var(--accent); color: var(--accent-ink); font-weight: 600; }

@@ -255,6 +255,21 @@ export const page = (): void => {
   burst(sfxBus, t + 0.02, 0.08, 0.06, 'highpass', 6000);
 };
 
+/** Сундук: скрип крышки и звон наград (у редких — выше и дольше). */
+export const chestOpen = (rarity: 'common' | 'rare' | 'epic'): void => {
+  if (!prefs.sfx || !ensure() || ctx!.state !== 'running') return;
+  const c = ctx!, t = c.currentTime + 0.55; // звук — когда крышка открывается
+  burst(sfxBus, t - 0.5, 0.45, 0.12, 'bandpass', 300, 700, 6); // скрип
+  burst(sfxBus, t, 0.12, 0.3, 'lowpass', 600);                 // крышка стукнула
+  const notes = rarity === 'epic' ? [76, 79, 83, 88, 91] : rarity === 'rare' ? [76, 80, 83, 88] : [79, 83, 86];
+  notes.forEach((n, i) => {
+    const o = c.createOscillator(); o.type = 'sine'; o.frequency.value = NOTE(n);
+    const g = c.createGain(); const at = t + 0.08 + i * 0.07;
+    g.gain.setValueAtTime(0.0001, at); g.gain.exponentialRampToValueAtTime(0.16, at + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, at + 0.9);
+    o.connect(g); g.connect(sfxBus); o.start(at); o.stop(at + 1);
+  });
+};
+
 // ---------- управление ----------
 
 export const audioPrefs = (): Prefs => ({ ...prefs });

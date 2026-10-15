@@ -16,3 +16,4 @@ export * from './ai.ts';
 export * from './aiwar.ts';
 export * from './stats.ts';
 export * from './bandits.ts';
+export * from './chest.ts';

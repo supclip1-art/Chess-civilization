@@ -7,6 +7,7 @@ import {
 import { type Result, hasTech, mods, piecePrice, playerGenerals, playerHalls, recruitElo } from './economy.ts';
 import { distance, key } from './hex.ts';
 import { freeCellNear } from './map.ts';
+import { type ChestReward, openChest } from './chest.ts';
 import { type Army, type GameState, addElo, emptyArmy, generalName, makeGeneral, say } from './state.ts';
 
 const ok: Result = { ok: true };
@@ -115,7 +116,7 @@ export type BattleEnd = 'mate' | 'resign' | 'stalemate' | 'repetition' | 'fifty'
 /** mateWinner — победитель при мате или сдаче соперника. */
 export type BattleReport = { end: BattleEnd; mateWinner?: 'white' | 'black'; white: Army; black: Army; promoted?: { white: Army; black: Army } };
 
-export type BattleOutcome = { winner: 'attacker' | 'defender' | null; note: string };
+export type BattleOutcome = { winner: 'attacker' | 'defender' | null; note: string; chest?: ChestReward };
 
 export const material = (a: Army): number => PIECES.reduce((sum, p) => sum + a[p] * PIECE_VALUE[p], 0);
 
@@ -200,6 +201,8 @@ export const applyBattle = (s: GameState, attackerId: string, defenderId: string
     addElo(s, winner, hasTech(s, winner.owner, 'veterans') ? 25 : ELO_PER_WIN); // «Ветераны»
   }
   say(s, `battle: ${out.note}`, att.owner);
+  // сундук трофеев — каждому победителю-игроку (и ИИ тоже)
+  if (winner && s.players[winner.owner]) out.chest = openChest(s, winner.owner, winner.id);
   const loser = out.winner === 'attacker' ? def : out.winner === 'defender' ? att : null;
   if (loser) defeat(s, loser.id);
   // ничья с разбойниками: шайка рассеивается; новая появится по расписанию, уже по силе армий игроков

@@ -1,6 +1,6 @@
 // Экран партии: карта, верхняя панель (казна, ход), нижняя панель действий, бои, ход ИИ.
 
-import { audioPrefs, page, setMusic, setSfx } from '../audio.ts';
+import { audioPrefs, chestOpen, page, setMusic, setSfx } from '../audio.ts';
 import { iconSvg, iconsReady } from './icons.ts';
 import { flagSvg } from './flags.ts';
 import { portraitSvg } from './portraits.ts';
@@ -10,7 +10,7 @@ import {
   RESOURCE_OUTPUT, TAVERN, TOWN_HALL_FOUND, TOWN_HALL_UPGRADE, BUILDER_HIRE_FOOD, BUILDER_UPKEEP_FOOD, GENERAL_UPKEEP_FOOD, cityUpgradeCost, tavernCost, PIECES, barracksCost, buildOptions, buildingOutput, maxLevelAt, piecePrice, researchCost, researchTurns, resourceCost, aiEconomyTurn, aiMilitaryTurn, attack, endTurn, say,
   foundTownHall, freeBuilders, hireBuilder, hireGeneral, hirePiece, income, key, maxBuilders, move, playerGenerals,
   reachable, recruitElo, resolveBattle, startResearch, upgrade, upgradeBarracks, upgradeTavern, upgradeTownHall,
-  remember, upkeep, visible, winner, TECHS, trainGeneral, trainingFor, hasTech, build, enqueue, cancelQueued, ELO_PER_RESEARCH, ARMY_MAX, startTech, type TechId, playerHalls, hasMet, jobHall, hallBuilders, banditsTurn, recordHistory, hireSettler, settlerCost, findPath, runOrders, armyMove, startMarch, MARCH_RESEARCH, ARMY_MOVE_MARCH, BUILDING_SLOTS, citySlots, generalLimit, nationStats, type QueueOrder, type Job, type GameState, type Hex, type Piece, type Res, type ResourceBuilding,
+  remember, upkeep, visible, winner, TECHS, chestText, type ChestReward, trainGeneral, trainingFor, hasTech, build, enqueue, cancelQueued, ELO_PER_RESEARCH, ARMY_MAX, startTech, type TechId, playerHalls, hasMet, jobHall, hallBuilders, banditsTurn, recordHistory, hireSettler, settlerCost, findPath, runOrders, armyMove, startMarch, MARCH_RESEARCH, ARMY_MOVE_MARCH, BUILDING_SLOTS, citySlots, generalLimit, nationStats, type QueueOrder, type Job, type GameState, type Hex, type Piece, type Res, type ResourceBuilding,
 } from '../../../core/src/index.ts';
 import { autobattle, type BattleRecord } from './battle.ts';
 import { playManual, showReplay } from './fight.ts';
@@ -22,6 +22,16 @@ import { setBack, tap } from '../tg.ts';
 
 const ME = 'p1';
 const PIECE_NAME: Record<Piece, string> = { p: 'Pawn', n: 'Knight', b: 'Bishop', r: 'Rook', q: 'Queen' };
+/** Сундук: деревянный, окован золотом; крышка — отдельная группа, её поворачивает анимация. */
+const CHEST_SVG = `<svg viewBox="0 0 120 100" width="150" height="125" aria-hidden="true">
+  <ellipse cx="60" cy="92" rx="44" ry="6" fill="rgba(0,0,0,.25)"/>
+  <rect x="18" y="46" width="84" height="44" rx="6" fill="#8b5a2b" stroke="#4a2c12" stroke-width="3"/>
+  <path d="M18 60h84M18 76h84" stroke="#6b4320" stroke-width="2"/>
+  <rect x="30" y="46" width="8" height="44" fill="#e3b341" stroke="#9a7412" stroke-width="1.5"/><rect x="82" y="46" width="8" height="44" fill="#e3b341" stroke="#9a7412" stroke-width="1.5"/>
+  <rect x="52" y="50" width="16" height="18" rx="3" fill="#f2cf5b" stroke="#9a7412" stroke-width="2"/><circle cx="60" cy="58" r="3" fill="#4a2c12"/>
+  <g class="lid"><path d="M18 46c0-22 84-22 84 0z" fill="#9b6233" stroke="#4a2c12" stroke-width="3"/>
+    <path d="M30 46c0-16 8-20 8-20M82 26s8 4 8 20" stroke="#e3b341" stroke-width="7"/><path d="M30 46c0-16 8-20 8-20M82 26s8 4 8 20" stroke="#9a7412" stroke-width="1.5" fill="none"/></g>
+</svg>`;
 const BUILDING_NAME: Record<ResourceBuilding, string> = { farm: 'Farm', sawmill: 'Sawmill', mine: 'Gold mine', fishery: 'Fishery' };
 const TERRAIN_NAME: Record<string, string> = {
   field: 'Field', forest: 'Forest', deposit: 'Gold deposit', tundra: 'Tundra', desert: 'Desert', mountain: 'Mountains', water: 'Sea',
@@ -646,6 +656,22 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
       await showReplay(app, rec, white, black, title, defending);
     }
     modal(null);
+    if (iWon && out.chest) await chestScreen(out.chest);
+  };
+
+  /** Сундук трофеев: сундук трясётся, крышка открывается, из света появляется награда. */
+  const chestScreen = async (r: ChestReward) => {
+    const icon = r.kind === 'gold' ? iconSvg('gold', 46) : r.kind === 'supplies' ? `${iconSvg('wood', 40)}${iconSvg('food', 40)}`
+      : r.kind === 'piece' ? `<span class="chestpiece">${{ p: '♟', n: '♞', b: '♝', r: '♜', q: '♛' }[r.piece]}\uFE0E</span>` : iconSvg('tactics', 46);
+    modal(`<div class="chest ${r.rarity}">
+        <div class="chestbox">${CHEST_SVG}</div>
+        <div class="chestprize"><span class="prizeico">${icon}</span><b>${esc(chestText(r)[0].toUpperCase() + chestText(r).slice(1))}</b>
+          <small>${r.rarity === 'epic' ? 'Epic find' : r.rarity === 'rare' ? 'Rare find' : 'Spoils of war'}</small></div>
+      </div><div class="acts">${btn('close', 'Take it', '')}</div>`);
+    chestOpen(r.rarity);
+    await ask();
+    modal(null);
+    refresh();
   };
 
   const startBattle = async (attackerId: string, defenderId: string) => {
@@ -918,5 +944,5 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
     draw();
     checkEnd();
   });
-  (window as unknown as { __cc?: unknown }).__cc = { view, state: s }; // для автотестов в браузере
+  (window as unknown as { __cc?: unknown }).__cc = { view, state: s, chest: chestScreen }; // для автотестов в браузере
 };
