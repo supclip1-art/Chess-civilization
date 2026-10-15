@@ -10,6 +10,7 @@
 
 import { armyValue, foundTownHall, hireSettler, playerGenerals, playerHalls, playerSettlers, settlerCost } from './economy.ts';
 import { type Hex, distance, key, neighbors } from './hex.ts';
+import { next } from './rng.ts';
 import { move, reachable } from './map.ts';
 import { type Aggression } from './nations.ts';
 import { type GameState, type General, PASSABLE } from './state.ts';
@@ -259,7 +260,18 @@ export const aiMilitaryTurn = (s: GameState, pid: string): AiAttack[] => {
       }
       continue;
     }
-    // целей нет — возвращаемся домой набирать армию
+    // целей нет. В начале партии полевая армия разведывает окрестности столицы — не дальше 5 клеток,
+    // чтобы за ход-два вернуться домой (возврат при опасности — выше)
+    if (capital && g === gens[0] && s.turn < 30 && !prowl) {
+      const reached = !p.ai.scout || distance(g.hex, p.ai.scout) <= 1 || distance(p.ai.scout, capital.hex) > 5;
+      if (reached) {
+        const spots = [...field.keys()].map((k) => { const [q, r] = k.split(',').map(Number); return { q, r }; })
+          .filter((h) => { const d = distance(h, capital.hex); return d >= 3 && d <= 5 && !s.cells[key(h)].owner; });
+        p.ai.scout = spots.length ? spots[Math.floor(next(s.rng) * spots.length)] : undefined;
+      }
+      if (p.ai.scout) { stepToward(s, g, p.ai.scout, false); continue; }
+    }
+    // возвращаемся домой набирать армию
     if (capital && distance(g.hex, capital.hex) > 0 && !strongEnough) stepToward(s, g, capital.hex, false);
   }
   // новые города основывают поселенцы: нанимаем одного в столице и ведём к хорошему месту

@@ -46,16 +46,28 @@ const pluckBuffer = (freq: number, bright: number, secs = 2.2): AudioBuffer => {
   if (cached) return cached;
   const n = Math.floor(c.sampleRate * secs), period = Math.max(2, Math.round(c.sampleRate / freq));
   const buf = c.createBuffer(1, n, c.sampleRate), out = buf.getChannelData(0);
+  // возбуждение струны — сглаженный шум: чем ниже нота и мягче звук, тем сильнее сглаживание (без «дребезга»)
   const line = new Float32Array(period);
-  for (let i = 0; i < period; i++) line[i] = (Math.random() * 2 - 1) * (i < period * 0.5 ? 1 : 0.6);
+  const smooth = Math.min(0.9, 0.35 + (1 - bright) * 0.4 + (freq < 150 ? 0.25 : 0));
+  let lp = 0;
+  for (let i = 0; i < period; i++) { lp = lp * smooth + (Math.random() * 2 - 1) * (1 - smooth); line[i] = lp; }
   let idx = 0, prev = 0;
-  const damp = 0.996 - (1 - bright) * 0.006;
+  // низкие струны глушим быстрее: долгий гул баса и давал тот самый дребезг
+  const damp = (0.996 - (1 - bright) * 0.006) * (freq < 150 ? 0.997 : 1);
+  let peak = 0;
   for (let i = 0; i < n; i++) {
     const cur = line[idx];
     const avg = (cur + prev) * 0.5 * damp;
     prev = cur; line[idx] = avg; out[i] = cur;
+    peak = Math.max(peak, Math.abs(cur));
     idx = (idx + 1) % period;
   }
+  // все ноты одной громкости: случайный шум иногда давал струну заметно громче остальных
+  if (peak > 0) for (let i = 0; i < n; i++) out[i] /= peak;
+  // мягкое начало и конец, чтобы не было щелчков
+  const fade = Math.floor(c.sampleRate * 0.004);
+  for (let i = 0; i < fade; i++) out[i] *= i / fade;
+  for (let i = 0; i < fade * 10; i++) out[n - 1 - i] *= i / (fade * 10);
   pluckCache.set(id, buf);
   return buf;
 };
@@ -64,7 +76,7 @@ const pluck = (t: number, freq: number, vol: number, bright = 0.6, pan = 0) => {
   const c = ctx!;
   const src = c.createBufferSource(); src.buffer = pluckBuffer(freq, bright);
   const g = c.createGain(); g.gain.value = vol;
-  const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1800 + bright * 2600;
+  const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = Math.min(1200 + bright * 2200, freq * 8);
   const p = c.createStereoPanner(); p.pan.value = pan;
   src.connect(lp); lp.connect(g); g.connect(p); p.connect(musicBus);
   src.start(t); src.stop(t + 2.2);
@@ -154,13 +166,13 @@ const scheduleBar = (t: number) => {
   const chord = CH[chordName];
   const [r, th, fi] = chord;
   // бас на 1 и 4 восьмую, лютня перебором
-  pluck(t, NOTE(r - 12), 0.55, 0.35, -0.2);
-  pluck(t + 3 * BEAT, NOTE(fi - 12), 0.42, 0.35, -0.2);
+  pluck(t, NOTE(r - 12), 0.26, 0.15, -0.2);
+  pluck(t + 3 * BEAT, NOTE(fi - 12), 0.2, 0.15, -0.2);
   const arp = [r, fi, r + 12, fi, th + 12, fi];
-  arp.forEach((n, i) => pluck(t + i * BEAT + (i % 3 === 0 ? 0 : 0.008), NOTE(n), i % 3 === 0 ? 0.32 : 0.22, 0.65, 0.25));
+  arp.forEach((n, i) => pluck(t + i * BEAT + (i % 3 === 0 ? 0 : 0.008), NOTE(n), i % 3 === 0 ? 0.2 : 0.15, 0.5, 0.25));
   // ударные: барабан на сильные доли, бубен на слабые
-  drum(t, 0.38);
-  drum(t + 3 * BEAT, 0.22);
+  drum(t, 0.28);
+  drum(t + 3 * BEAT, 0.16);
   for (const i of [2, 5]) burst(musicBus, t + i * BEAT, 0.12, 0.05, 'highpass', 7000);
   // мелодия: в 3-м и 4-м такте фразы звучит тот же мотив выше (вопрос — ответ), в 8-м — каденция
   const bar = barNo % 8;
