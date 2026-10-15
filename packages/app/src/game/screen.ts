@@ -16,6 +16,7 @@ import { playManual, showReplay } from './fight.ts';
 import { MapView, attackTargets, ownerColor, type Highlight } from './render.ts';
 import { clearSave, saveGame } from './save.ts';
 import { showSummary } from './summary.ts';
+import { techNodes, techTreeHtml } from './techtree.ts';
 import { setBack, tap } from '../tg.ts';
 
 const ME = 'p1';
@@ -122,7 +123,7 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
     app.querySelector('#gensbtn')!.innerHTML = `<span class="kingico">♚</span><b>Generals ${playerGenerals(s, ME).length}</b>${ready ? `<small class="badge">${ready}</small>` : ''}`;
     app.querySelector('#citiesbtn')!.innerHTML = `${CASTLE}<b>Cities ${playerHalls(s, ME).length}</b>`;
     const r = p.research;
-    app.querySelector('#tactics')!.innerHTML = `${iconSvg(r.active || r.marchFinish ? 'clock' : 'tactics', 18)}<b>Tactics ${r.done}/${RESEARCH.length}</b>${r.active ? `<small>${left(r.active.finish)}</small>` : r.marchFinish ? `<small>march ${left(r.marchFinish)}</small>` : ''}`;
+    app.querySelector('#tactics')!.innerHTML = `${iconSvg(r.active || r.marchFinish ? 'clock' : 'tactics', 18)}<b>Technology tree</b>${r.active ? `<small>${left(r.active.finish)}</small>` : r.marchFinish ? `<small>${left(r.marchFinish)}</small>` : ''}`;
   };
 
   // ---------- карта ----------
@@ -508,27 +509,31 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
   });
 
   // ---------- Тактика: исследования для новых генералов ----------
+  /** Дерево технологий: касание узла показывает его описание и кнопку исследования. */
   const tactics = async () => {
-    const p = s.players[ME];
-    const r = p.research;
-    const next = r.done < RESEARCH.length ? r.done : null;
-    const body = r.active
-      ? `<p class="withico">${iconSvg('clock', 16)}Researching level ${r.active.step + 1} · ${left(r.active.finish)}</p>`
-      : next === null ? '<p>All Tactics research is done.</p>'
-        : `<div class="acts">${btn('research', `Research level ${next + 1}`, `${cost(researchCost(s, ME, next))} · ${researchTurns(s, ME, next)} turn${researchTurns(s, ME, next) > 1 ? 's' : ''} · new generals +${ELO_PER_RESEARCH} ELO`)}</div>`;
-    modal(`<h2 class="withico">${iconSvg('tactics', 24)}Tactics ${r.done}/${RESEARCH.length}</h2>
-      <p>Each level of Tactics makes every <b>newly hired</b> general ${ELO_PER_RESEARCH} ELO stronger. Generals you already have keep their ELO and grow by winning battles.</p>
-      <p class="muted">Next general: ELO ${recruitElo(s, ME)}. Research needs no builder.</p>
-      ${body}
-      <h3 class="withico">Forced march</h3>
-      <p>A one-time upgrade: all your generals and settlers move <b>${ARMY_MOVE_MARCH} cells</b> per turn instead of 2.</p>
-      ${r.march ? '<p class="muted">Researched.</p>' : r.marchFinish ? `<p class="withico">${iconSvg('clock', 16)}Researching · ${left(r.marchFinish)}</p>`
-        : `<div class="acts">${btn('march', 'Research Forced march', `${cost(MARCH_RESEARCH.cost)} · ${MARCH_RESEARCH.turns} turns · generals move ${ARMY_MOVE_MARCH} cells`)}</div>`}
-      <div class="acts">${btn('close', 'Close', '')}</div>`);
-    const c = await ask();
-    modal(null);
-    if (c === 'research') act(startResearch(s, ME));
-    if (c === 'march') act(startMarch(s, ME));
+    let picked: string | undefined;
+    for (;;) {
+      const nodes = techNodes(s, ME);
+      picked ??= (nodes.find((n) => n.state === 'active') ?? nodes.find((n) => n.state === 'open') ?? nodes[0]).id;
+      const n = nodes.find((x) => x.id === picked)!;
+      const info = n.state === 'done' ? '<p class="muted">Researched.</p>'
+        : n.state === 'active' ? `<p class="withico">${iconSvg('clock', 16)}Researching · ${left(n.finish!)}</p>`
+          : n.state === 'locked' ? `<p class="muted">First research ${nodes.filter((x) => n.needs.includes(x.id)).map((x) => x.name).join(', ')}.</p>`
+            : `<div class="acts">${btn(`learn:${n.id}`, `Research ${n.name}`, `${cost(n.cost)} · ${n.turns} turn${n.turns > 1 ? 's' : ''}`)}</div>`;
+      modal(`<h2 class="withico">${iconSvg('tactics', 24)}Technology tree</h2>
+        ${techTreeHtml(nodes, picked)}
+        <div class="techinfo"><b>${esc(n.name)}</b><p>${esc(n.text)}</p>${n.id.startsWith('t') ? `<p class="muted">Next general: ELO ${recruitElo(s, ME)}. Research needs no builder.</p>` : ''}${info}</div>
+        <div class="acts">${btn('close', 'Close', '')}</div>`);
+      const c = await ask();
+      if (c.startsWith('tech:')) { picked = c.slice(5); continue; }
+      if (c.startsWith('learn:')) {
+        const id = c.slice(6);
+        act(id === 'march' ? startMarch(s, ME) : startResearch(s, ME));
+        continue;
+      }
+      modal(null);
+      return;
+    }
   };
   app.querySelector('#tactics')!.addEventListener('click', () => { if (!busy) { tap(); void tactics(); } });
 

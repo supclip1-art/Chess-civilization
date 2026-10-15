@@ -267,6 +267,7 @@ export const startMarch = (s: GameState, pid: string): Result => {
   const p = s.players[pid];
   if (p.research.march) return no('Forced march is already researched');
   if (p.research.marchFinish) return no('Forced march is already being researched');
+  if (p.research.done < 2) return no('research Tactics II first');
   const cost = MARCH_RESEARCH.cost;
   if (!canAfford(p.res, cost)) return no('not enough resources');
   pay(p, cost);
