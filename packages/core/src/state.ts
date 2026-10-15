@@ -53,6 +53,8 @@ export type General = {
   vsD4: string; // защита против 1.d4
   /** Приказ на несколько ходов: идти к клетке, разведывать сам, стоять на месте. */
   order?: GeneralOrder;
+  /** Поселенец: без армии, основывает город, гибнет при нападении. Генералом не считается. */
+  settler?: boolean;
 };
 
 export type GeneralOrder = { kind: 'goto'; to: Hex } | { kind: 'explore' } | { kind: 'hold' };

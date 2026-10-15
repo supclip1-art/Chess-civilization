@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   BUILD_TURNS, RESOURCE_COST, RESOURCE_OUTPUT, build, endTurn, foundTownHall, hireBuilder, income, maxBuilders,
-  newGame, nextDeserter, settleEconomy, startResearch, recruitElo, upgrade, upgradeTownHall, upkeep, playerHalls,
+  newGame, nextDeserter, hireSettler, settleEconomy, startResearch, recruitElo, upgrade, upgradeTownHall, upkeep, playerHalls,
   key, emptyArmy, type GameState,
 } from '../src/index.ts';
 import { SPAWN_A, cellsAround, testMap } from './helpers.ts';
@@ -87,11 +87,16 @@ test('Франция нанимает строителей бесплатно', 
 test('основание города на ничейной земле, Россия — дешевле и за 1 ход', () => {
   for (const [nation, turns, wood] of [['germany', 2, 100], ['russia', 1, 70]] as const) {
     const s = newGame(testMap(), [{ nation }, { nation: 'spain' }], { elo: 1200, seed: 1 });
-    const g = Object.values(s.generals).find((x) => x.owner === 'p1')!;
-    g.hex = { q: -1, r: -3 };
+    const general = Object.values(s.generals).find((x) => x.owner === 'p1')!;
     s.players.p1.res = { wood: 200, food: 200, gold: 0 };
-    assert.equal(foundTownHall(s, 'p1', g.id).ok, true);
+    general.hex = { q: -1, r: -3 };
+    assert.equal(foundTownHall(s, 'p1', general.id).ok, false, 'генерал город не основывает');
+    assert.ok(hireSettler(s, 'p1', playerHalls(s, 'p1')[0].id).ok);
     assert.equal(200 - s.players.p1.res.wood, wood, nation);
+    const g = Object.values(s.generals).find((x) => x.owner === 'p1' && x.settler)!;
+    general.hex = { q: 0, r: -1 };
+    g.hex = { q: -1, r: -3 };
+    assert.equal(foundTownHall(s, 'p1', g.id).ok, true);
     for (let i = 0; i < turns; i++) round(s);
     assert.equal(playerHalls(s, 'p1').length, 2, nation);
     const names = playerHalls(s, 'p1').sort((a, b) => a.order - b.order).map((h) => h.name);
@@ -102,6 +107,22 @@ test('основание города на ничейной земле, Росс
   const all = Object.values(s.halls).map((h) => h.name);
   assert.equal(new Set(all).size, all.length);
   assert.ok(all.includes('Istanbul') && all.includes('Madrid'));
+});
+
+test('поселенец гибнет, если на него напасть; стройка города отменяется', async () => {
+  const { attack, emptyArmy: _e } = await import('../src/index.ts');
+  const s = newGame(testMap(), [{ nation: 'germany' }, { nation: 'spain' }], { elo: 1200, seed: 1 });
+  s.players.p1.res = { wood: 500, food: 500, gold: 0 };
+  assert.ok(hireSettler(s, 'p1', playerHalls(s, 'p1')[0].id).ok);
+  const st = Object.values(s.generals).find((x) => x.owner === 'p1' && x.settler)!;
+  st.hex = { q: -1, r: -3 };
+  assert.ok(foundTownHall(s, 'p1', st.id).ok);
+  const foe = Object.values(s.generals).find((x) => x.owner === 'p2')!;
+  foe.hex = { q: -1, r: -2 };
+  const r = attack(s, foe.id, st.hex);
+  assert.equal(r.kind, 'killed');
+  assert.equal(s.generals[st.id], undefined);
+  assert.equal(s.players.p1.jobs.filter((j) => j.kind === 'found').length, 0);
 });
 
 test('порядок дезертирства при голоде сохраняет правило строя', () => {

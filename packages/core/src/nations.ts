@@ -52,7 +52,7 @@ const N = (
 ): Nation => ({ id, name, bonus, effect, rulers: { warlike: rulers[0], moderate: rulers[1], peaceful: rulers[2] }, cities: cities.split(', '), mods });
 
 export const NATIONS: Record<NationId, Nation> = {
-  russia: N('russia', 'Russia', 'Vast Lands', 'Founding a city costs 30% less and takes 1 turn instead of 2.',
+  russia: N('russia', 'Russia', 'Vast Lands', 'Settlers cost 30% less and found a city in 1 turn instead of 2.',
     ['Ivan the Terrible', 'Peter the Great', 'Elizabeth of Russia'],
     'Moscow, Saint Petersburg, Novgorod, Kazan, Smolensk, Tver, Yaroslavl, Vladimir, Pskov, Tula, Ryazan, Rostov',
     { townHallFoundCostMult: 0.7, townHallFoundTurns: 1 }),

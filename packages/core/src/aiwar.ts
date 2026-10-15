@@ -8,12 +8,11 @@
 //   peaceful — расширяется основанием городов и захватом слабых нейтралов; на игроков нападает поздно (с 25-го хода),
 //              редко (раз в 8 ходов) и только при большом перевесе; чужую армию со своей земли выбивает всегда.
 
-import { armyValue, foundTownHall, playerGenerals, playerHalls } from './economy.ts';
+import { armyValue, foundTownHall, hireSettler, playerGenerals, playerHalls, playerSettlers, settlerCost } from './economy.ts';
 import { type Hex, distance, key, neighbors } from './hex.ts';
 import { move, reachable } from './map.ts';
 import { type Aggression } from './nations.ts';
 import { type GameState, type General, PASSABLE } from './state.ts';
-import { TOWN_HALL_FOUND } from './config.ts';
 
 /** defense — отбиться (у стен столицы, снять осаду, выгнать со своей земли), offense — поход. */
 export type AiAttack = { gid: string; target: Hex; defense: boolean };
@@ -185,6 +184,11 @@ export const aiMilitaryTurn = (s: GameState, pid: string): AiAttack[] => {
     }
     // идёт осада: стоять у стен, пока город не сдастся в начале следующего хода
     if (Object.values(s.halls).some((h) => h.siege?.by === g.id && distance(h.hex, g.hex) === 1)) continue;
+    // чужой поселенец рядом — лёгкая добыча (если с этой страной уже можно воевать или он на нашей земле)
+    const warReady = s.turn >= ch.playersFrom && s.turn - (p.ai.lastWar ?? -Infinity) >= ch.peace;
+    const prey = armyValue(g.army) > 0 ? Object.values(s.generals).find((x) => x.settler && x.owner !== pid && s.players[x.owner]
+      && distance(x.hex, g.hex) === 1 && (warReady || s.cells[key(x.hex)]?.owner === pid)) : undefined;
+    if (prey) { attacks.push({ gid: g.id, target: prey.hex, defense: false }); continue; }
     const field = pathField(s, g);
     const targets = armyValue(g.army) >= ch.minArmy || armyValue(g.army) > 0 ? targetsFor(s, g, field) : [];
     const strongEnough = armyValue(g.army) >= ch.minArmy;
@@ -197,16 +201,20 @@ export const aiMilitaryTurn = (s: GameState, pid: string): AiAttack[] => {
       }
       continue;
     }
-    // целей нет: расширяемся новыми городами, иначе возвращаемся домой набирать армию
-    const found = TOWN_HALL_FOUND.cost;
-    const wantsCity = playerHalls(s, pid).length < ch.wantCities && p.res.wood >= found.wood + 40 && p.res.food >= found.food + 40;
-    const site = wantsCity ? citySite(s, g, field) : null;
-    if (site) {
-      if (distance(g.hex, site) > 0) stepToward(s, g, site, false);
-      if (g.hex.q === site.q && g.hex.r === site.r) foundTownHall(s, pid, g.id);
-      continue;
-    }
+    // целей нет — возвращаемся домой набирать армию
     if (capital && distance(g.hex, capital.hex) > 0 && !strongEnough) stepToward(s, g, capital.hex, false);
+  }
+  // новые города основывают поселенцы: нанимаем одного в столице и ведём к хорошему месту
+  const settlers = playerSettlers(s, pid);
+  const cost = settlerCost(s, pid);
+  if (capital && !settlers.length && playerHalls(s, pid).length < ch.wantCities
+    && p.res.wood >= cost.wood + 40 && p.res.food >= cost.food + 40) hireSettler(s, pid, capital.id);
+  for (const st of settlers) {
+    if (p.jobs.some((j) => j.kind === 'found' && j.general === st.id)) continue;
+    const site = citySite(s, st, pathField(s, st));
+    if (!site) continue;
+    if (distance(st.hex, site) > 0) stepToward(s, st, site, false);
+    if (st.hex.q === site.q && st.hex.r === site.r) foundTownHall(s, pid, st.id);
   }
   return attacks;
 };

@@ -29,6 +29,7 @@ export const hirePiece = (s: GameState, pid: string, gid: string, piece: Piece):
   const p = s.players[pid];
   const g = s.generals[gid];
   if (!g || g.owner !== pid) return no('not your general');
+  if (g.settler) return no('settlers carry no army');
   const h = hallUnder(s, pid, gid);
   if (!h) return no('the general must stand on the land of one of your cities');
   const bar = h.barracks ?? 0;
@@ -71,7 +72,7 @@ export const hireGeneral = (s: GameState, pid: string, hallId?: string): Result 
 export const transfer = (s: GameState, pid: string, fromId: string, toId: string, pieces: Partial<Army>): Result => {
   const a = s.generals[fromId];
   const b = s.generals[toId];
-  if (!a || !b || a.owner !== pid || b.owner !== pid) return no('these are not your generals');
+  if (!a || !b || a.owner !== pid || b.owner !== pid || a.settler || b.settler) return no('these are not your generals');
   if (distance(a.hex, b.hex) > 1) return no('the generals must stand next to each other');
   const from = { ...a.army };
   const to = { ...b.army };

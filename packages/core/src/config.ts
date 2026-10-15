@@ -104,6 +104,8 @@ export const ELO_PER_RESEARCH = 25;
 export const ARMY_MOVE = 2;
 /** «Марш-бросок» — разовое исследование ветки «Тактика»: генералы ходят на 3 клетки. */
 export const ARMY_MOVE_MARCH = 3;
+/** Поселенец всегда ходит на 2 клетки. */
+export const SETTLER_MOVE = 2;
 export const MARCH_RESEARCH = { cost: res(80, 40, 40), turns: 3 };
 export const FOG_RADIUS = 2;
 export const SIEGE_TURNS = 1;

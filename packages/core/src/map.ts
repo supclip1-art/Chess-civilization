@@ -49,6 +49,7 @@ export const reachable = (s: GameState, gid: string): Map<string, number> => {
 export const move = (s: GameState, gid: string, to: Hex): Result => {
   const g = s.generals[gid];
   if (!g) return no('no such general');
+  if (g.settler && s.players[g.owner]?.jobs.some((j) => j.kind === 'found' && j.general === gid)) return no('the settler is founding a city');
   const d = reachable(s, gid).get(key(to));
   if (d === undefined || d === 0) return no('too far for this turn');
   g.hex = { ...to };
@@ -187,17 +188,33 @@ export const remember = (s: GameState, pid: string, seen: Set<string> = visible(
 export type AttackStart =
   | { kind: 'battle'; attacker: string; defender: string }
   | { kind: 'siege'; hall: string }
+  | { kind: 'killed'; count: number }
   | { kind: 'error'; reason: string };
 
 /** Атака соседней клетки: там армия — бой; там пустая чужая ратуша — осада на один полный ход. */
 export const attack = (s: GameState, gid: string, target: Hex): AttackStart => {
   const g = s.generals[gid];
   if (!g || !s.players[g.owner]) return { kind: 'error', reason: 'no such general' };
+  if (g.settler) return { kind: 'error', reason: 'a settler cannot attack' };
   if (g.attacked) return { kind: 'error', reason: 'this army has already attacked this turn' };
   if (armyValue(g.army) === 0) return { kind: 'error', reason: 'the army has no pieces' };
   if (distance(g.hex, target) !== 1) return { kind: 'error', reason: 'you can only attack a neighbouring cell' };
   const def = defenderAt(s, target, g.owner);
   if (def) return { kind: 'battle', attacker: gid, defender: def.id };
+  // беззащитные поселенцы гибнут
+  const settlers = generalsAt(s, target).filter((x) => x.settler && x.owner !== g.owner);
+  if (settlers.length) {
+    for (const x of settlers) {
+      delete s.generals[x.id];
+      const owner = s.players[x.owner];
+      if (owner) owner.jobs = owner.jobs.filter((j) => !(j.kind === 'found' && j.general === x.id));
+      say(s, `a settler of ${owner ? NATIONS[owner.nation].name : 'a neutral'} was killed`, g.owner);
+      if (owner) say(s, 'your settler was killed', x.owner);
+    }
+    g.attacked = true;
+    g.moveLeft = 0;
+    return { kind: 'killed', count: settlers.length };
+  }
   const h = hallAt(s, target);
   if (h && h.owner !== g.owner) {
     h.siege = { by: gid, since: s.turn };

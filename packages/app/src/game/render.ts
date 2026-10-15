@@ -182,7 +182,9 @@ export class MapView {
         // на клетке ратуши генерал стоит сбоку и меньше, чтобы ратушу было видно
         const gx = onHall ? x + S * 0.42 + i * S * 0.3 : x + i * S * 0.42;
         const gy = onHall ? y - S * 0.42 : y - S * 0.12; // на клетке города — справа сверху, снизу подпись
-        this.general(gx, gy, onHall ? S * 0.78 : S, ownerColor(s, g.owner)!, pieces, g.owner === viewer && !g.attacked && g.moveLeft > 0);
+        const ready = g.owner === viewer && !g.attacked && g.moveLeft > 0;
+        if (g.settler) this.settler(onHall ? x - S * 0.42 : gx, gy, onHall ? S * 0.78 : S, ownerColor(s, g.owner)!, ready); // на городе — слева сверху
+        else this.general(gx, gy, onHall ? S * 0.78 : S, ownerColor(s, g.owner)!, pieces, ready);
       });
     }
     // 5. подсветка хода
@@ -329,6 +331,18 @@ export class MapView {
     if (siege) { c.strokeStyle = '#d63a2a'; c.lineWidth = 3; c.beginPath(); c.arc(x, y, S * 0.78, 0, Math.PI * 2); c.stroke(); }
   }
 
+  /** Поселенец: светлый кружок с флажком цвета владельца. */
+  private settler(x: number, y: number, S: number, color: string, ready: boolean): void {
+    const c = this.ctx;
+    const r = S * 0.36;
+    c.fillStyle = '#f7f3e8'; c.strokeStyle = ready ? color : 'rgba(0,0,0,0.35)'; c.lineWidth = ready ? 2.5 : 1.5;
+    c.beginPath(); c.arc(x, y, r, 0, Math.PI * 2); c.fill(); c.stroke();
+    c.strokeStyle = '#4a3424'; c.lineWidth = Math.max(1.2, S * 0.05); c.lineCap = 'round';
+    c.beginPath(); c.moveTo(x - r * 0.35, y + r * 0.6); c.lineTo(x - r * 0.35, y - r * 0.62); c.stroke();
+    c.fillStyle = color;
+    c.beginPath(); c.moveTo(x - r * 0.3, y - r * 0.62); c.lineTo(x + r * 0.55, y - r * 0.35); c.lineTo(x - r * 0.3, y - r * 0.05); c.closePath(); c.fill();
+  }
+
   private general(x: number, y: number, S: number, color: string, pieces: number, ready: boolean): void {
     const c = this.ctx;
     const r = S * 0.42;
@@ -356,7 +370,7 @@ export const attackTargets = (s: GameState, gid: string): Set<string> => {
   for (const n of neighbors(g.hex)) {
     const k = key(n);
     const enemyArmy = Object.values(s.generals).some((x) => key(x.hex) === k && x.owner !== g.owner &&
-      x.army.p + x.army.n + x.army.b + x.army.r + x.army.q > 0);
+      (x.settler || x.army.p + x.army.n + x.army.b + x.army.r + x.army.q > 0));
     const enemyHall = Object.values(s.halls).some((h) => key(h.hex) === k && h.owner !== g.owner);
     if (enemyArmy || enemyHall) out.add(k);
   }

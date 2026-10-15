@@ -9,7 +9,7 @@ import {
   RESOURCE_OUTPUT, TAVERN, TOWN_HALL_FOUND, TOWN_HALL_UPGRADE, BUILDER_HIRE_FOOD, BUILDER_UPKEEP_FOOD, GENERAL_UPKEEP_FOOD, cityUpgradeCost, tavernCost, PIECES, barracksCost, buildOptions, buildingOutput, maxLevelAt, piecePrice, researchCost, researchTurns, resourceCost, aiEconomyTurn, aiMilitaryTurn, attack, endTurn, say,
   foundTownHall, freeBuilders, hireBuilder, hireGeneral, hirePiece, income, key, maxBuilders, move, playerGenerals,
   reachable, recruitElo, resolveBattle, startResearch, upgrade, upgradeBarracks, upgradeTavern, upgradeTownHall,
-  remember, upkeep, visible, winner, build, enqueue, cancelQueued, ELO_PER_RESEARCH, ARMY_MAX, findPath, runOrders, armyMove, startMarch, MARCH_RESEARCH, ARMY_MOVE_MARCH, BUILDING_SLOTS, citySlots, generalLimit, nationStats, type QueueOrder, type Job, type GameState, type Hex, type Piece, type Res, type ResourceBuilding,
+  remember, upkeep, visible, winner, build, enqueue, cancelQueued, ELO_PER_RESEARCH, ARMY_MAX, hireSettler, settlerCost, SETTLER_MOVE, findPath, runOrders, armyMove, startMarch, MARCH_RESEARCH, ARMY_MOVE_MARCH, BUILDING_SLOTS, citySlots, generalLimit, nationStats, type QueueOrder, type Job, type GameState, type Hex, type Piece, type Res, type ResourceBuilding,
 } from '../../../core/src/index.ts';
 import { autobattle, type BattleRecord } from './battle.ts';
 import { playManual, showReplay } from './fight.ts';
@@ -118,6 +118,27 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
   const btn = (id: string, label: string, sub: string, enabled = true) =>
     `<button class="act" data-a="${id}" ${enabled ? '' : 'disabled'}><b>${label}</b><span>${sub}</span></button>`;
 
+  /** Карточка поселенца: где он, основание города, приказы. */
+  const settlerCard = (g: typeof s.generals[string], cell: typeof s.cells[string]): string => {
+    const mine = g.owner === ME;
+    if (!mine) return `<div class="card"><div class="row"><b style="color:${ownerColor(s, g.owner)}">Settler · ${esc(ownerName(s, g.owner))}</b>${s.players[g.owner] ? nationBtn(g.owner) : ''}</div><p class="muted">Unarmed: any army next to him can kill him.</p></div>`;
+    const p = s.players[ME];
+    const founding = p.jobs.find((j) => j.kind === 'found' && j.general === g.id);
+    const m = NATIONS[p.nation].mods;
+    const turns = m.townHallFoundTurns ?? TOWN_HALL_FOUND.turns;
+    const o = g.order;
+    const canFound = !cell.owner && cell.terrain !== 'water' && cell.terrain !== 'mountain';
+    return `<div class="card"><div class="row"><b style="color:${ownerColor(s, ME)}">Your settler</b><span class="muted">${founding ? '' : `moves left ${g.moveLeft}`}</span></div>
+      <p class="muted">Unarmed: an enemy army next to him can kill him. Walk him to free land and found a city.</p>
+      ${sel.gid !== g.id ? '<p class="muted"><b>Tap this cell again</b> to command the settler.</p>' : ''}
+      ${founding ? `<p class="withico">${iconSvg('clock', 15)}Founding a city · ${left(founding.finish)}</p>` : `
+      ${o ? `<p class="muted"><b>${o.kind === 'goto' ? 'marching' : 'holding position'}</b></p>` : ''}
+      <div class="acts">${canFound ? btn(`found:${g.id}`, 'Found a city here', `${turns} turn${turns > 1 ? 's' : ''} · the settler becomes the city`) : ''}
+        ${o?.kind === 'goto' ? btn(`order:${g.id}:none`, 'Stop the march', 'he waits for orders') : ''}
+        ${btn(`order:${g.id}:${o?.kind === 'hold' ? 'none' : 'hold'}`, o?.kind === 'hold' ? 'Stop holding' : 'Hold position', o?.kind === 'hold' ? 'remind me about him again' : 'stays put; no end-of-turn reminder')}</div>
+      ${canFound ? '' : '<p class="muted">Cities are founded on unclaimed land. Tap a far cell to send him there.</p>'}`}</div>`;
+  };
+
   const sheet = () => {
     const el = app.querySelector<HTMLElement>('#sheet')!;
     if (!sel.hex) {
@@ -144,7 +165,9 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
     } else if (sel.gid && sel.target === 'attack') {
       const hall = Object.values(s.halls).some((h) => key(h.hex) === k);
       const army = Object.values(s.generals).some((g) => key(g.hex) === k && g.owner !== ME && g.army.p + g.army.n + g.army.b + g.army.r + g.army.q > 0);
-      parts.push(`<div class="acts">${btn('attack', army ? 'Attack this army' : `Besiege ${esc(Object.values(s.halls).find((h) => key(h.hex) === k)?.name ?? 'the city')}`, army ? 'a chess battle, you play White' : 'it falls in one turn unless reinforced')}</div>`);
+      const settlerHere = !army && Object.values(s.generals).some((g) => key(g.hex) === k && g.owner !== ME && g.settler);
+      if (settlerHere) parts.push(`<div class="acts">${btn('attack', 'Kill the settler', 'he is unarmed — no battle')}</div>`);
+      else parts.push(`<div class="acts">${btn('attack', army ? 'Attack this army' : `Besiege ${esc(Object.values(s.halls).find((h) => key(h.hex) === k)?.name ?? 'the city')}`, army ? 'a chess battle, you play White' : 'it falls in one turn unless reinforced')}</div>`);
     }
     if (!seen) {
       // под туманом — то, что игрок запомнил, когда видел клетку
@@ -159,6 +182,7 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
     const gens = Object.values(s.generals).filter((g) => key(g.hex) === k);
     for (const g of gens) {
       const mine = g.owner === ME;
+      if (g.settler) { parts.push(settlerCard(g, cell)); continue; }
       const army = PIECES.filter((x) => g.army[x]).map((x) => `${g.army[x]} ${PIECE_NAME[x].toLowerCase()}${g.army[x] > 1 ? 's' : ''}`).join(', ') || 'no pieces';
       let html = `<div class="card"><div class="row"><b style="color:${ownerColor(s, g.owner)}">${mine ? 'Your general' : esc(ownerName(s, g.owner))}</b><span>ELO ${g.elo} ${'★'.repeat(g.stars)}${!mine && s.players[g.owner] ? nationBtn(g.owner) : ''}</span></div>
         <p>King + ${army}</p>`;
@@ -180,11 +204,6 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
               .replace('class="act"', `class="act${bar >= HIRE_LEVEL[x] && p.res.gold >= piecePrice(s, ME, x) && g.army[x] < ARMY_MAX[x] ? '' : ' off'}"`)).join('')}</div>`;
         } else if (cell.owner === ME) {
           html += '<p class="muted hirehead">Pieces are hired on the land of a city with barracks.</p>';
-        }
-        if (!cell.owner && cell.terrain !== 'water' && cell.terrain !== 'mountain') {
-          const m = NATIONS[p.nation].mods;
-          const c = { wood: Math.ceil(TOWN_HALL_FOUND.cost.wood * (m.townHallFoundCostMult ?? 1)), food: Math.ceil(TOWN_HALL_FOUND.cost.food * (m.townHallFoundCostMult ?? 1)), gold: 0 };
-          html += `<div class="acts">${btn(`found:${g.id}`, 'Found a city', `${cost(c)} · ${m.townHallFoundTurns ?? TOWN_HALL_FOUND.turns} turn${(m.townHallFoundTurns ?? TOWN_HALL_FOUND.turns) > 1 ? 's' : ''}`, !g.attacked)}</div>`;
         }
       }
       parts.push(html + '</div>');
@@ -208,6 +227,7 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
           ${nb <= maxBuilders(s, ME) ? btn('builder', `Hire builder ${nb}`, `${NATIONS[p.nation].mods.freeBuilderHire ? 'free' : `${amount('food', BUILDER_HIRE_FOOD[nb as 2 | 3])}`} · ${NATIONS[p.nation].mods.freeBuilderUpkeep ? 'eats nothing' : `eats ${amount('food', BUILDER_UPKEEP_FOOD)}/turn`}`) : ''}
           ${barNext ? btn(`barracks:${hall.id}`, hb ? `Barracks → ${hb + 1}` : 'Build barracks', `${cost(barracksCost(s, ME, (hb + 1) as 1 | 2 | 3 | 4 | 5))} · ${barNext.turns} turn${barNext.turns > 1 ? 's' : ''} · ${PIECE_NAME[PIECES[hb]].toLowerCase()}s here`) : ''}
           ${tavNext ? btn(`tavern:${hall.id}`, ht ? `Tavern → ${ht + 1}` : 'Build tavern', `${cost(tavernCost(s, ME, (ht + 1) as 1 | 2 | 3 | 4))} · ${tavNext.turns} turn${tavNext.turns > 1 ? 's' : ''} · up to ${Math.min(5, ht + 2)} generals`) : ''}
+          ${btn(`settler:${hall.id}`, 'Train a settler', `${cost(settlerCost(s, ME))} · founds a new city · moves ${SETTLER_MOVE} cells`)}
           ${ht && gCount < generalLimit(s, ME) ? btn(`general:${hall.id}`, 'Hire a general here', `${amount('gold', gCost)} · ELO ${recruitElo(s, ME)} · eats ${amount('food', GENERAL_UPKEEP_FOOD)}/turn`) : ''}
         </div>
         <p class="muted">Buildings on its land ${citySlots(s, hall.id).used}/${citySlots(s, hall.id).max}${hall.level < 3 ? ` · level ${hall.level + 1}: ${BUILDING_SLOTS[hall.level]}` : ''} · Barracks ${hb || '—'} · Tavern ${ht || '—'}</p>
@@ -260,9 +280,10 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
         : a === 'build' ? { kind: 'build', hex: hex(x), building: y as ResourceBuilding } : null;
     if (order) { construct(order, b.querySelector('b')?.textContent ?? 'this'); return; }
     if (a === 'hire') act(hirePiece(s, ME, x, y as Piece));
-    else if (a === 'found') act(foundTownHall(s, ME, x));
+    else if (a === 'found') { const r = foundTownHall(s, ME, x); act(r); if (r.ok) { sel = {}; refresh(); } }
     else if (a === 'builder') act(hireBuilder(s, ME));
     else if (a === 'general') act(hireGeneral(s, ME, x));
+    else if (a === 'settler') { const r = hireSettler(s, ME, x); act(r); if (r.ok) toast('A settler is ready in the city. He can move next turn.'); }
     else if (a === 'unqueue') act(cancelQueued(s, ME, Number(x)));
     else if (a === 'move') doMove();
     else if (a === 'goto') {
@@ -273,7 +294,7 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
       if (s.generals[g.id]?.order) toast('The general is marching. Tap him to see the route or stop the march.');
       refresh();
     }
-    else if (a === 'order') { const g = s.generals[x]; g.order = y === 'none' ? undefined : y === 'explore' ? { kind: 'explore' } : { kind: 'hold' }; if (y === 'explore') followOrders(); sel = { hex: g.hex, gid: g.id }; saveGame(s); refresh(); }
+    else if (a === 'order') { const g = s.generals[x]; g.order = y === 'none' ? undefined : y === 'explore' ? { kind: 'explore' } : { kind: 'hold' }; if (y === 'explore') followOrders(); sel = y === 'none' ? { hex: g.hex, gid: g.id } : {}; saveGame(s); refresh(); }
     else if (a === 'attack') doAttack();
   });
 
@@ -458,13 +479,13 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
     if (busy) return;
     tap();
     // армия с непотраченными ходами и без приказа: показываем её и напоминаем; повторное нажатие завершает ход
-    const idle = playerGenerals(s, ME).find((g) => g.moveLeft > 0 && !g.attacked && !g.order);
+    const idle = Object.values(s.generals).find((g) => g.owner === ME && g.moveLeft > 0 && !g.attacked && !g.order);
     if (idle && warnedTurn !== s.turn) {
       warnedTurn = s.turn;
       sel = { hex: idle.hex, gid: idle.id };
       view.centerOn(idle.hex);
       refresh();
-      toast('This army has not moved yet. Move it, give it an order (march, explore, hold) — or press End turn again.');
+      toast(idle.settler ? 'This settler has not moved yet. Move him, found a city, hold — or press End turn again.' : 'This army has not moved yet. Move it, give it an order (march, explore, hold) — or press End turn again.');
       return;
     }
     busy = true;
@@ -510,7 +531,10 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
       // если генерал уже идёт походом, касание другой клетки просто открывает её (маршрут не меняется)
       if (!own && s.generals[sel.gid].owner === ME && s.generals[sel.gid].order?.kind !== 'goto') { sel = { hex: h, gid: sel.gid, target: 'goto' }; refresh(); return; }
     }
-    const mine = Object.values(s.generals).find((g) => g.owner === ME && key(g.hex) === k);
+    // на клетке несколько своих (генерал и поселенец) — повторное касание выбирает следующего
+    const units = Object.values(s.generals).filter((g) => g.owner === ME && key(g.hex) === k).sort((a, b) => Number(!!a.settler) - Number(!!b.settler));
+    const at = units.findIndex((g) => g.id === sel.gid);
+    const mine = units.length ? units[(at + 1) % units.length] : undefined;
     sel = { hex: h, gid: mine?.id };
     refresh();
   };
@@ -534,6 +558,7 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
     s.generals[gid].order = undefined;
     const r = attack(s, gid, h);
     if (r.kind === 'battle') { startBattle(r.attacker, r.defender); return; }
+    if (r.kind === 'killed') { saveGame(s); toast('The enemy settler is killed.'); sel = { hex: s.generals[gid].hex, gid }; refresh(); return; }
     if (r.kind === 'siege') {
       saveGame(s);
       toast('Siege begins: the city falls at the start of your next turn unless reinforcements arrive.');

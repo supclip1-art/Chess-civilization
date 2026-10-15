@@ -10,7 +10,7 @@ import {
 import { type Hex, key, neighbors } from './hex.ts';
 import { NATIONS, type Mods } from './nations.ts';
 import {
-  BUILDING_TERRAIN, PASSABLE, type Army, type Cell, type GameState, type General, type Job, type Player, cityName, newId, recomputeTerritory, say,
+  BUILDING_TERRAIN, PASSABLE, makeGeneral, type Army, type Cell, type GameState, type General, type Job, type Player, cityName, newId, recomputeTerritory, say,
 } from './state.ts';
 
 export type Result = { ok: true } | { ok: false; reason: string };
@@ -173,21 +173,20 @@ export const upgradeTownHall = (s: GameState, pid: string, hallId: string): Resu
   return ok;
 };
 
-/** Основать ратушу на ничейной клетке, где стоит генерал. Армия в этот ход не атакует. */
+/** Основать город на ничейной клетке, где стоит поселенец. Он остаётся там до конца стройки и становится городом. */
 export const foundTownHall = (s: GameState, pid: string, generalId: string): Result => {
   const p = s.players[pid];
   const g = s.generals[generalId];
-  if (!g || g.owner !== pid) return no('not your general');
-  if (g.attacked) return no('this army has already acted this turn');
+  if (!g || g.owner !== pid) return no('not your settler');
+  if (!g.settler) return no('only a settler can found a city: train one in a city');
+  if (p.jobs.some((j) => j.kind === 'found' && j.general === g.id)) return no('this settler is already founding a city');
   const c = s.cells[key(g.hex)];
   if (!c || !PASSABLE[c.terrain]) return no('you cannot build here');
   if (c.owner) return no('this land already belongs to someone');
   if (p.jobs.some((j) => j.kind === 'found' && key(j.hex) === key(g.hex))) return no('a city is already being founded here');
   const m = mods(s, pid);
-  const cost = scale(TOWN_HALL_FOUND.cost, m.townHallFoundCostMult ?? 1);
-  if (!canAfford(p.res, cost)) return no('not enough resources');
-  pay(p, cost);
-  g.attacked = true;
+  g.moveLeft = 0;
+  g.order = undefined;
   p.jobs.push({ kind: 'found', hex: { ...g.hex }, general: g.id, finish: s.turn + (m.townHallFoundTurns ?? TOWN_HALL_FOUND.turns) });
   return ok;
 };
@@ -340,8 +339,28 @@ export const startQueued = (s: GameState, pid: string): void => {
 export const armyValue = (a: Army): number =>
   (Object.keys(a) as Piece[]).reduce((sum, p) => sum + a[p] * PIECE_PRICE[p], 0);
 
+/** Генералы игрока (поселенцы — нет). */
 export const playerGenerals = (s: GameState, pid: string): General[] =>
-  Object.values(s.generals).filter((g) => g.owner === pid);
+  Object.values(s.generals).filter((g) => g.owner === pid && !g.settler);
+export const playerSettlers = (s: GameState, pid: string): General[] =>
+  Object.values(s.generals).filter((g) => g.owner === pid && g.settler);
+
+/** Цена поселенца с бонусом нации. */
+export const settlerCost = (s: GameState, pid: string): Res => scale(TOWN_HALL_FOUND.cost, mods(s, pid).townHallFoundCostMult ?? 1);
+
+/** Нанять поселенца в городе. Он появляется в городе и пойдёт в следующий ход. */
+export const hireSettler = (s: GameState, pid: string, hallId: string): Result => {
+  const p = s.players[pid];
+  const h = s.halls[hallId];
+  if (!h || h.owner !== pid) return no('not your city');
+  const cost = settlerCost(s, pid);
+  if (!canAfford(p.res, cost)) return no('not enough resources');
+  pay(p, cost);
+  const g = makeGeneral(s, pid, { ...h.hex }, 0, { p: 0, n: 0, b: 0, r: 0, q: 0 }, 'Settler');
+  g.settler = true;
+  say(s, `a settler leaves ${h.name}`, pid);
+  return ok;
+};
 
 export const income = (s: GameState, pid: string): Res => {
   const inc: Res = { wood: 0, food: 0, gold: 0 };
@@ -410,7 +429,9 @@ export const completeJobs = (s: GameState, pid: string): void => {
       if (h && h.owner === pid) { h.level = j.level; recomputeTerritory(s); }
     } else if (j.kind === 'found') {
       const c = s.cells[key(j.hex)];
-      if (c && !c.owner) {
+      const settler = s.generals[j.general];
+      if (settler?.settler) delete s.generals[settler.id]; // поселенец становится городом
+      if (c && !c.owner && settler) {
         const id = newId(s, 'h');
         const name = cityName(s, pid);
         s.halls[id] = { id, name, hex: j.hex, owner: pid, level: 1, order: s.nextId };
