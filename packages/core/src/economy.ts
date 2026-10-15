@@ -97,11 +97,17 @@ export const jobHall = (s: GameState, j: Job): string | undefined =>
 export const busyBuilders = (s: GameState, pid: string, hallId: string): number =>
   s.players[pid].jobs.filter((j) => jobHall(s, j) === hallId).length;
 /** Свободные строители города; без hallId — всех городов игрока вместе. */
+/** Город, где сейчас нельзя строить (карантин, недовольство после бунта). */
+export const halted = (s: GameState, h: { haltUntil?: number }): boolean => (h.haltUntil ?? 0) > s.turn;
 export const freeBuilders = (s: GameState, pid: string, hallId?: string): number => {
-  if (hallId) { const h = s.halls[hallId]; return h && h.owner === pid ? hallBuilders(h) - busyBuilders(s, pid, hallId) : 0; }
-  return playerHalls(s, pid).reduce((n, h) => n + Math.max(0, hallBuilders(h) - busyBuilders(s, pid, h.id)), 0);
+  if (hallId) { const h = s.halls[hallId]; return h && h.owner === pid && !halted(s, h) ? hallBuilders(h) - busyBuilders(s, pid, hallId) : 0; }
+  return playerHalls(s, pid).filter((h) => !halted(s, h)).reduce((n, h) => n + Math.max(0, hallBuilders(h) - busyBuilders(s, pid, h.id)), 0);
 };
-const noBuilder = (s: GameState, hallId?: string) => no(`all builders of ${hallId ? s.halls[hallId]?.name ?? 'this city' : 'this city'} are busy`);
+const noBuilder = (s: GameState, hallId?: string) => {
+  const h = hallId ? s.halls[hallId] : undefined;
+  if (h && halted(s, h)) return no(`${h.name}: ${h.haltWhy ?? 'no construction'} — ${h.haltUntil! - s.turn} turn${h.haltUntil! - s.turn > 1 ? 's' : ''} left`);
+  return no(`all builders of ${h?.name ?? 'this city'} are busy`);
+};
 
 export const playerHalls = (s: GameState, pid: string) => Object.values(s.halls).filter((h) => h.owner === pid);
 

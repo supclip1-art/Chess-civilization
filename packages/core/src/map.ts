@@ -378,6 +378,8 @@ export const capture = (s: GameState, hallId: string, newOwner: string): void =>
   }
   h.owner = newOwner;
   h.siege = undefined;
+  h.takenAt = s.turn;
+  h.haltUntil = undefined;
   if (s.neutrals[old]) {
     delete s.neutrals[old];
     for (const g of Object.values(s.generals)) if (g.owner === old) delete s.generals[g.id];

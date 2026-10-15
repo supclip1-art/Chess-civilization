@@ -10,7 +10,7 @@ import {
   RESOURCE_OUTPUT, TAVERN, TOWN_HALL_FOUND, TOWN_HALL_UPGRADE, BUILDER_HIRE_FOOD, BUILDER_UPKEEP_FOOD, GENERAL_UPKEEP_FOOD, cityUpgradeCost, tavernCost, PIECES, barracksCost, buildOptions, buildingOutput, maxLevelAt, piecePrice, researchCost, researchTurns, resourceCost, aiEconomyTurn, aiMilitaryTurn, attack, endTurn, say,
   foundTownHall, freeBuilders, hireBuilder, hireGeneral, hirePiece, income, key, maxBuilders, move, playerGenerals,
   reachable, recruitElo, resolveBattle, startResearch, upgrade, upgradeBarracks, upgradeTavern, upgradeTownHall,
-  remember, upkeep, visible, winner, TECHS, chestText, type ChestReward, trainGeneral, trainingFor, hasTech, build, enqueue, cancelQueued, ELO_PER_RESEARCH, ARMY_MAX, startTech, type TechId, playerHalls, hasMet, jobHall, hallBuilders, banditsTurn, recordHistory, hireSettler, settlerCost, findPath, runOrders, armyMove, startMarch, MARCH_RESEARCH, ARMY_MOVE_MARCH, BUILDING_SLOTS, citySlots, generalLimit, nationStats, type QueueOrder, type Job, type GameState, type Hex, type Piece, type Res, type ResourceBuilding,
+  remember, upkeep, visible, winner, answerEvent, canSuppress, MERCENARY_GOLD, type EventKind, TECHS, chestText, type ChestReward, trainGeneral, trainingFor, hasTech, build, enqueue, cancelQueued, ELO_PER_RESEARCH, ARMY_MAX, startTech, type TechId, playerHalls, hasMet, jobHall, hallBuilders, banditsTurn, recordHistory, hireSettler, settlerCost, findPath, runOrders, armyMove, startMarch, MARCH_RESEARCH, ARMY_MOVE_MARCH, BUILDING_SLOTS, citySlots, generalLimit, nationStats, type QueueOrder, type Job, type GameState, type Hex, type Piece, type Res, type ResourceBuilding,
 } from '../../../core/src/index.ts';
 import { autobattle, type BattleRecord } from './battle.ts';
 import { playManual, showReplay } from './fight.ts';
@@ -22,6 +22,21 @@ import { setBack, tap } from '../tg.ts';
 
 const ME = 'p1';
 const PIECE_NAME: Record<Piece, string> = { p: 'Pawn', n: 'Knight', b: 'Bishop', r: 'Rook', q: 'Queen' };
+/** Рисунки событий (простые медальоны 64×64). */
+const EVENT_ART: Record<EventKind, string> = (() => {
+  const m = (bg: string, inner: string) => `<svg viewBox="0 0 64 64" width="84" height="84" aria-hidden="true"><circle cx="32" cy="32" r="30" fill="${bg}" stroke="rgba(0,0,0,.25)" stroke-width="2"/>${inner}</svg>`;
+  return {
+    harvest: m('#f3e0a2', '<path d="M32 50V18" stroke="#8a6a1a" stroke-width="3"/>' + [22, 28, 34, 40].map((y, i) => `<ellipse cx="${i % 2 ? 38 : 26}" cy="${y}" rx="6" ry="3.5" fill="#e0a92e" transform="rotate(${i % 2 ? -35 : 35} ${i % 2 ? 38 : 26} ${y})"/>`).join('') + '<ellipse cx="32" cy="16" rx="3.5" ry="6" fill="#e0a92e"/>'),
+    plague: m('#cfd8c4', '<path d="M20 44c0-14 24-14 24 0" fill="#3d4a3a"/><circle cx="32" cy="26" r="10" fill="#3d4a3a"/><path d="M30 28l-14 8 14-2z" fill="#e8e2c8"/><circle cx="35" cy="24" r="2" fill="#e8e2c8"/>'),
+    revolt: m('#f2c0a8', '<path d="M30 52V30h4v22z" fill="#6b4320"/><path d="M32 30c-8-6-2-14 0-20 2 6 8 14 0 20z" fill="#e8622a"/><path d="M32 28c-3-3-1-7 0-10 1 3 3 7 0 10z" fill="#f7d04a"/>'),
+    master: m('#d9cfc0', '<path d="M20 44l16-16" stroke="#7a4a22" stroke-width="5" stroke-linecap="round"/><path d="M30 22l12-6 6 6-6 12z" fill="#9ba5af" stroke="#454d55" stroke-width="1.5"/>'),
+    mercenaries: m('#c9d4e3', '<path d="M18 46L44 20M46 46L20 20" stroke="#e8edf2" stroke-width="4" stroke-linecap="round"/><path d="M16 42l6 6M48 42l-6 6" stroke="#d1a24a" stroke-width="4" stroke-linecap="round"/>'),
+    caravan: m('#ead7b0', '<path d="M14 40h30l4-10H18z" fill="#b9824f" stroke="#5a3719" stroke-width="1.5"/><circle cx="22" cy="44" r="4" fill="#5a3719"/><circle cx="40" cy="44" r="4" fill="#5a3719"/><path d="M48 30c4 0 6 4 4 10h-6" fill="#c98b4a" stroke="#5a3719" stroke-width="1.5"/>'),
+    earthquake: m('#d6c9b4', '<path d="M10 36h44" stroke="#7a6a52" stroke-width="3"/><path d="M30 14l-4 10 6 4-6 8 5 6-3 8" fill="none" stroke="#3a2e22" stroke-width="3" stroke-linejoin="round"/>'),
+    fire: m('#f5c9a0', '<path d="M32 52c-12 0-16-10-10-20 2 4 4 6 6 6-2-8 2-16 8-20 0 8 10 12 10 24 0 6-6 10-14 10z" fill="#e8622a"/><path d="M32 52c-5 0-8-4-5-10 2 2 4 2 5 1 0-4 2-6 4-8 1 5 4 7 4 11 0 4-4 6-8 6z" fill="#f7d04a"/>'),
+  };
+})();
+
 /** Сундук: деревянный, окован золотом; крышка — отдельная группа, её поворачивает анимация. */
 const CHEST_SVG = `<svg viewBox="0 0 120 100" width="150" height="125" aria-hidden="true">
   <ellipse cx="60" cy="92" rx="44" ry="6" fill="rgba(0,0,0,.25)"/>
@@ -804,7 +819,30 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
     sel = { hex: sel.hex, gid: sel.gid && s.generals[sel.gid] ? sel.gid : undefined };
     refresh();
     checkEnd();
+    void eventCard();
   });
+
+  /** Событие хода: карточка с рисунком и вариантами. Беды без выбора — просто сообщение. */
+  const eventCard = async () => {
+    const ev = s.players[ME]?.event;
+    if (!ev || !s.players[ME].alive) return;
+    if (ev.hallId) glideTo(s.halls[ev.hallId].hex);
+    for (;;) {
+      modal(`<div class="evcard ev-${ev.kind}"><div class="evart">${EVENT_ART[ev.kind]}</div><h2>${esc(ev.title)}</h2><p>${esc(ev.text)}</p></div>
+        <div class="acts">${ev.choices.map((c) => {
+          const off = (c.id === 'suppress' && !canSuppress(s, ME, ev.hallId!)) || (c.id === 'hire' && s.players[ME].res.gold < MERCENARY_GOLD);
+          return btn(`ev:${c.id}`, c.label, c.text).replace('class="act"', `class="act${off ? ' off' : ''}"`);
+        }).join('')}</div>`);
+      const c = (await ask()).slice(3);
+      if (c === 'suppress' && !canSuppress(s, ME, ev.hallId!)) { toast('No army of yours stands in or next to the city.'); continue; }
+      modal(null);
+      const res = answerEvent(s, ME, c);
+      if (res) toast(`${ev.title}: ${res}.`);
+      saveGame(s);
+      refresh();
+      return;
+    }
+  };
 
   // ---------- касания и камера ----------
   const onTap = (px: number, py: number) => {
@@ -943,6 +981,7 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
     if (capital) view.centerOn(capital.hex);
     draw();
     checkEnd();
+    void eventCard();
   });
   (window as unknown as { __cc?: unknown }).__cc = { view, state: s, chest: chestScreen }; // для автотестов в браузере
 };

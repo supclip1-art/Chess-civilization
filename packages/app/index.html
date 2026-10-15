@@ -70,6 +70,8 @@
     @keyframes chestlid { to { transform: rotate(-38deg) translate(-4px, -6px); } }
     @keyframes chestglow { to { transform: translate(-50%, -50%) scale(1); } }
     @keyframes chestprize { to { opacity: 1; transform: none; } }
+    .evcard { text-align: center; } .evcard h2 { margin: 8px 0 4px; } .evcard p { margin: 0 0 6px; }
+    .evart { display: inline-flex; animation: evpop .45s ease-out; } @keyframes evpop { from { transform: scale(.6) rotate(-8deg); opacity: 0; } }
     .seg { display: flex; gap: 0; border: 1px solid var(--line); border-radius: 9px; overflow: hidden; }
     .seg button { width: auto; border-radius: 0; padding: 7px 14px; background: var(--bg); color: var(--ink); font-weight: 500; }
     .seg button.on { background: var(--accent); color: var(--accent-ink); font-weight: 600; }

@@ -38,6 +38,11 @@ export type TownHall = {
   tavern?: number; // таверна города: в ней нанимают генералов
   builders?: number; // строители города (нет — один)
   siege?: { by: string; since: number }; // id осаждающего генерала и ход начала осады
+  /** До какого хода в городе нельзя строить (карантин, недовольство) и почему. */
+  haltUntil?: number;
+  haltWhy?: string;
+  /** Ход, когда город взяли силой (для бунтов). */
+  takenAt?: number;
 };
 
 export type General = {
@@ -61,6 +66,8 @@ export type General = {
   settler?: boolean;
   /** Лагерь шайки разбойников: она бродит и охотится только вокруг него. */
   camp?: Hex;
+  /** До какого хода генерал не может двигаться (подавляет бунт). */
+  pinnedUntil?: number;
 };
 
 export type GeneralOrder = { kind: 'goto'; to: Hex } | { kind: 'explore' } | { kind: 'hold' };
@@ -90,6 +97,9 @@ export type Player = {
   jobs: Job[];
   /** Очередь строек: оплачены, начнутся, когда освободится строитель. turns — сколько ходов займёт стройка. */
   queue?: { job: Job; turns: number; paid: Res }[];
+  /** События: ход следующего и событие, которое ждёт выбора игрока. */
+  nextEvent?: number;
+  event?: import('./events.ts').PendingEvent;
   starterKnight: boolean; // стартовый конь жив и всегда возвращается после боя
   alive: boolean;
 };
