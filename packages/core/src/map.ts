@@ -57,6 +57,104 @@ export const move = (s: GameState, gid: string, to: Hex): Result => {
   return { ok: true };
 };
 
+// ---------- Приказы: поход к клетке, разведка, стоять ----------
+
+/** Можно ли генералу пройти через клетку (те же правила, что у reachable). */
+const passableFor = (s: GameState, g: General, n: Hex): boolean => {
+  const c = s.cells[key(n)];
+  if (!c || !PASSABLE[c.terrain]) return false;
+  if (generalsAt(s, n).some((x) => x.owner !== g.owner)) return false;
+  const h = hallAt(s, n);
+  return !(h && h.owner !== g.owner);
+};
+
+/** Кратчайший путь генерала к клетке через всю карту (без учёта очков хода). Если в саму клетку войти нельзя
+ *  (чужая армия или город), путь ведёт к соседней с ней. null — пути нет. */
+export const findPath = (s: GameState, gid: string, to: Hex): Hex[] | null => {
+  const g = s.generals[gid];
+  const goal = key(to);
+  const enterable = passableFor(s, g, to);
+  const prev = new Map<string, string | null>([[key(g.hex), null]]);
+  const queue: Hex[] = [g.hex];
+  let end: string | null = null;
+  while (queue.length && !end) {
+    const cur = queue.shift()!;
+    const ck = key(cur);
+    if (ck === goal || (!enterable && distance(cur, to) === 1)) { end = ck; break; }
+    for (const n of neighbors(cur)) {
+      const k = key(n);
+      if (prev.has(k) || !passableFor(s, g, n)) continue;
+      prev.set(k, ck);
+      queue.push(n);
+    }
+  }
+  if (!end) return null;
+  const path: Hex[] = [];
+  for (let k: string | null = end; k; k = prev.get(k) ?? null) { const [q, r] = k.split(',').map(Number); path.unshift({ q, r }); }
+  return path; // path[0] — где генерал стоит сейчас
+};
+
+/** Ближайшая проходимая клетка, которую игрок ещё ни разу не видел, — цель разведки. */
+export const exploreGoal = (s: GameState, gid: string): Hex | null => {
+  const g = s.generals[gid];
+  const mem = s.memory?.[g.owner] ?? {};
+  const seen = new Set([key(g.hex)]);
+  const queue: Hex[] = [g.hex];
+  while (queue.length) {
+    const cur = queue.shift()!;
+    for (const n of neighbors(cur)) {
+      const k = key(n);
+      if (seen.has(k) || !passableFor(s, g, n)) continue;
+      seen.add(k);
+      if (!mem[k]) return n;
+      queue.push(n);
+    }
+  }
+  return null;
+};
+
+/** Сделать шаг по приказу: дойти по пути так далеко, как позволяют очки хода. */
+const stepAlong = (s: GameState, gid: string, path: Hex[]): boolean => {
+  const g = s.generals[gid];
+  const reach = reachable(s, gid);
+  for (let i = Math.min(path.length - 1, g.moveLeft); i > 0; i--) {
+    if (reach.has(key(path[i]))) return move(s, gid, path[i]).ok;
+  }
+  return false;
+};
+
+const enemyNear = (s: GameState, g: General): General | undefined =>
+  Object.values(s.generals).find((x) => x.owner !== g.owner && armyValue(x.army) > 0 && distance(x.hex, g.hex) <= 2);
+
+/** Выполнить приказы генералов игрока (в начале его хода). Возвращает, что произошло, — для уведомлений. */
+export const runOrders = (s: GameState, pid: string): { gid: string; text: string }[] => {
+  const out: { gid: string; text: string }[] = [];
+  for (const g of Object.values(s.generals)) {
+    if (g.owner !== pid || !g.order || g.order.kind === 'hold' || g.attacked || g.moveLeft <= 0) continue;
+    if (g.order.kind === 'goto') {
+      const to = g.order.to;
+      const path = findPath(s, g.id, to);
+      if (!path) { g.order = undefined; out.push({ gid: g.id, text: 'the way is blocked — the march order is cancelled' }); continue; }
+      if (path.length > 1) stepAlong(s, g.id, path);
+      const arrived = key(g.hex) === key(to) || (findPath(s, g.id, to)?.length ?? 2) <= 1;
+      if (arrived) { g.order = undefined; out.push({ gid: g.id, text: 'has arrived' }); continue; }
+    } else {
+      // разведка: несколько шагов, пока есть очки хода и куда идти
+      for (let guard = 0; guard < 4 && g.moveLeft > 0; guard++) {
+        const goal = exploreGoal(s, g.id);
+        if (!goal) { g.order = undefined; out.push({ gid: g.id, text: 'has explored everything it can reach' }); break; }
+        const path = findPath(s, g.id, goal);
+        if (!path || !stepAlong(s, g.id, path)) break;
+        remember(s, pid);
+      }
+    }
+    remember(s, pid);
+    const foe = enemyNear(s, g);
+    if (foe && g.order) { g.order = undefined; out.push({ gid: g.id, text: 'stopped: an enemy army is near' }); }
+  }
+  return out;
+};
+
 // ---------- Туман войны ----------
 
 /** Видимые игроку клетки: 2 клетки от края его территории и 2 клетки вокруг его генералов. */

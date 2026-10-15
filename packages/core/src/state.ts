@@ -51,7 +51,11 @@ export type General = {
   white: string; // дебют за белых
   vsE4: string; // защита против 1.e4
   vsD4: string; // защита против 1.d4
+  /** Приказ на несколько ходов: идти к клетке, разведывать сам, стоять на месте. */
+  order?: GeneralOrder;
 };
+
+export type GeneralOrder = { kind: 'goto'; to: Hex } | { kind: 'explore' } | { kind: 'hold' };
 
 export type Job =
   | { kind: 'resource'; hex: Hex; building: ResourceBuilding; level: number; finish: number }
@@ -68,7 +72,8 @@ export type Player = {
   builders: number;
   /** Правитель игрока (у ИИ — ai.ruler). */
   ruler?: string;
-  research: { done: number; active?: { step: number; finish: number } };
+  /** «Тактика»: done ступеней +ELO; march — марш-бросок (генералы ходят на 3 клетки), marchFinish — когда изучится. */
+  research: { done: number; active?: { step: number; finish: number }; march?: boolean; marchFinish?: number };
   jobs: Job[];
   /** Очередь строек: оплачены, начнутся, когда освободится строитель. turns — сколько ходов займёт стройка. */
   queue?: { job: Job; turns: number; paid: Res }[];

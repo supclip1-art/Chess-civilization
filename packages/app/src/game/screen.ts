@@ -9,7 +9,7 @@ import {
   RESOURCE_OUTPUT, TAVERN, TOWN_HALL_FOUND, TOWN_HALL_UPGRADE, BUILDER_HIRE_FOOD, BUILDER_UPKEEP_FOOD, GENERAL_UPKEEP_FOOD, cityUpgradeCost, tavernCost, PIECES, barracksCost, buildOptions, buildingOutput, maxLevelAt, piecePrice, researchCost, researchTurns, resourceCost, aiEconomyTurn, aiMilitaryTurn, attack, endTurn, say,
   foundTownHall, freeBuilders, hireBuilder, hireGeneral, hirePiece, income, key, maxBuilders, move, playerGenerals,
   reachable, recruitElo, resolveBattle, startResearch, upgrade, upgradeBarracks, upgradeTavern, upgradeTownHall,
-  remember, upkeep, visible, winner, build, enqueue, cancelQueued, ELO_PER_RESEARCH, ARMY_MAX, BUILDING_SLOTS, citySlots, generalLimit, nationStats, type QueueOrder, type Job, type GameState, type Hex, type Piece, type Res, type ResourceBuilding,
+  remember, upkeep, visible, winner, build, enqueue, cancelQueued, ELO_PER_RESEARCH, ARMY_MAX, findPath, runOrders, armyMove, startMarch, MARCH_RESEARCH, ARMY_MOVE_MARCH, BUILDING_SLOTS, citySlots, generalLimit, nationStats, type QueueOrder, type Job, type GameState, type Hex, type Piece, type Res, type ResourceBuilding,
 } from '../../../core/src/index.ts';
 import { autobattle, type BattleRecord } from './battle.ts';
 import { playManual, showReplay } from './fight.ts';
@@ -52,7 +52,8 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
   const canvas = app.querySelector<HTMLCanvasElement>('#map')!;
   const view = new MapView(canvas);
   // выбранная клетка; gid — выбранный свой генерал; target — эта клетка цель для него (идти или нападать)
-  let sel: { hex?: Hex; gid?: string; target?: 'move' | 'attack' } = {};
+  let sel: { hex?: Hex; gid?: string; target?: 'move' | 'attack' | 'goto' } = {};
+  let warnedTurn = 0; // на этом ходу уже напомнили про армию, которая не ходила
   let busy = false;
 
   const exit = () => { document.body.classList.remove('game'); app.className = 'stack'; setBack(null); onExit(); };
@@ -93,14 +94,18 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
       <span title="Food">${iconSvg('food')}${fmt(p.res.food)}<small class="${food < 0 ? 'neg' : ''}">${food >= 0 ? '+' : ''}${fmt(food)}</small></span>
       <span title="Gold">${iconSvg('gold')}${fmt(p.res.gold)}<small>+${fmt(inc.gold)}</small></span>`;
     const r = p.research;
-    app.querySelector('#tactics')!.innerHTML = `${iconSvg(r.active ? 'clock' : 'tactics', 18)}<b>Tactics ${r.done}/${RESEARCH.length}</b>${r.active ? `<small>${left(r.active.finish)}</small>` : ''}`;
+    app.querySelector('#tactics')!.innerHTML = `${iconSvg(r.active || r.marchFinish ? 'clock' : 'tactics', 18)}<b>Tactics ${r.done}/${RESEARCH.length}</b>${r.active ? `<small>${left(r.active.finish)}</small>` : r.marchFinish ? `<small>march ${left(r.marchFinish)}</small>` : ''}`;
   };
 
   // ---------- карта ----------
   const highlight = () => {
     const reach = new Set<string>(), atk = sel.gid ? attackTargets(s, sel.gid) : new Set<string>();
     if (sel.gid) for (const [k, d] of reachable(s, sel.gid)) if (d > 0) reach.add(k);
-    return { selected: sel.hex, reach, attack: atk };
+    // путь похода: к выбранной цели или по уже отданному приказу
+    const g = sel.gid ? s.generals[sel.gid] : undefined;
+    const to = sel.target === 'goto' ? sel.hex : g?.order?.kind === 'goto' ? g.order.to : undefined;
+    const path = g && to ? findPath(s, g.id, to) ?? undefined : undefined;
+    return { selected: sel.hex, reach, attack: atk, path };
   };
   const draw = () => {
     const seen = visible(s, ME);
@@ -130,6 +135,12 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
     if (sel.gid && sel.target === 'move') {
       const d = reachable(s, sel.gid).get(k) ?? 0;
       parts.push(`<div class="acts">${btn('move', 'Move general here', `${d} of ${s.generals[sel.gid].moveLeft} moves`)}</div>`);
+    } else if (sel.gid && sel.target === 'goto') {
+      const path = findPath(s, sel.gid, sel.hex);
+      const mv = armyMove(s, ME);
+      parts.push(path && path.length > 1
+        ? `<div class="acts">${btn('goto', 'March here', `${path.length - 1} cells · about ${Math.ceil((path.length - 1) / mv)} turn${path.length - 1 > mv ? 's' : ''}; the general walks on his own`)}</div>`
+        : '<p class="muted">Your general cannot find a way there.</p>');
     } else if (sel.gid && sel.target === 'attack') {
       const hall = Object.values(s.halls).some((h) => key(h.hex) === k);
       const army = Object.values(s.generals).some((g) => key(g.hex) === k && g.owner !== ME && g.army.p + g.army.n + g.army.b + g.army.r + g.army.q > 0);
@@ -152,8 +163,14 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
       let html = `<div class="card"><div class="row"><b style="color:${ownerColor(s, g.owner)}">${mine ? 'Your general' : esc(ownerName(s, g.owner))}</b><span>ELO ${g.elo} ${'★'.repeat(g.stars)}${!mine && s.players[g.owner] ? nationBtn(g.owner) : ''}</span></div>
         <p>King + ${army}</p>`;
       if (mine) {
+        const o = g.order;
+        const where = o?.kind === 'goto' ? (Object.values(s.halls).find((h) => key(h.hex) === key(o.to))?.name ?? `${TERRAIN_NAME[s.cells[key(o.to)].terrain].toLowerCase()} far away`) : '';
         html += `<p class="muted">White: ${esc(g.white)} · vs 1.e4: ${esc(g.vsE4)} · vs 1.d4: ${esc(g.vsD4)}</p>
-          <p class="muted">${g.attacked ? 'Has acted this turn' : `Moves left: ${g.moveLeft}`}</p>`;
+          <p class="muted">${g.attacked ? 'Has acted this turn' : `Moves left: ${g.moveLeft}`}${o ? ` · <b>${o.kind === 'goto' ? `marching to ${esc(where)}` : o.kind === 'explore' ? 'exploring' : 'holding position'}</b>` : ''}</p>
+          <div class="acts">${o?.kind === 'goto' ? btn(`order:${g.id}:none`, 'Stop the march', 'the general waits for orders') : ''}
+            ${btn(`order:${g.id}:${o?.kind === 'explore' ? 'none' : 'explore'}`, o?.kind === 'explore' ? 'Stop exploring' : 'Explore', o?.kind === 'explore' ? 'back to your orders' : 'walks into the unknown by himself every turn')}
+            ${btn(`order:${g.id}:${o?.kind === 'hold' ? 'none' : 'hold'}`, o?.kind === 'hold' ? 'Stop holding' : 'Hold position', o?.kind === 'hold' ? 'remind me about him again' : 'stays put; no end-of-turn reminder')}</div>
+          <p class="muted">Tip: tap any far cell to send this general marching there.</p>`;
         const home = cell.owner === ME && cell.hall ? s.halls[cell.hall] : undefined;
         if (home) {
           // найм — по казарме города, на чьей земле стоит генерал; кнопки не отключаем: нажатие объясняет, чего не хватает
@@ -248,6 +265,8 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
     else if (a === 'general') act(hireGeneral(s, ME, x));
     else if (a === 'unqueue') act(cancelQueued(s, ME, Number(x)));
     else if (a === 'move') doMove();
+    else if (a === 'goto') { const g = s.generals[sel.gid!]; g.order = { kind: 'goto', to: { ...sel.hex! } }; followOrders(); sel = { hex: g.hex, gid: g.id }; refresh(); }
+    else if (a === 'order') { const g = s.generals[x]; g.order = y === 'none' ? undefined : y === 'explore' ? { kind: 'explore' } : { kind: 'hold' }; if (y === 'explore') followOrders(); sel = { hex: g.hex, gid: g.id }; saveGame(s); refresh(); }
     else if (a === 'attack') doAttack();
   });
 
@@ -302,10 +321,16 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
     modal(`<h2 class="withico">${iconSvg('tactics', 24)}Tactics ${r.done}/${RESEARCH.length}</h2>
       <p>Each level of Tactics makes every <b>newly hired</b> general ${ELO_PER_RESEARCH} ELO stronger. Generals you already have keep their ELO and grow by winning battles.</p>
       <p class="muted">Next general: ELO ${recruitElo(s, ME)}. Research needs no builder.</p>
-      ${body}<div class="acts">${btn('close', 'Close', '')}</div>`);
+      ${body}
+      <h3 class="withico">Forced march</h3>
+      <p>A one-time upgrade: all your generals move <b>${ARMY_MOVE_MARCH} cells</b> per turn instead of 2.</p>
+      ${r.march ? '<p class="muted">Researched.</p>' : r.marchFinish ? `<p class="withico">${iconSvg('clock', 16)}Researching · ${left(r.marchFinish)}</p>`
+        : `<div class="acts">${btn('march', 'Research Forced march', `${cost(MARCH_RESEARCH.cost)} · ${MARCH_RESEARCH.turns} turns · generals move ${ARMY_MOVE_MARCH} cells`)}</div>`}
+      <div class="acts">${btn('close', 'Close', '')}</div>`);
     const c = await ask();
     modal(null);
     if (c === 'research') act(startResearch(s, ME));
+    if (c === 'march') act(startMarch(s, ME));
   };
   app.querySelector('#tactics')!.addEventListener('click', () => { if (!busy) { tap(); void tactics(); } });
 
@@ -425,6 +450,16 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
   app.querySelector('#end')!.addEventListener('click', async () => {
     if (busy) return;
     tap();
+    // армия с непотраченными ходами и без приказа: показываем её и напоминаем; повторное нажатие завершает ход
+    const idle = playerGenerals(s, ME).find((g) => g.moveLeft > 0 && !g.attacked && !g.order);
+    if (idle && warnedTurn !== s.turn) {
+      warnedTurn = s.turn;
+      sel = { hex: idle.hex, gid: idle.id };
+      view.centerOn(idle.hex);
+      refresh();
+      toast('This army has not moved yet. Move it, give it an order (march, explore, hold) — or press End turn again.');
+      return;
+    }
     busy = true;
     const from = s.log.length;
     endTurn(s);
@@ -440,9 +475,13 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
     }
     banner(null);
     busy = false;
+    const marched = s.players[ME].alive ? runOrders(s, ME) : [];
     saveGame(s);
     const news = s.log.slice(from).filter((e) => e.player === ME || /captured|out of the game|siege of/.test(e.text));
-    if (news.length) toast(news.map((e) => `${e.player && e.player !== ME ? ownerName(s, e.player) + ': ' : ''}${e.text}`).join(' · '));
+    const notes = [...news.map((e) => `${e.player && e.player !== ME ? ownerName(s, e.player) + ': ' : ''}${e.text}`), ...marched.map((m) => `General ${m.text}`)];
+    if (notes.length) toast(notes.join(' · '));
+    const stopped = marched.find((m) => s.generals[m.gid] && /stopped|blocked/.test(m.text));
+    if (stopped) { sel = { hex: s.generals[stopped.gid].hex, gid: stopped.gid }; view.centerOn(s.generals[stopped.gid].hex); }
     sel = { hex: sel.hex, gid: sel.gid && s.generals[sel.gid] ? sel.gid : undefined };
     refresh();
     checkEnd();
@@ -459,21 +498,32 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
       const d = reachable(s, sel.gid).get(k);
       if (d && d > 0) { sel = { hex: h, gid: sel.gid, target: 'move' }; refresh(); return; }
       if (attackTargets(s, sel.gid).has(k)) { sel = { hex: h, gid: sel.gid, target: 'attack' }; refresh(); return; }
+      // дальняя клетка: открываем её и предлагаем отправить туда генерала походом
+      const own = Object.values(s.generals).some((g) => g.owner === ME && key(g.hex) === k);
+      if (!own && s.generals[sel.gid].owner === ME) { sel = { hex: h, gid: sel.gid, target: 'goto' }; refresh(); return; }
     }
     const mine = Object.values(s.generals).find((g) => g.owner === ME && key(g.hex) === k);
     sel = { hex: h, gid: mine?.id };
     refresh();
   };
 
+  /** Выполнить приказы сразу (поход и разведка начинаются в тот же ход). */
+  const followOrders = () => {
+    const ev = runOrders(s, ME);
+    if (ev.length) toast(ev.map((m) => `General ${m.text}`).join(' · '));
+    saveGame(s);
+  };
+
   const doMove = () => {
     const h = sel.hex!, gid = sel.gid!;
     const r = move(s, gid, h);
-    if (r.ok) { sel = { hex: h, gid }; saveGame(s); } else toast((r as { reason: string }).reason);
+    if (r.ok) { if (s.generals[gid].order?.kind !== 'hold') s.generals[gid].order = undefined; sel = { hex: h, gid }; saveGame(s); } else toast((r as { reason: string }).reason);
     refresh();
   };
 
   const doAttack = () => {
     const h = sel.hex!, gid = sel.gid!;
+    s.generals[gid].order = undefined;
     const r = attack(s, gid, h);
     if (r.kind === 'battle') { startBattle(r.attacker, r.defender); return; }
     if (r.kind === 'siege') {

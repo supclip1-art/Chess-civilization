@@ -12,7 +12,7 @@ const TERRAIN: Record<Terrain, string> = {
 };
 const SQRT3 = Math.sqrt(3);
 
-export type Highlight = { selected?: Hex; reach?: Set<string>; attack?: Set<string> };
+export type Highlight = { selected?: Hex; reach?: Set<string>; attack?: Set<string>; path?: Hex[] };
 
 export const ownerColor = (s: GameState, owner?: string): string | null => {
   if (!owner) return null;
@@ -186,6 +186,17 @@ export class MapView {
       });
     }
     // 5. подсветка хода
+    // путь похода — пунктир от генерала к цели
+    if (hl.path && hl.path.length > 1) {
+      c.save();
+      c.strokeStyle = 'rgba(255,255,255,0.9)'; c.lineWidth = Math.max(2, S * 0.12); c.setLineDash([S * 0.25, S * 0.2]); c.lineCap = 'round';
+      c.beginPath();
+      hl.path.forEach((h, i) => { const p = this.toPixel(h); if (i) c.lineTo(p.x, p.y); else c.moveTo(p.x, p.y); });
+      c.stroke();
+      const end = this.toPixel(hl.path[hl.path.length - 1]);
+      c.setLineDash([]); c.fillStyle = '#ffffff'; c.beginPath(); c.arc(end.x, end.y, S * 0.16, 0, Math.PI * 2); c.fill();
+      c.restore();
+    }
     for (const k of hl.reach ?? []) {
       const cell = s.cells[k]; if (!cell) continue;
       const { x, y } = this.toPixel(cell.hex);

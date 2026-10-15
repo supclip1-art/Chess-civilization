@@ -2,7 +2,7 @@
 // доход, содержание и голод.
 
 import {
-  ARMY_UPKEEP_RATE, BARRACKS, BUILDING_SLOTS, CITY_WOOD, BUILDER_HIRE_FOOD, BUILDER_UPKEEP_FOOD, BUILD_TURNS, ELO_PER_RESEARCH,
+  ARMY_MOVE, ARMY_MOVE_MARCH, MARCH_RESEARCH, ARMY_UPKEEP_RATE, BARRACKS, BUILDING_SLOTS, CITY_WOOD, BUILDER_HIRE_FOOD, BUILDER_UPKEEP_FOOD, BUILD_TURNS, ELO_PER_RESEARCH,
   GENERAL_UPKEEP_FOOD, MAX_RESOURCE_LEVEL, PAWNS_REQUIRED, PIECE_PRICE, RESEARCH, RESOURCE_COST, RESOURCE_OF,
   RESOURCE_OUTPUT, TAVERN, TOWN_HALL_FOUND, TOWN_HALL_MAX_LEVEL, TOWN_HALL_UPGRADE,
   type Piece, type Res, type ResourceBuilding,
@@ -245,6 +245,21 @@ export const startResearch = (s: GameState, pid: string): Result => {
   return ok;
 };
 
+/** Исследовать «Марш-бросок» (один раз). Идёт параллельно со ступенями «Тактики». */
+export const startMarch = (s: GameState, pid: string): Result => {
+  const p = s.players[pid];
+  if (p.research.march) return no('Forced march is already researched');
+  if (p.research.marchFinish) return no('Forced march is already being researched');
+  const cost = MARCH_RESEARCH.cost;
+  if (!canAfford(p.res, cost)) return no('not enough resources');
+  pay(p, cost);
+  p.research.marchFinish = s.turn + MARCH_RESEARCH.turns;
+  return ok;
+};
+
+/** Сколько клеток за ход проходят генералы игрока. */
+export const armyMove = (s: GameState, pid: string): number => (s.players[pid]?.research.march ? ARMY_MOVE_MARCH : ARMY_MOVE);
+
 /** ELO, с которым придёт следующий нанятый генерал. */
 export const recruitElo = (s: GameState, pid: string): number =>
   s.settings.elo + s.players[pid].research.done * ELO_PER_RESEARCH;
@@ -407,6 +422,7 @@ export const completeJobs = (s: GameState, pid: string): void => {
   }
   const r = p.research.active;
   if (r && r.finish <= s.turn) { p.research.done = r.step + 1; p.research.active = undefined; }
+  if (p.research.marchFinish && p.research.marchFinish <= s.turn) { p.research.march = true; p.research.marchFinish = undefined; say(s, 'Forced march researched: generals move 3 cells', pid); }
   startQueued(s, pid);
 };
 

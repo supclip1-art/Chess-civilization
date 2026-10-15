@@ -45,3 +45,27 @@ test('города не переходят из рук в руки каждый 
   assert.ok(Math.max(0, ...perCity.values()) <= 8, // не чаще раза в ~8 ходов на город
     `чаще всего: ${JSON.stringify([...perCity].sort((a, b) => b[1] - a[1])[0])}`);
 });
+
+test('приказы генералу: поход через всю карту за несколько ходов и разведка', async () => {
+  const { runOrders, findPath, newGame, europeMap, endTurn, key: k, distance: dist } = await import('../src/index.ts');
+  const s = newGame(europeMap(), [{ nation: 'spain' }, { nation: 'italy' }], { elo: 1200, seed: 2 });
+  const g = Object.values(s.generals).find((x) => x.owner === 'p1')!;
+  // цель — дальняя проходимая клетка, до которой есть путь
+  const far = Object.values(s.cells).filter((c) => c.terrain === 'field' && !c.owner).sort((a, b) => dist(b.hex, g.hex) - dist(a.hex, g.hex))
+    .find((c) => findPath(s, g.id, c.hex));
+  assert.ok(far);
+  g.order = { kind: 'goto', to: far.hex };
+  const start = dist(g.hex, far.hex);
+  runOrders(s, 'p1');
+  assert.ok(dist(g.hex, far.hex) < start, 'генерал двинулся к цели');
+  assert.equal(g.moveLeft, 0);
+  const e = Object.values(s.generals).find((x) => x.owner === 'p1' && x !== g);
+  assert.equal(e, undefined);
+  // разведка открывает новые клетки
+  g.order = { kind: 'explore' };
+  endTurn(s); endTurn(s);
+  const before = Object.keys(s.memory?.p1 ?? {}).length;
+  runOrders(s, 'p1');
+  assert.ok(Object.keys(s.memory!.p1).length > before, 'разведка открыла новые клетки');
+  void k;
+});
