@@ -114,6 +114,8 @@ export class MapView {
     if (this.canvas.width !== Math.round(w * dpr) || this.canvas.height !== Math.round(h * dpr)) {
       this.canvas.width = Math.round(w * dpr); this.canvas.height = Math.round(h * dpr);
     }
+    // начинаем каждый кадр с чистого состояния холста (стек save/restore, трансформация, стили)
+    (c as CanvasRenderingContext2D & { reset?: () => void }).reset?.();
     c.setTransform(dpr, 0, 0, dpr, 0, 0);
     c.clearRect(0, 0, w, h);
     const S = this.size;
@@ -544,6 +546,8 @@ export class MapView {
       c.beginPath(); c.arc(x, y, S * 0.82, 0, Math.PI * 2); c.stroke();
       c.restore();
     }
+    c.restore(); // пара к save() в начале: без неё каждый город каждый кадр оставлял лишнее состояние в стеке холста —
+    // к поздним ходам стек переполнялся, и чужие повороты (пила лесопилки) доставались иконкам: они «крутились» по экрану
   }
 
   /** Поселенец: фишка с повозкой-флажком цвета владельца. */

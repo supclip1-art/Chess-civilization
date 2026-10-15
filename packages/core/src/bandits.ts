@@ -4,7 +4,7 @@
 import { ARMY_MAX, PIECE_PRICE, STARTING_ARMY, type Piece } from './config.ts';
 import { armyValue } from './economy.ts';
 import { type Hex, distance, key } from './hex.ts';
-import { findPath, move, reachable, seizeByBandits } from './map.ts';
+import { findPath, isCapital, move, reachable, seizeByBandits } from './map.ts';
 import { power } from './aiwar.ts';
 import { int } from './rng.ts';
 import { type Army, type GameState, type General, PASSABLE, makeGeneral, say } from './state.ts';
@@ -42,10 +42,13 @@ const spawnNear = (s: GameState, pid: string): boolean => {
   const cap = Object.values(s.halls).filter((h) => h.owner === pid).sort((a, b) => a.order - b.order)[0];
   if (!cap || s.cells[key(cap.hex)]?.noBandits) return false; // у столицы в «тихом» крае шаек нет
   const halls = Object.values(s.halls);
-  const spots = Object.values(s.cells).filter((c) => PASSABLE[c.terrain] && !c.owner && !c.noBandits
-    && distance(c.hex, cap.hex) >= 5 && distance(c.hex, cap.hex) <= 7
+  // обычно 5–7 клеток от столицы; если там места нет (полуостров, соседи вплотную) — чуть шире
+  const ring = (lo: number, hi: number) => Object.values(s.cells).filter((c) => PASSABLE[c.terrain] && !c.owner && !c.noBandits
+    && distance(c.hex, cap.hex) >= lo && distance(c.hex, cap.hex) <= hi
     && halls.every((h) => distance(h.hex, c.hex) >= 4)
     && Object.values(s.generals).every((g) => distance(g.hex, c.hex) >= 3));
+  let spots = ring(5, 7);
+  if (!spots.length) spots = ring(4, 9);
   if (!spots.length) return false;
   const c = spots[int(s.rng, 0, spots.length - 1)];
   const g = makeGeneral(s, BANDITS, { ...c.hex }, s.settings.elo, banditArmy(s), 'Bandits');
@@ -97,7 +100,7 @@ export const banditsTurn = (s: GameState): BanditAttack[] => {
       if (x.settler || (armyValue(x.army) > 0 && power(b) >= power(x))) prey.push({ hex: x.hex, d: distance(x.hex, b.hex) });
     }
     for (const h of Object.values(s.halls)) {
-      if (s.turn < RAIDS_FROM || !s.players[h.owner] || distance(h.hex, b.hex) > HUNT_RANGE || distance(h.hex, camp) > LEASH) continue;
+      if (s.turn < RAIDS_FROM || !s.players[h.owner] || isCapital(s, h) || distance(h.hex, b.hex) > HUNT_RANGE || distance(h.hex, camp) > LEASH) continue;
       const guard = Object.values(s.generals).find((x) => x.owner === h.owner && key(x.hex) === key(h.hex) && armyValue(x.army) > 0);
       if (guard && power(b) < power(guard)) continue; // крепкий гарнизон не трогают
       prey.push({ hex: h.hex, d: distance(h.hex, b.hex) + (h.level - 1) * 3, hallId: guard ? undefined : h.id });

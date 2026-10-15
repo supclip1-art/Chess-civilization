@@ -32,9 +32,9 @@ type Character = {
 };
 
 export const CHARACTER: Record<Aggression, Character> = {
-  warlike: { vsNeutral: 1.15, vsPlayer: 1.1, playersFrom: 8, peace: 0, minArmy: 70, wantCities: 2 },
-  moderate: { vsNeutral: 1.5, vsPlayer: 1.5, playersFrom: 15, peace: 3, minArmy: 120, wantCities: 3 },
-  peaceful: { vsNeutral: 2, vsPlayer: 1.8, playersFrom: 25, peace: 8, minArmy: 150, wantCities: 4 },
+  warlike: { vsNeutral: 1.05, vsPlayer: 1.0, playersFrom: 6, peace: 0, minArmy: 70, wantCities: 4 },
+  moderate: { vsNeutral: 1.2, vsPlayer: 1.2, playersFrom: 10, peace: 2, minArmy: 90, wantCities: 5 },
+  peaceful: { vsNeutral: 1.4, vsPlayer: 1.5, playersFrom: 18, peace: 5, minArmy: 110, wantCities: 6 },
 };
 
 /** Сила армии с поправкой на ELO генерала: +400 ELO — вдвое сильнее. */
@@ -165,14 +165,46 @@ export const aiMilitaryTurn = (s: GameState, pid: string): AiAttack[] => {
   const attacks: AiAttack[] = [];
   const gens = playerGenerals(s, pid).sort((a, b) => Number(a.id.slice(1)) - Number(b.id.slice(1)));
   const besieged = Object.values(s.halls).filter((h) => h.owner === pid && h.siege);
+  // гарнизоны: второй генерал — в столице, следующие — в остальных городах по порядку основания/захвата
+  // после столицы гарнизон получают города, к которым ближе всего чужие армии (игроков и разбойников)
+  const danger = (h: Hex) => Math.min(99, ...Object.values(s.generals)
+    .filter((x) => x.owner !== pid && !s.neutrals[x.owner] && !x.settler && armyValue(x.army) > 0).map((x) => distance(x.hex, h)));
+  const all = playerHalls(s, pid).sort((a, b) => a.order - b.order);
+  const halls = [all[0], ...all.slice(1).sort((a, b) => danger(a.hex) - danger(b.hex) || b.level - a.level)].filter(Boolean);
+  // гарнизон не бегает между городами каждый ход: кто уже стоит в городе из списка — там и остаётся
+  const post = new Map<string, Hex>();
+  const free = gens.slice(1);
+  for (const h of halls.slice(0, free.length)) {
+    const here = free.find((g) => !post.has(g.id) && key(g.hex) === key(h.hex));
+    if (here) post.set(here.id, h.hex);
+  }
+  for (const h of halls.slice(0, free.length)) {
+    if ([...post.values()].some((x) => key(x) === key(h.hex))) continue;
+    const g = free.filter((x) => !post.has(x.id)).sort((a, b) => distance(a.hex, h.hex) - distance(b.hex, h.hex))[0];
+    if (g) post.set(g.id, h.hex);
+  }
+  const guardedHex = new Set([...post.values()].map(key));
   for (const g of gens) {
     if (g.attacked) continue;
-    // гарнизон (второй и следующие генералы): сидит в столице и бьёт только тех, кто подошёл к её стенам
-    if (g !== gens[0] && capital) {
-      const atWalls = Object.values(s.generals).find((x) => x.owner !== pid && armyValue(x.army) > 0
-        && distance(x.hex, capital.hex) <= 1 && power(g) >= 0.9 * power(x));
+    // гарнизон: бьёт тех, кто подошёл к стенам его города, иначе стоит в городе
+    const home = post.get(g.id);
+    if (home) {
+      const atWalls = Object.values(s.generals).find((x) => x.owner !== pid && armyValue(x.army) > 0 && !s.neutrals[x.owner]
+        && distance(x.hex, home) <= 1 && power(g) >= 0.9 * power(x));
       if (atWalls && distance(g.hex, atWalls.hex) === 1) { attacks.push({ gid: g.id, target: atWalls.hex, defense: true }); continue; }
-      if (distance(g.hex, capital.hex) > 0) stepToward(s, g, capital.hex, false);
+      // без фигур гарнизон бесполезен — сначала набирает их у столицы (там казарма)
+      const recruit = armyValue(g.army) < 40 && capital && (capital.barracks ?? 0) > 0 ? capital.hex : home;
+      if (key(g.hex) !== key(recruit)) stepToward(s, g, recruit, false);
+      continue;
+    }
+    // полевая армия: враг у своего города без гарнизона — сначала защитить
+    const threat = armyValue(g.army) > 0 ? Object.values(s.generals)
+      .filter((x) => x.owner !== pid && !s.neutrals[x.owner] && !x.settler && armyValue(x.army) > 0
+        && halls.some((h) => !guardedHex.has(key(h.hex)) && distance(h.hex, x.hex) <= 3) && power(g) >= 0.7 * power(x))
+      .sort((a, b) => distance(a.hex, g.hex) - distance(b.hex, g.hex))[0] : undefined;
+    if (threat && distance(g.hex, threat.hex) <= 10) {
+      if (distance(g.hex, threat.hex) > 1) stepToward(s, g, threat.hex, true);
+      if (distance(g.hex, threat.hex) === 1) attacks.push({ gid: g.id, target: threat.hex, defense: true });
       continue;
     }
     // свой город в осаде — главная армия идёт снимать осаду

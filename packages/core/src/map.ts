@@ -291,7 +291,7 @@ export const resolveBattle = (s: GameState, attackerId: string, defenderId: stri
   if (out.winner !== 'attacker') return out;
   const h = hallAt(s, defHex);
   if (!h || h.owner === att.owner) return out;
-  if (att.owner === 'bandits') { if (!defenderAt(s, defHex, att.owner)) seizeByBandits(s, att.id, h.id); return out; }
+  if (att.owner === 'bandits') { if (!defenderAt(s, defHex, att.owner) && !isCapital(s, h)) seizeByBandits(s, att.id, h.id); return out; }
   if (!s.players[att.owner]) return out; // нейтралы города не захватывают
   // защитники города разбиты: если других армий в городе нет — город сразу переходит к победителю
   if (defenderAt(s, defHex, att.owner)) { h.siege = { by: att.id, since: s.turn }; return out; }
@@ -307,6 +307,10 @@ export const resolveBattle = (s: GameState, attackerId: string, defenderId: stri
   }
   return out;
 };
+
+/** Столица — самый старый город игрока. Разбойники её не берут: иначе страна могла погибнуть от первой же шайки. */
+export const isCapital = (s: GameState, h: TownHall): boolean =>
+  !!s.players[h.owner] && !Object.values(s.halls).some((x) => x.owner === h.owner && x.order < h.order);
 
 /** Разбойники захватили город: он становится нейтральным, шайка садится в нём гарнизоном. */
 export const seizeByBandits = (s: GameState, gid: string, hallId: string): void => {

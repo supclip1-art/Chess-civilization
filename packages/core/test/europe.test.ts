@@ -83,7 +83,7 @@ test('разбойники: по шайке на игрока недалеко �
   assert.equal(bs.length, 2, 'по шайке на каждого из двух игроков');
   for (const pid of ['p1', 'p2']) {
     const cap = playerHalls(s, pid)[0];
-    assert.equal(bs.filter((b) => distance(b.hex, cap.hex) >= 5 && distance(b.hex, cap.hex) <= 7).length >= 1, true, pid);
+    assert.equal(bs.filter((b) => distance(b.hex, cap.hex) >= 4 && distance(b.hex, cap.hex) <= 9).length >= 1, true, pid);
   }
   for (const b of bs) for (const h of Object.values(s.halls)) assert.ok(distance(b.hex, h.hex) >= 4);
   // город без армии разбойники берут: он становится вольным, шайка — его гарнизоном
@@ -142,24 +142,34 @@ test('разбойники не появляются у Афин и не зах�
   void banditsTurn;
 });
 
-test('разбойники, разбившие армию в городе, забирают город; из двух городов выбирают менее развитый', async () => {
-  const { bandits, attack, resolveBattle, banditsTurn } = await import('../src/index.ts');
+test('разбойники, разбившие армию в городе, забирают его, но не столицу', async () => {
+  const { bandits, attack, resolveBattle, capture, makeGeneral } = await import('../src/index.ts');
   const m = europeMap();
   m.randomSpawns = false;
   m.spawnNations = ['italy', 'germany', 'france', 'spain', 'britain', 'poland', 'turkey', 'russia'];
   const s = newGame(m, [{ nation: 'spain' }, { nation: 'italy' }], { elo: 1200, seed: 7, bandits: 6 });
   const cap = playerHalls(s, 'p1')[0];
-  const g = Object.values(s.generals).find((x) => x.owner === 'p1')!;
   const b = bandits(s)[0];
-  b.hex = Object.values(s.cells).find((c) => distance(c.hex, cap.hex) === 1 && c.terrain !== 'water' && c.terrain !== 'mountain')!.hex;
-  b.moveLeft = 2;
-  const r = attack(s, b.id, cap.hex);
-  assert.equal(r.kind, 'battle');
-  if (r.kind !== 'battle') return;
-  resolveBattle(s, r.attacker, r.defender, { end: 'mate', mateWinner: 'white', white: { ...b.army }, black: { p: 0, n: 0, b: 0, r: 0, q: 0 } });
-  assert.ok(s.neutrals[s.halls[cap.id].owner], 'город стал вольным');
-  assert.equal(s.generals[b.id].owner, s.halls[cap.id].owner);
-  void g; void banditsTurn;
+  const win = (hallHex: { q: number; r: number }, defender: string) => {
+    b.hex = Object.values(s.cells).find((c) => distance(c.hex, hallHex) === 1 && c.terrain !== 'water' && c.terrain !== 'mountain' && !Object.values(s.generals).some((g) => key(g.hex) === key(c.hex)))!.hex;
+    b.moveLeft = 2; b.attacked = false;
+    const r = attack(s, b.id, hallHex);
+    assert.equal(r.kind, 'battle');
+    if (r.kind === 'battle') resolveBattle(s, r.attacker, r.defender, { end: 'mate', mateWinner: 'white', white: { ...b.army }, black: { p: 0, n: 0, b: 0, r: 0, q: 0 } });
+    void defender;
+  };
+  // столица устояла: армия разбита, город остался у игрока
+  const g1 = Object.values(s.generals).find((x) => x.owner === 'p1')!;
+  g1.hex = { ...cap.hex };
+  win(cap.hex, g1.id);
+  assert.equal(s.halls[cap.id].owner, 'p1', 'столицу разбойники не берут');
+  // второй город берут
+  const second = Object.values(s.halls).filter((h) => s.neutrals[h.owner]).sort((x, y) => distance(x.hex, cap.hex) - distance(y.hex, cap.hex))[0];
+  capture(s, second.id, 'p1');
+  makeGeneral(s, 'p1', { ...second.hex }, 1200, { p: 1, n: 0, b: 0, r: 0, q: 0 }, 'Guard');
+  win(second.hex, 'guard');
+  assert.ok(s.neutrals[s.halls[second.id].owner], 'город стал вольным');
+  assert.equal(s.generals[b.id].owner, s.halls[second.id].owner);
 });
 
 test('Япония: взятый японцами город ничего не теряет, а японский город при захвате теряет уровень', async () => {

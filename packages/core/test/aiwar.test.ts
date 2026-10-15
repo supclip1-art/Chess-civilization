@@ -36,9 +36,9 @@ test('ИИ захватывает нейтралов, воинственный �
   assert.ok(captured >= 4, `захватов: ${captured}`);
   assert.ok(vs.some((v) => v.aggr === 'warlike' && !v.neutral), 'воинственный атакует игроков');
   const peaceful = vs.filter((v) => v.aggr === 'peaceful' && !v.neutral && !v.defense).map((v) => v.turn); // отбиться можно всегда
-  assert.ok(peaceful.every((t) => t >= 25), 'миролюбивый — не раньше 25-го хода');
+  assert.ok(peaceful.every((t) => t >= 18), 'миролюбивый — не раньше 18-го хода');
   assert.ok(peaceful.every((t, i) => i === 0 || t - peaceful[i - 1] >= 8 || t === peaceful[i - 1]), 'и не чаще раза в 8 ходов');
-  assert.ok(!vs.some((v) => v.aggr === 'moderate' && !v.neutral && v.turn < 15), 'умеренный — не раньше 15-го хода');
+  assert.ok(!vs.some((v) => v.aggr === 'moderate' && !v.neutral && v.turn < 10), 'умеренный — не раньше 10-го хода');
 });
 
 test('города не переходят из рук в руки каждый ход', () => {

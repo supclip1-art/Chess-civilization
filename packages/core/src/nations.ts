@@ -109,7 +109,7 @@ export const NATIONS: Record<NationId, Nation> = {
     ['Ablai Khan', 'Kasym Khan', 'Tauke Khan'],
     'Astana, Almaty, Turkestan, Shymkent, Taraz, Karaganda, Aktobe, Pavlodar, Semey, Atyrau, Oral, Kostanay',
     { firstLevelRadius: 2 }),
-  pakistan: N('pakistan', 'Pakistan', 'Indus Canals', 'Farm upgrades cost 25% less.',
+  pakistan: N('pakistan', 'Pakistan', 'Five Rivers', 'Farm upgrades cost 25% less.',
     ['Ahmad Shah Durrani', 'Shah Jahan', 'Mir Fateh Ali Khan Talpur'],
     'Lahore, Karachi, Islamabad, Multan, Peshawar, Quetta, Hyderabad, Faisalabad, Rawalpindi, Sialkot, Bahawalpur, Thatta',
     { upgradeCostMult: { farm: 0.75 } }),

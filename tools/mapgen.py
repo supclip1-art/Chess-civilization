@@ -354,6 +354,24 @@ for nation, name, c in spawns:
     if c not in seen:
         print(f'!!! {nation} {name} {c} отрезана')
         assert 'MAPDUMP' in __import__('os').environ
+# острова, куда не дойти по суше (Корсика, Ирландия…), — в море: там некому жить, а разбойники застревали
+land = {start}
+stack = [start]
+while stack:
+    c = stack.pop()
+    for dq, dr in NB:
+        n = (c[0] + dq, c[1] + dr)
+        if n in terrain and terrain[n] != 'water' and n not in land:
+            land.add(n)
+            stack.append(n)
+islands = [c for c, t in terrain.items() if t != 'water' and c not in land]
+for c in islands:
+    terrain[c] = 'water'
+# долины, со всех сторон закрытые горами (Тибет), — тоже горы: туда не войти и оттуда не выйти
+pockets = [c for c, t in terrain.items() if t not in ('water', 'mountain') and c not in seen]
+for c in pockets:
+    terrain[c] = 'mountain'
+print('island cells sunk', len(islands), 'closed valleys', len(pockets))
 unreached = [n for n, h in neutrals if h not in seen]
 neutrals = [(n, h) for n, h in neutrals if h in seen]
 print('spawns', spawns)

@@ -3,7 +3,7 @@
 // жадная стройка по выгоде на единицу цены, найм фигур к полной армии, «Тактика» на остаток золота.
 
 import { ARMY_UPKEEP_RATE, BARRACKS, GENERAL_UPKEEP_FOOD, PIECES, PIECE_PRICE, HIRE_LEVEL, RESOURCE_COST, RESOURCE_OUTPUT, type Piece, type ResourceBuilding } from './config.ts';
-import { hireGeneral, hirePiece } from './army.ts';
+import { generalLimit, hireGeneral, hirePiece } from './army.ts';
 import {
   build, buildOptions, freeBuilders, mods, resourceCost, hireBuilder, income, playerGenerals, playerHalls, startResearch, upgrade, upgradeBarracks,
   upgradeTavern, upgradeTownHall, upkeep, citySlots, cityUpgradeCost, startTech, trainGeneral, trainingFor,
@@ -89,7 +89,9 @@ export const aiEconomyTurn = (s: GameState, pid: string): void => {
         const weight = kind === 'sawmill' && !sawmills && farms >= 2 ? 50 : kind === 'mine' ? (sawmills && have('mine') === 1 && farms >= 3 ? 15 : 6)
           : hungry ? 3 : glut ? 0 : food && foodNet > 40 ? 0.3 : 1;
         if (!weight) continue;
-        const score = (gain * weight) / (cost.wood + cost.food);
+        // новый город сразу получает свою базу: первые постройки в нём вдвое выгоднее
+        const fresh = level === 1 && c.hall !== capital.id && citySlots(s, c.hall).used < 3 ? 2 : 1;
+        const score = (gain * weight * fresh) / (cost.wood + cost.food);
         const hex = c.hex;
         if (!best || score > best.score) best = { score, run: () => { level === 1 ? build(s, pid, hex, kind) : upgrade(s, pid, hex); } };
       }
@@ -97,25 +99,28 @@ export const aiEconomyTurn = (s: GameState, pid: string): void => {
     if (!best) break;
     best.run();
   }
-  if (g) {
+  // армии: полевая (первый генерал) и по гарнизону на каждый город, начиная со столицы.
+  // Фигуры нанимаются только на земле города с казармой — гарнизоны набирают их у столицы, потом уходят к своему городу.
+  const feed = (gid: string, goal: Record<Piece, number>) => {
+    const x = s.generals[gid];
     for (const piece of PIECES) {
-      while (g.army[piece] < FULL_ARMY[piece] && income(s, pid).food >= upkeep(s, pid) + PIECE_PRICE[piece] * (mods(s, pid).armyUpkeepRate ?? ARMY_UPKEEP_RATE)) {
-        if (!hirePiece(s, pid, g.id, piece).ok) break;
+      while (x.army[piece] < goal[piece] && income(s, pid).food >= upkeep(s, pid) + PIECE_PRICE[piece] * (mods(s, pid).armyUpkeepRate ?? ARMY_UPKEEP_RATE)) {
+        if (!hirePiece(s, pid, x.id, piece).ok) break;
       }
     }
-  }
-  // вторая армия — гарнизон столицы: таверна после казармы 3, потом найм генерала и немного фигур ему
-  // миролюбивый строит гарнизон раньше — ему важнее оборона
-  if ((capital.barracks ?? 0) >= (p.ai?.aggression === 'peaceful' ? 2 : 3) && !capital.tavern) upgradeTavern(s, pid, capital.id);
-  const gens = playerGenerals(s, pid).sort((a, b) => Number(a.id.slice(1)) - Number(b.id.slice(1)));
+  };
+  const byAge = () => playerGenerals(s, pid).sort((a, b) => Number(a.id.slice(1)) - Number(b.id.slice(1)));
+  const MIN_GUARD: Record<Piece, number> = { p: 4, n: 0, b: 0, r: 0, q: 0 };
+  for (const guard of byAge().slice(1)) feed(guard.id, MIN_GUARD); // сначала хоть какой-то гарнизон
+  if (g) feed(g.id, FULL_ARMY);
+  for (const guard of byAge().slice(1)) feed(guard.id, GUARD_ARMY);
+  // таверна — рано: генералов нужно по одному на город плюс полевая армия (не больше 4)
+  const cities = playerHalls(s, pid).length;
+  const want = Math.min(5, cities + 1);
+  if ((capital.barracks ?? 0) >= 1 && s.turn >= 4 && generalLimit(s, pid) < want && !p.jobs.some((j) => j.kind === 'tavern')) upgradeTavern(s, pid, capital.id);
   // новый генерал ест еду — нанимаем, только если доход еды это выдержит
-  if (capital.tavern && gens.length < 2 && p.res.gold >= 60 && income(s, pid).food - upkeep(s, pid) >= GENERAL_UPKEEP_FOOD + 5) hireGeneral(s, pid, capital.id);
-  for (const guard of playerGenerals(s, pid).sort((a, b) => Number(a.id.slice(1)) - Number(b.id.slice(1))).slice(1)) {
-    for (const piece of PIECES) {
-      while (guard.army[piece] < GUARD_ARMY[piece] && income(s, pid).food >= upkeep(s, pid) + PIECE_PRICE[piece] * ARMY_UPKEEP_RATE) {
-        if (!hirePiece(s, pid, guard.id, piece).ok) break;
-      }
-    }
+  if (byAge().length < Math.min(want, generalLimit(s, pid)) && p.res.gold >= 50 && income(s, pid).food - upkeep(s, pid) >= GENERAL_UPKEEP_FOOD + 3) {
+    if (hireGeneral(s, pid, capital.id).ok) { const fresh = byAge().slice(-1)[0]; feed(fresh.id, MIN_GUARD); }
   }
   if (p.res.gold >= 50) startResearch(s, pid);
   // технологии: по порядку, когда хватает золота с запасом на армию
