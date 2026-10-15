@@ -1,7 +1,6 @@
 // Отрисовка шестиугольной карты на Canvas 2D: местность, территории с границами, ратуши, здания,
 // генералы, туман войны, подсветка хода. Камера: перетаскивание и щипок для масштаба.
 
-import { iconImage } from './icons.ts';
 import { VARIANTS, tileSprite } from './tiles.ts';
 import { type GameState, type Hex, type Job, key, neighbors } from '../../../core/src/index.ts';
 
@@ -34,6 +33,26 @@ export class MapView {
   ox = 0; // смещение камеры в CSS-пикселях
   oy = 0;
   private base = 26; // радиус клетки при zoom = 1
+  /** Время для анимаций (мс): волны, дым, пила, покачивание армий. */
+  time = 0;
+  /** Плавное перемещение армий: генерал скользит по пути от старой клетки к новой. */
+  private slides = new Map<string, { path: Hex[]; t0: number; dur: number }>();
+  slide(gid: string, path: Hex[]): void { if (path.length > 1) this.slides.set(gid, { path, t0: performance.now(), dur: 180 * (path.length - 1) + 120 }); }
+  /** Есть ли что анимировать прямо сейчас (чтобы не гонять кадры зря). */
+  get busy(): boolean { return this.slides.size > 0; }
+  private slidePos(gid: string, at: { x: number; y: number }): { x: number; y: number } {
+    const a = this.slides.get(gid);
+    if (!a) return at;
+    const k = (performance.now() - a.t0) / a.dur;
+    if (k >= 1) { this.slides.delete(gid); return at; }
+    const e = k < 0.5 ? 2 * k * k : 1 - (-2 * k + 2) ** 2 / 2; // плавный разгон и торможение
+    const f = e * (a.path.length - 1), i = Math.min(a.path.length - 2, Math.floor(f)), u = f - i;
+    const p = this.toPixel(a.path[i]), q = this.toPixel(a.path[i + 1]);
+    const end = this.toPixel(a.path[a.path.length - 1]);
+    // смещение генерала внутри клетки (на городе он сбоку) переносим на весь путь
+    const ox = at.x - end.x, oy = at.y - end.y;
+    return { x: p.x + (q.x - p.x) * u + ox, y: p.y + (q.y - p.y) * u + oy - Math.sin(u * Math.PI) * this.size * 0.15 };
+  }
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -86,6 +105,7 @@ export class MapView {
   }
 
   draw(s: GameState, viewer: string, seen: Set<string>, hl: Highlight): void {
+    this.time = performance.now();
     const c = this.ctx;
     const dpr = window.devicePixelRatio || 1;
     const w = this.canvas.clientWidth, h = this.canvas.clientHeight;
@@ -153,6 +173,23 @@ export class MapView {
         c.beginPath(); c.moveTo(ax + ix * 0.5, ay + iy * 0.5); c.lineTo(bx + ix * 0.5, by + iy * 0.5); c.stroke();
       });
     }
+    // блики на воде: бегущие светлые дуги (только на открытой воде)
+    if (S >= 10) {
+      const t = this.time / 1000;
+      c.lineCap = 'round';
+      for (const cell of onScreen) {
+        if (cell.terrain !== 'water' || !visible(key(cell.hex))) continue;
+        const { x, y } = this.toPixel(cell.hex);
+        const ph = (cell.hex.q * 1.7 + cell.hex.r * 2.3);
+        for (let j = 0; j < 2; j++) {
+          const k = (t * 0.25 + ph * 0.13 + j * 0.5) % 1;
+          const a = Math.sin(k * Math.PI);
+          const wx = x + (k - 0.5) * S * 1.1, wy = y + (j ? S * 0.32 : -S * 0.28) + Math.sin(t * 2 + ph) * S * 0.04;
+          c.strokeStyle = `rgba(255,255,255,${(0.5 * a).toFixed(3)})`; c.lineWidth = Math.max(1, S * 0.06);
+          c.beginPath(); c.arc(wx, wy + S * 0.2, S * 0.22, Math.PI * 1.25, Math.PI * 1.75); c.stroke();
+        }
+      }
+    }
     // территории: лёгкая заливка цвета владельца
     for (const cell of onScreen) {
       const col = ownerColor(s, known.get(key(cell.hex))?.owner);
@@ -216,8 +253,11 @@ export class MapView {
         const gx = onHall ? x + S * 0.42 + i * S * 0.3 : x + i * S * 0.42;
         const gy = onHall ? y - S * 0.42 : y - S * 0.12; // на клетке города — справа сверху, снизу подпись
         const ready = g.owner === viewer && !g.attacked && g.moveLeft > 0;
-        if (g.settler) this.settler(onHall ? x - S * 0.42 : gx, gy, onHall ? S * 0.78 : S, ownerColor(s, g.owner)!, ready); // на городе — слева сверху
-        else this.general(gx, gy, onHall ? S * 0.78 : S, ownerColor(s, g.owner)!, pieces, ready);
+        // готовые к ходу армии слегка покачиваются — их видно издалека
+        const bob = ready ? Math.sin(this.time / 380 + g.hex.q) * S * 0.05 : 0;
+        const at = this.slidePos(g.id, { x: g.settler && onHall ? x - S * 0.42 : gx, y: gy + bob });
+        if (g.settler) this.settler(at.x, at.y, onHall ? S * 0.78 : S, ownerColor(s, g.owner)!, ready);
+        else this.general(at.x, at.y, onHall ? S * 0.78 : S, ownerColor(s, g.owner)!, pieces, ready);
       });
     }
     // 5. подсветка хода
@@ -313,29 +353,101 @@ export class MapView {
     c.restore();
   }
 
-  /** Ресурсное здание: значок на светлой плашке с тенью и уровень в кружке. */
-  private building(x: number, y: number, S: number, kind: 'farm' | 'sawmill' | 'mine' | 'fishery', level: number): void {
-    const img = iconImage(kind);
-    if (!img) { this.badge(x, y, S, kind === 'farm' ? 'F' : kind === 'sawmill' ? 'S' : kind === 'fishery' ? 'B' : 'M', level); return; }
+  /** Ресурсное здание — маленькая постройка на клетке: ферма с амбаром и колосьями, лесопилка с крутящейся пилой,
+   *  рудник со штольней и вагонеткой, рыбный промысел с причалом и лодкой. С уровнем построек становится больше. */
+  private building(x: number, y: number, cellS: number, kind: 'farm' | 'sawmill' | 'mine' | 'fishery', level: number): void {
     const c = this.ctx;
-    const w = S * 0.86, top = y - S * 0.3;
+    const S = cellS * 1.22; // постройки чуть крупнее клетки по ощущению — так их лучше видно
+    if (S < 11) { // издалека — просто цветная точка
+      c.fillStyle = { farm: '#e2b13c', sawmill: '#9b6233', mine: '#f3c33a', fishery: '#5f9fc4' }[kind];
+      c.beginPath(); c.arc(x, y, Math.max(2, S * 0.3), 0, Math.PI * 2); c.fill();
+      return;
+    }
+    const t = this.time / 1000;
     c.save();
-    c.shadowColor = 'rgba(0,0,0,0.35)'; c.shadowBlur = S * 0.18; c.shadowOffsetY = S * 0.06;
-    const g = c.createLinearGradient(0, top, 0, top + w);
-    g.addColorStop(0, '#fffdf6'); g.addColorStop(1, '#efe6cf');
-    c.fillStyle = g;
-    c.beginPath(); c.roundRect(x - w / 2, top, w, w, S * 0.22); c.fill();
+    c.lineJoin = 'round'; c.lineCap = 'round';
+    const shadow = (cx: number, cy: number, rw: number) => {
+      c.fillStyle = 'rgba(0,0,0,0.25)'; c.beginPath(); c.ellipse(cx + S * 0.04, cy, rw, rw * 0.3, 0, 0, Math.PI * 2); c.fill();
+    };
+    const roofHouse = (cx: number, cy: number, w: number, wall: string, roof: string) => {
+      shadow(cx, cy, w * 0.62);
+      c.fillStyle = wall; c.strokeStyle = 'rgba(60,40,20,0.7)'; c.lineWidth = Math.max(0.8, S * 0.025);
+      c.beginPath(); c.rect(cx - w / 2, cy - w * 0.55, w, w * 0.55); c.fill(); c.stroke();
+      c.fillStyle = roof;
+      c.beginPath(); c.moveTo(cx - w * 0.62, cy - w * 0.5); c.lineTo(cx, cy - w * 1.02); c.lineTo(cx + w * 0.62, cy - w * 0.5); c.closePath(); c.fill(); c.stroke();
+      c.fillStyle = 'rgba(255,255,255,0.25)';
+      c.beginPath(); c.moveTo(cx - w * 0.62, cy - w * 0.5); c.lineTo(cx, cy - w * 1.02); c.lineTo(cx - w * 0.1, cy - w * 0.5); c.closePath(); c.fill();
+    };
+    if (kind === 'farm') {
+      // золотые грядки колосьев, покачиваются на ветру
+      const rows = Math.min(4, 1 + level);
+      for (let i = 0; i < rows; i++) {
+        const ry = y + S * (0.05 + i * 0.13) - S * 0.05;
+        for (let j = 0; j < 5; j++) {
+          const rx = x - S * 0.5 + j * S * 0.13 + (i % 2) * S * 0.06;
+          const sway = Math.sin(t * 2.2 + j * 0.8 + i) * S * 0.025;
+          c.strokeStyle = '#a07a1e'; c.lineWidth = Math.max(0.8, S * 0.025);
+          c.beginPath(); c.moveTo(rx, ry + S * 0.1); c.lineTo(rx + sway, ry - S * 0.02); c.stroke();
+          c.fillStyle = '#f0c548';
+          c.beginPath(); c.ellipse(rx + sway, ry - S * 0.05, S * 0.03, S * 0.06, sway / S, 0, Math.PI * 2); c.fill();
+        }
+      }
+      roofHouse(x + S * 0.3, y + S * 0.05, S * 0.34, '#c94a3a', '#7a2e22');
+      c.fillStyle = '#fff1d6'; c.fillRect(x + S * 0.26, y - S * 0.1, S * 0.08, S * 0.15); // дверь амбара
+      if (level >= 3) roofHouse(x + S * 0.05, y - S * 0.32, S * 0.24, '#e8d6b0', '#9b5a2a');
+    } else if (kind === 'sawmill') {
+      // бревенчатый сарай, штабель брёвен, крутящаяся пила
+      const logs = Math.min(3, level);
+      for (let i = 0; i < logs; i++) {
+        const lx = x - S * 0.42, ly = y + S * 0.18 - i * S * 0.1;
+        c.fillStyle = '#9b6233'; c.strokeStyle = '#5a3719'; c.lineWidth = Math.max(0.8, S * 0.02);
+        c.beginPath(); c.roundRect(lx, ly - S * 0.05, S * 0.36, S * 0.1, S * 0.05); c.fill(); c.stroke();
+        c.fillStyle = '#e6bd84'; c.beginPath(); c.arc(lx + S * 0.36, ly, S * 0.05, 0, Math.PI * 2); c.fill(); c.stroke();
+      }
+      roofHouse(x + S * 0.12, y + S * 0.12, S * 0.42, '#b9824f', '#6b4423');
+      const sx = x + S * 0.38, sy = y - S * 0.22, sr = S * 0.17;
+      c.save(); c.translate(sx, sy); c.rotate(t * 3);
+      c.fillStyle = '#c3cbd3'; c.strokeStyle = '#4b535b'; c.lineWidth = Math.max(0.8, S * 0.02);
+      c.beginPath();
+      for (let i = 0; i < 16; i++) { const a = (i / 16) * Math.PI * 2, r = i % 2 ? sr * 0.78 : sr; c.lineTo(r * Math.cos(a), r * Math.sin(a)); }
+      c.closePath(); c.fill(); c.stroke();
+      c.fillStyle = '#6b4423'; c.beginPath(); c.arc(0, 0, sr * 0.3, 0, Math.PI * 2); c.fill();
+      c.restore();
+    } else if (kind === 'mine') {
+      // скала со штольнью, рельсы и вагонетка с золотом
+      shadow(x, y + S * 0.2, S * 0.5);
+      c.fillStyle = '#8d8478'; c.strokeStyle = 'rgba(50,40,30,0.7)'; c.lineWidth = Math.max(0.8, S * 0.025);
+      c.beginPath(); c.moveTo(x - S * 0.5, y + S * 0.2); c.quadraticCurveTo(x - S * 0.35, y - S * 0.5, x + S * 0.05, y - S * 0.45);
+      c.quadraticCurveTo(x + S * 0.45, y - S * 0.4, x + S * 0.5, y + S * 0.2); c.closePath(); c.fill(); c.stroke();
+      c.fillStyle = '#2a211a';
+      c.beginPath(); c.moveTo(x - S * 0.16, y + S * 0.2); c.lineTo(x - S * 0.16, y - S * 0.08); c.arc(x, y - S * 0.08, S * 0.16, Math.PI, 0); c.lineTo(x + S * 0.16, y + S * 0.2); c.closePath(); c.fill();
+      c.strokeStyle = '#7a4a22'; c.lineWidth = Math.max(1, S * 0.05);
+      c.beginPath(); c.moveTo(x - S * 0.19, y + S * 0.2); c.lineTo(x - S * 0.19, y - S * 0.1); c.arc(x, y - S * 0.1, S * 0.19, Math.PI, 0); c.lineTo(x + S * 0.19, y + S * 0.2); c.stroke();
+      // вагонетка ездит туда-сюда
+      const cx = x + S * 0.08 + Math.sin(t * 0.9) * S * 0.18, cy = y + S * 0.3;
+      c.strokeStyle = '#5a5047'; c.lineWidth = Math.max(0.8, S * 0.02);
+      c.beginPath(); c.moveTo(x - S * 0.2, cy + S * 0.06); c.lineTo(x + S * 0.5, cy + S * 0.06); c.stroke();
+      c.fillStyle = '#6d6a66'; c.beginPath(); c.moveTo(cx - S * 0.13, cy - S * 0.07); c.lineTo(cx + S * 0.13, cy - S * 0.07); c.lineTo(cx + S * 0.1, cy + S * 0.04); c.lineTo(cx - S * 0.1, cy + S * 0.04); c.closePath(); c.fill();
+      c.fillStyle = '#f2c63a'; c.beginPath(); c.arc(cx - S * 0.04, cy - S * 0.09, S * 0.05, 0, Math.PI * 2); c.arc(cx + S * 0.05, cy - S * 0.09, S * 0.045, 0, Math.PI * 2); c.fill();
+      if (level >= 3) { c.fillStyle = 'rgba(255,248,200,0.9)'; const k = (Math.sin(t * 3) + 1) / 2; c.beginPath(); c.arc(x + S * 0.3, y - S * 0.28, S * 0.04 * (0.5 + k), 0, Math.PI * 2); c.fill(); }
+    } else {
+      // причал на сваях и покачивающаяся лодка
+      c.fillStyle = '#9b6233'; c.strokeStyle = '#5a3719'; c.lineWidth = Math.max(0.8, S * 0.02);
+      c.fillRect(x - S * 0.5, y - S * 0.06, S * 0.62, S * 0.1); c.strokeRect(x - S * 0.5, y - S * 0.06, S * 0.62, S * 0.1);
+      for (let i = 0; i < 3; i++) c.fillRect(x - S * 0.46 + i * S * 0.24, y + S * 0.04, S * 0.04, S * 0.12);
+      const bob = Math.sin(t * 1.8) * S * 0.04;
+      const bx = x + S * 0.2, by = y + S * 0.26 + bob;
+      c.fillStyle = '#c47a3a'; c.beginPath(); c.moveTo(bx - S * 0.26, by - S * 0.06); c.lineTo(bx + S * 0.26, by - S * 0.06); c.quadraticCurveTo(bx + S * 0.18, by + S * 0.1, bx, by + S * 0.1); c.quadraticCurveTo(bx - S * 0.18, by + S * 0.1, bx - S * 0.26, by - S * 0.06); c.fill(); c.stroke();
+      c.strokeStyle = '#5a3719'; c.beginPath(); c.moveTo(bx, by - S * 0.06); c.lineTo(bx, by - S * 0.42); c.stroke();
+      c.fillStyle = '#f7f3e8'; c.beginPath(); c.moveTo(bx + S * 0.02, by - S * 0.4); c.lineTo(bx + S * 0.22, by - S * 0.1); c.lineTo(bx + S * 0.02, by - S * 0.1); c.closePath(); c.fill();
+      if (level >= 3) { c.fillStyle = '#5f9fc4'; c.beginPath(); c.ellipse(x - S * 0.3, y - S * 0.2, S * 0.1, S * 0.05, 0, 0, Math.PI * 2); c.fill(); }
+    }
     c.restore();
-    c.strokeStyle = 'rgba(120,90,40,0.45)'; c.lineWidth = 1;
-    c.beginPath(); c.roundRect(x - w / 2, top, w, w, S * 0.22); c.stroke();
-    const pad = w * 0.1;
-    c.drawImage(img, x - w / 2 + pad, top + pad, w - 2 * pad, w - 2 * pad);
-    const rr = Math.max(6, S * 0.22), bx = x + w / 2 - rr * 0.35, by = top + w - rr * 0.35;
-    const lg = c.createLinearGradient(0, by - rr, 0, by + rr);
-    lg.addColorStop(0, '#4a4a44'); lg.addColorStop(1, '#1f1f1c');
+    // уровень — маленький кружок с золотой каймой
+    const rr = Math.max(5.5, S * 0.17), bx = x - S * 0.45, by = y - S * 0.38;
     c.beginPath(); c.arc(bx, by, rr, 0, Math.PI * 2);
-    c.fillStyle = lg; c.fill();
-    c.strokeStyle = '#f3d27a'; c.lineWidth = 1.3; c.stroke();
+    c.fillStyle = 'rgba(30,30,28,0.88)'; c.fill();
+    c.strokeStyle = '#f3d27a'; c.lineWidth = 1.2; c.stroke();
     c.fillStyle = '#ffffff'; c.font = `700 ${Math.round(rr * 1.25)}px system-ui, sans-serif`;
     c.textAlign = 'center'; c.textBaseline = 'middle';
     c.fillText(String(level), bx, by + 0.5);
@@ -406,7 +518,15 @@ export class MapView {
       c.fillStyle = '#f2c94c'; c.beginPath(); c.arc(dx + (dx >= x - 1 && dx <= x + 1 ? 0 : 0), top + h * 0.6, S * 0.065, 0, Math.PI * 2); c.fill();
       c.strokeStyle = 'rgba(90,60,10,0.8)'; c.lineWidth = 0.8; c.stroke();
     }
-    c.restore();
+    // дымок из трубы — город живёт
+    if (S >= 14) {
+      const t = this.time / 1000;
+      for (let i = 0; i < 3; i++) {
+        const k = (t * 0.35 + i / 3) % 1;
+        c.fillStyle = `rgba(235,235,235,${(0.55 * (1 - k)).toFixed(3)})`;
+        c.beginPath(); c.arc(x - w * 0.36 + Math.sin(k * 6 + i) * S * 0.04, top + h * 0.05 - k * S * 0.5, S * (0.05 + k * 0.08), 0, Math.PI * 2); c.fill();
+      }
+    }
     if (siege) {
       c.save();
       c.strokeStyle = '#e8432f'; c.lineWidth = Math.max(2.5, S * 0.1); c.setLineDash([S * 0.22, S * 0.14]);

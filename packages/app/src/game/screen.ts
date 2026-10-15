@@ -13,7 +13,7 @@ import {
 } from '../../../core/src/index.ts';
 import { autobattle, type BattleRecord } from './battle.ts';
 import { playManual, showReplay } from './fight.ts';
-import { MapView, attackTargets, ownerColor } from './render.ts';
+import { MapView, attackTargets, ownerColor, type Highlight } from './render.ts';
 import { clearSave, saveGame } from './save.ts';
 import { showSummary } from './summary.ts';
 import { setBack, tap } from '../tg.ts';
@@ -136,17 +136,30 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
     return { selected: sel.hex, reach, attack: atk, path };
   };
   let seenCache = new Set<string>();
+  let hlCache: Highlight = {};
   const draw = () => {
     const seen = visible(s, ME);
     seenCache = seen;
     remember(s, ME, seen); // память карты под туманом войны
-    view.draw(s, ME, seen, highlight());
+    hlCache = highlight();
+    view.draw(s, ME, seen, hlCache);
   };
+  // живая карта: волны, дым, пила, покачивание армий — ~30 кадров в секунду, пока игра на экране
+  let lastAnim = 0;
+  const animate = (t: number) => {
+    if (!app.isConnected || !document.body.classList.contains('game')) return;
+    requestAnimationFrame(animate);
+    if (document.hidden || t - lastAnim < (view.busy ? 16 : 33)) return;
+    if (!app.querySelector<HTMLElement>('#modal')!.hidden && !view.busy) return;
+    lastAnim = t;
+    view.draw(s, ME, seenCache, hlCache);
+  };
+  requestAnimationFrame(animate);
   /** Перерисовка при движении камеры: не чаще кадра и без пересчёта тумана. */
   let frame = 0;
   const drawView = () => {
     if (frame) return;
-    frame = requestAnimationFrame(() => { frame = 0; view.draw(s, ME, seenCache, highlight()); });
+    frame = requestAnimationFrame(() => { frame = 0; view.draw(s, ME, seenCache, hlCache); });
   };
   /** Плавно перевести камеру к клетке. */
   let glide = 0;
@@ -160,7 +173,7 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
     const step = (t: number) => {
       const k = Math.min(1, (t - t0) / 320), e = 1 - (1 - k) ** 3;
       view.ox = x0 + (x1 - x0) * e; view.oy = y0 + (y1 - y0) * e;
-      view.draw(s, ME, seenCache, highlight());
+      view.draw(s, ME, seenCache, hlCache);
       if (k < 1) glide = requestAnimationFrame(step);
     };
     glide = requestAnimationFrame(step);
@@ -707,7 +720,9 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
     }
     veil(false);
     busy = false;
+    const was = new Map(Object.values(s.generals).filter((g) => g.owner === ME).map((g) => [g.id, { ...g.hex }]));
     const marched = s.players[ME].alive ? runOrders(s, ME) : [];
+    for (const [id, h] of was) { const g = s.generals[id]; if (g && key(g.hex) !== key(h)) view.slide(id, [h, g.hex]); }
     saveGame(s);
     const news = s.log.slice(from).filter((e) => e.player === ME || /captured|out of the game|siege of/.test(e.text));
     const notes = [...news.map((e) => `${e.player && e.player !== ME ? (hasMet(s, ME, e.player) ? ownerName(s, e.player) : 'An unknown nation') + ': ' : ''}${e.text[0].toUpperCase()}${e.text.slice(1)}`), ...marched.map((m) => `General ${m.text}`)];
@@ -747,14 +762,18 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
 
   /** Выполнить приказы сразу (поход и разведка начинаются в тот же ход). */
   const followOrders = () => {
+    const before = new Map(Object.values(s.generals).filter((g) => g.owner === ME).map((g) => [g.id, { ...g.hex }]));
     const ev = runOrders(s, ME);
+    for (const [id, h] of before) { const g = s.generals[id]; if (g && key(g.hex) !== key(h)) view.slide(id, [h, g.hex]); }
     if (ev.length) toast(ev.map((m) => `General ${m.text}`).join(' · '));
     saveGame(s);
   };
 
   const doMove = () => {
     const h = sel.hex!, gid = sel.gid!;
+    const path = findPath(s, gid, h);
     const r = move(s, gid, h);
+    if (r.ok && path) view.slide(gid, path);
     if (r.ok) { if (s.generals[gid].order?.kind !== 'hold') s.generals[gid].order = undefined; sel = { hex: h, gid }; saveGame(s); } else toast((r as { reason: string }).reason);
     refresh();
   };
@@ -814,7 +833,7 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
         const dt = t - last; last = t;
         view.ox += vx * dt; view.oy += vy * dt;
         const k = Math.pow(0.94, dt / 16); vx *= k; vy *= k;
-        view.draw(s, ME, seenCache, highlight());
+        view.draw(s, ME, seenCache, hlCache);
         if (Math.hypot(vx, vy) > 0.02) fling = requestAnimationFrame(roll);
       };
       fling = requestAnimationFrame(roll);
