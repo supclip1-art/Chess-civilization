@@ -70,12 +70,16 @@ test('память карты: под туманом виден город та�
   assert.equal(s.memory!.p1[k].hall!.level, 1);
 });
 
-test('разбойники: шесть шаек вдали от городов, грабят город без армии, ведут историю для графиков', async () => {
+test('разбойники: по шайке на игрока недалеко от его столицы, грабят город без армии, ведут историю для графиков', async () => {
   const { bandits, banditsTurn, raidCity, BANDITS, endTurn } = await import('../src/index.ts');
   const s = newGame(europeMap(), [{ nation: 'spain' }, { nation: 'italy' }], { elo: 1200, seed: 7, bandits: 6 });
   const bs = bandits(s);
-  assert.equal(bs.length, 6);
-  for (const b of bs) for (const h of Object.values(s.halls)) assert.ok(distance(b.hex, h.hex) >= 6);
+  assert.equal(bs.length, 2, 'по шайке на каждого из двух игроков');
+  for (const pid of ['p1', 'p2']) {
+    const cap = playerHalls(s, pid)[0];
+    assert.equal(bs.filter((b) => distance(b.hex, cap.hex) >= 5 && distance(b.hex, cap.hex) <= 7).length >= 1, true, pid);
+  }
+  for (const b of bs) for (const h of Object.values(s.halls)) assert.ok(distance(b.hex, h.hex) >= 4);
   // набег: треть золота и одно здание
   const cap = playerHalls(s, 'p1')[0];
   s.players.p1.res.gold = 90;

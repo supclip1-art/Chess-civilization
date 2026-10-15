@@ -1,7 +1,7 @@
 // Экран боя: ручная партия игрока против генерала-соперника и просмотр сыгранной партии (реплей).
 
 import { pieceHtml } from './pieces.ts';
-import { MAX_PLIES, battleFen, repertoireFor, type GameState } from '../../../core/src/index.ts';
+import { MAX_PLIES, battleFen, battleSides, repertoireFor, type GameState } from '../../../core/src/index.ts';
 import { tap } from '../tg.ts';
 import { type BattleRecord, type HumanAction, type Turn, runBattle } from './battle.ts';
 import { BoardView, armyGlyphs, isWhite, moveText, parseFen } from './board.ts';
@@ -48,7 +48,8 @@ export const playManual = (
   const board = new BoardView(el.querySelector('#boardhost')!, !meWhite);
   const status = (t: string) => { el.querySelector('#fstatus')!.innerHTML = t; };
   const att = s.generals[attackerId], def = s.generals[defenderId];
-  const fens: string[] = [battleFen(att.army, def.army)];
+  const sides = battleSides(s, att.id, def.id);
+  const fens: string[] = [battleFen(sides.white, sides.black)];
   const moves: string[] = [];
   let pending: ((a: HumanAction) => void) | null = null;
   let lastCheck = false;

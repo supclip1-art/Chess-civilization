@@ -10,9 +10,10 @@ import { int } from './rng.ts';
 import { type Army, type GameState, type General, PASSABLE, makeGeneral, say } from './state.ts';
 
 export const BANDITS = 'bandits';
-export const BANDIT_COUNT = 6;
+export const BANDIT_COUNT = 6; // устарело: шаек столько, сколько игроков
 const RESPAWN_EVERY = 8; // раз в столько ходов появляется новая шайка, если их меньше BANDIT_COUNT
-const HUNT_RANGE = 7; // дальше этого разбойники добычу не ищут
+const HUNT_RANGE = 6; // дальше этого разбойники добычу не ищут
+const LEASH = 8; // и не уходят от лагеря дальше
 const CALM_UNTIL = 8; // первые ходы разбойники только бродят — игрокам нужно время на армию
 const RAIDS_FROM = 12; // на города — ещё позже
 const RAID_COOLDOWN = 8; // один город грабят не чаще
@@ -24,20 +25,34 @@ export const banditArmy = (turn: number): Army =>
 export const isBandit = (s: GameState, gid: string): boolean => s.generals[gid]?.owner === BANDITS;
 export const bandits = (s: GameState): General[] => Object.values(s.generals).filter((g) => g.owner === BANDITS);
 
-/** Поставить шайки на ничейную землю подальше от городов и друг от друга. */
-export const spawnBandits = (s: GameState, count: number): number => {
-  const cells = Object.values(s.cells).filter((c) => PASSABLE[c.terrain] && !c.owner);
+/** Поставить шайку недалеко от столицы игрока: на ничейной земле в 5–7 клетках от неё, не вплотную к чужим городам и армиям. */
+const spawnNear = (s: GameState, pid: string): boolean => {
+  const cap = Object.values(s.halls).filter((h) => h.owner === pid).sort((a, b) => a.order - b.order)[0];
+  if (!cap) return false;
   const halls = Object.values(s.halls);
+  const spots = Object.values(s.cells).filter((c) => PASSABLE[c.terrain] && !c.owner
+    && distance(c.hex, cap.hex) >= 5 && distance(c.hex, cap.hex) <= 7
+    && halls.every((h) => distance(h.hex, c.hex) >= 4)
+    && Object.values(s.generals).every((g) => distance(g.hex, c.hex) >= 3));
+  if (!spots.length) return false;
+  const c = spots[int(s.rng, 0, spots.length - 1)];
+  const g = makeGeneral(s, BANDITS, { ...c.hex }, s.settings.elo, banditArmy(s.turn), 'Bandits');
+  g.moveLeft = 0;
+  g.camp = { ...c.hex };
+  return true;
+};
+
+/** Шайки по числу игроков — по одной у каждого, чтобы давление было ровным, а не кучей у одного. */
+export const spawnBandits = (s: GameState, _count?: number): number => {
   let made = 0;
-  for (let tries = 0; made < count && tries < 400; tries++) {
-    const c = cells[int(s.rng, 0, cells.length - 1)];
-    if (halls.some((h) => distance(h.hex, c.hex) < 6)) continue;
-    if (Object.values(s.generals).some((g) => distance(g.hex, c.hex) < 5)) continue;
-    const g = makeGeneral(s, BANDITS, { ...c.hex }, s.settings.elo, banditArmy(s.turn), 'Bandits');
-    g.moveLeft = 0;
-    made++;
-  }
+  for (const pid of s.order) if (s.players[pid].alive && spawnNear(s, pid)) made++;
   return made;
+};
+
+/** Есть ли у игрока «своя» шайка (лагерь недалеко от его столицы). */
+const hasBand = (s: GameState, pid: string): boolean => {
+  const cap = Object.values(s.halls).filter((h) => h.owner === pid).sort((a, b) => a.order - b.order)[0];
+  return !!cap && bandits(s).some((b) => distance(b.camp ?? b.hex, cap.hex) <= 9);
 };
 
 /** Набег на город без защиты: разбойники уносят треть золота и ломают одно здание на его земле. */
@@ -68,21 +83,26 @@ export type BanditAttack = { gid: string; target: Hex };
 export const banditsTurn = (s: GameState): BanditAttack[] => {
   if (s.banditsAt === s.turn) return []; // уже ходили в этом круге
   s.banditsAt = s.turn;
-  if (s.turn > 1 && s.turn % RESPAWN_EVERY === 0 && bandits(s).length < BANDIT_COUNT) spawnBandits(s, 1);
+  // раз в RESPAWN_EVERY ходов — новая шайка у одного игрока, рядом с которым своей шайки уже нет
+  if (s.turn > 1 && s.turn % RESPAWN_EVERY === 0) {
+    const lonely = s.order.filter((pid) => s.players[pid].alive && !hasBand(s, pid));
+    if (lonely.length) spawnNear(s, lonely[int(s.rng, 0, lonely.length - 1)]);
+  }
   const out: BanditAttack[] = [];
   for (const b of bandits(s)) {
     b.moveLeft = 2;
     b.attacked = false;
     if (armyValue(b.army) === 0) { delete s.generals[b.id]; continue; }
+    const camp = b.camp ?? b.hex;
     // добыча: поселенцы, армии слабее, города без армии
     const prey: { hex: Hex; d: number; hallId?: string }[] = [];
     if (s.turn >= CALM_UNTIL) for (const x of Object.values(s.generals)) {
-      if (!s.players[x.owner] || distance(x.hex, b.hex) > HUNT_RANGE) continue;
+      if (!s.players[x.owner] || distance(x.hex, b.hex) > HUNT_RANGE || distance(x.hex, camp) > LEASH) continue;
       // поселенцы и армии равной силы или слабее
       if (x.settler || (armyValue(x.army) > 0 && power(b) >= power(x))) prey.push({ hex: x.hex, d: distance(x.hex, b.hex) });
     }
     for (const h of Object.values(s.halls)) {
-      if (s.turn < RAIDS_FROM || !s.players[h.owner] || distance(h.hex, b.hex) > HUNT_RANGE) continue;
+      if (s.turn < RAIDS_FROM || !s.players[h.owner] || distance(h.hex, b.hex) > HUNT_RANGE || distance(h.hex, camp) > LEASH) continue;
       if (h.raidedAt !== undefined && s.turn - h.raidedAt < RAID_COOLDOWN) continue;
       const guarded = Object.values(s.generals).some((x) => x.owner === h.owner && key(x.hex) === key(h.hex) && armyValue(x.army) > 0);
       if (!guarded) prey.push({ hex: h.hex, d: distance(h.hex, b.hex), hallId: h.id });
@@ -103,8 +123,10 @@ export const banditsTurn = (s: GameState): BanditAttack[] => {
       }
       continue;
     }
-    // бродим: случайный шаг, но не на чужую землю вглубь
-    const options = [...reachable(s, b.id).keys()].filter((k) => k !== key(b.hex));
+    // бродим вокруг лагеря
+    const all = [...reachable(s, b.id).keys()].filter((k) => k !== key(b.hex));
+    const near = all.filter((k) => { const [q, r] = k.split(',').map(Number); return distance({ q, r }, camp) <= 3; });
+    const options = near.length ? near : all;
     if (options.length) {
       const k = options[int(s.rng, 0, options.length - 1)];
       const [q, r] = k.split(',').map(Number);

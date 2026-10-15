@@ -9,7 +9,7 @@ import {
   RESOURCE_OUTPUT, TAVERN, TOWN_HALL_FOUND, TOWN_HALL_UPGRADE, BUILDER_HIRE_FOOD, BUILDER_UPKEEP_FOOD, GENERAL_UPKEEP_FOOD, cityUpgradeCost, tavernCost, PIECES, barracksCost, buildOptions, buildingOutput, maxLevelAt, piecePrice, researchCost, researchTurns, resourceCost, aiEconomyTurn, aiMilitaryTurn, attack, endTurn, say,
   foundTownHall, freeBuilders, hireBuilder, hireGeneral, hirePiece, income, key, maxBuilders, move, playerGenerals,
   reachable, recruitElo, resolveBattle, startResearch, upgrade, upgradeBarracks, upgradeTavern, upgradeTownHall,
-  remember, upkeep, visible, winner, build, enqueue, cancelQueued, ELO_PER_RESEARCH, ARMY_MAX, playerHalls, hasMet, jobHall, hallBuilders, banditsTurn, recordHistory, hireSettler, settlerCost, findPath, runOrders, armyMove, startMarch, MARCH_RESEARCH, ARMY_MOVE_MARCH, BUILDING_SLOTS, citySlots, generalLimit, nationStats, type QueueOrder, type Job, type GameState, type Hex, type Piece, type Res, type ResourceBuilding,
+  remember, upkeep, visible, winner, build, enqueue, cancelQueued, ELO_PER_RESEARCH, ARMY_MAX, startTech, type TechId, playerHalls, hasMet, jobHall, hallBuilders, banditsTurn, recordHistory, hireSettler, settlerCost, findPath, runOrders, armyMove, startMarch, MARCH_RESEARCH, ARMY_MOVE_MARCH, BUILDING_SLOTS, citySlots, generalLimit, nationStats, type QueueOrder, type Job, type GameState, type Hex, type Piece, type Res, type ResourceBuilding,
 } from '../../../core/src/index.ts';
 import { autobattle, type BattleRecord } from './battle.ts';
 import { playManual, showReplay } from './fight.ts';
@@ -123,7 +123,7 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
     app.querySelector('#gensbtn')!.innerHTML = `<span class="kingico">♚</span><b>Generals ${playerGenerals(s, ME).length}</b>${ready ? `<small class="badge">${ready}</small>` : ''}`;
     app.querySelector('#citiesbtn')!.innerHTML = `${CASTLE}<b>Cities ${playerHalls(s, ME).length}</b>`;
     const r = p.research;
-    app.querySelector('#tactics')!.innerHTML = `${iconSvg(r.active || r.marchFinish ? 'clock' : 'tactics', 18)}<b>Technology tree</b>${r.active ? `<small>${left(r.active.finish)}</small>` : r.marchFinish ? `<small>${left(r.marchFinish)}</small>` : ''}`;
+    app.querySelector('#tactics')!.innerHTML = `${iconSvg(r.active || r.tech ? 'clock' : 'tactics', 18)}<b>Technology tree</b>${r.active ? `<small>${left(r.active.finish)}</small>` : r.tech ? `<small>${left(r.tech.finish)}</small>` : ''}`;
   };
 
   // ---------- карта ----------
@@ -384,15 +384,12 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
     if (!hid || freeBuilders(s, ME, hid) > 0) { act(enqueue(s, ME, order)); return; }
     if (order.kind === 'upgrade') { const b = s.cells[key(order.hex)]?.building; if (b) label = `${BUILDING_NAME[b.kind]} → ${b.level + 1}`; }
     if (order.kind === 'build') label = BUILDING_NAME[order.building];
-    // сначала проверяем на копии, что стройку вообще можно оплатить и начать
-    const dry = enqueue(structuredClone(s), ME, order);
-    if (!dry.ok) { act(dry); return; }
-    const busyWith = s.players[ME].jobs.filter((j) => jobHall(s, j) === hid).map((j) => `${jobName(j)} (${left(j.finish)})`).join(', ');
-    modal(`<h2>All builders of ${esc(s.halls[hid].name)} are busy</h2><p>${esc(busyWith)}</p><p>Put <b>${esc(label)}</b> in the queue? You pay now; construction starts as soon as a builder is free. You can cancel it in the city and get the resources back.</p>
-      <div class="acts">${btn('queue', 'Add to queue', 'starts when a builder is free')}${btn('cancel', 'Not now', '')}</div>`);
-    const c = await ask();
-    modal(null);
-    if (c === 'queue') { const r = enqueue(s, ME, order); act(r); if (r.ok) toast(`${label}: queued`); }
+    if (order.kind === 'townhall') label = `${s.halls[hid].name} → level ${s.halls[hid].level + 1}`;
+    if (order.kind === 'barracks' || order.kind === 'tavern') label = `${order.kind === 'barracks' ? 'Barracks' : 'Tavern'} in ${s.halls[hid].name}`;
+    // все строители заняты — сразу ставим в очередь, без вопросов
+    const r = enqueue(s, ME, order);
+    act(r);
+    if (r.ok) toast(`${label}: queued — starts when a builder of ${s.halls[hid].name} is free`);
   };
 
   // ---------- Держава: правитель и сила государства ----------
@@ -522,13 +519,13 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
             : `<div class="acts">${btn(`learn:${n.id}`, `Research ${n.name}`, `${cost(n.cost)} · ${n.turns} turn${n.turns > 1 ? 's' : ''}`)}</div>`;
       modal(`<h2 class="withico">${iconSvg('tactics', 24)}Technology tree</h2>
         ${techTreeHtml(nodes, picked)}
-        <div class="techinfo"><b>${esc(n.name)}</b><p>${esc(n.text)}</p>${n.id.startsWith('t') ? `<p class="muted">Next general: ELO ${recruitElo(s, ME)}. Research needs no builder.</p>` : ''}${info}</div>
+        <div class="techinfo"><b>${esc(n.name)}</b><p>${esc(n.text)}</p>${/^t\d$/.test(n.id) ? `<p class="muted">Next general: ELO ${recruitElo(s, ME)}. Research needs no builder.</p>` : ''}${info}</div>
         <div class="acts">${btn('close', 'Close', '')}</div>`);
       const c = await ask();
       if (c.startsWith('tech:')) { picked = c.slice(5); continue; }
       if (c.startsWith('learn:')) {
         const id = c.slice(6);
-        act(id === 'march' ? startMarch(s, ME) : startResearch(s, ME));
+        act(/^t\d$/.test(id) ? startResearch(s, ME) : startTech(s, ME, id as TechId));
         continue;
       }
       modal(null);

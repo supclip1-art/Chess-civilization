@@ -57,6 +57,8 @@ export type General = {
   order?: GeneralOrder;
   /** Поселенец: без армии, основывает город, гибнет при нападении. Генералом не считается. */
   settler?: boolean;
+  /** Лагерь шайки разбойников: она бродит и охотится только вокруг него. */
+  camp?: Hex;
 };
 
 export type GeneralOrder = { kind: 'goto'; to: Hex } | { kind: 'explore' } | { kind: 'hold' };
@@ -76,7 +78,13 @@ export type Player = {
   /** Правитель игрока (у ИИ — ai.ruler). */
   ruler?: string;
   /** «Тактика»: done ступеней +ELO; march — марш-бросок (генералы ходят на 3 клетки), marchFinish — когда изучится. */
-  research: { done: number; active?: { step: number; finish: number }; march?: boolean; marchFinish?: number };
+  research: {
+    done: number; active?: { step: number; finish: number };
+    /** Изученные технологии дерева и та, что изучается сейчас. */
+    techs?: Partial<Record<string, true>>; tech?: { id: string; finish: number };
+    /** Устаревшее (до дерева технологий): переносится в techs при загрузке. */
+    march?: boolean; marchFinish?: number;
+  };
   jobs: Job[];
   /** Очередь строек: оплачены, начнутся, когда освободится строитель. turns — сколько ходов займёт стройка. */
   queue?: { job: Job; turns: number; paid: Res }[];

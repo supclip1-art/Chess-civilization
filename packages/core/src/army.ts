@@ -4,7 +4,7 @@ import {
   ARMY_MAX, ELO_PER_WIN, GENERAL_HIRE_GOLD, HIRE_LEVEL, MAX_GENERALS, MAX_STARS, PAWNS_REQUIRED, PIECES, PIECE_PRICE,
   PIECE_VALUE, type Piece,
 } from './config.ts';
-import { type Result, mods, piecePrice, playerGenerals, playerHalls, recruitElo } from './economy.ts';
+import { type Result, hasTech, mods, piecePrice, playerGenerals, playerHalls, recruitElo } from './economy.ts';
 import { distance, key } from './hex.ts';
 import { type Army, type GameState, emptyArmy, generalName, makeGeneral, say } from './state.ts';
 
@@ -89,6 +89,21 @@ export const transfer = (s: GameState, pid: string, fromId: string, toId: string
 };
 
 // ---------- Итог боя ----------
+
+/** Кто и с чем выходит на доску. «Укрепления»: армия, защищающая свой город, получает лишнюю пешку
+ *  (если пешек меньше 8), иначе +50 ELO. Лишняя пешка после боя не остаётся. */
+export const battleSides = (s: GameState, attackerId: string, defenderId: string) => {
+  const att = s.generals[attackerId], def = s.generals[defenderId];
+  const black = { ...def.army };
+  let blackElo = def.elo;
+  let fortified = false;
+  const home = Object.values(s.halls).some((h) => h.owner === def.owner && h.hex.q === def.hex.q && h.hex.r === def.hex.r);
+  if (home && s.players[def.owner] && hasTech(s, def.owner, 'fortify')) {
+    fortified = true;
+    if (black.p < ARMY_MAX.p) black.p++; else blackElo += 50;
+  }
+  return { white: { ...att.army }, black, whiteElo: att.elo, blackElo, fortified };
+};
 
 export type BattleEnd = 'mate' | 'resign' | 'stalemate' | 'repetition' | 'fifty' | 'insufficient' | 'limit';
 
@@ -176,7 +191,7 @@ export const applyBattle = (s: GameState, attackerId: string, defenderId: string
   const winner = out.winner === 'attacker' ? att : out.winner === 'defender' ? def : null;
   if (winner && s.players[winner.owner] && winner.stars < MAX_STARS) {
     winner.stars++;
-    winner.elo += ELO_PER_WIN;
+    winner.elo += hasTech(s, winner.owner, 'veterans') ? 25 : ELO_PER_WIN; // «Ветераны»
   }
   say(s, `battle: ${out.note}`, att.owner);
   const loser = out.winner === 'attacker' ? def : out.winner === 'defender' ? att : null;

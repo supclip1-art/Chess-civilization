@@ -2,7 +2,7 @@
 // доход, содержание и голод.
 
 import {
-  ARMY_MOVE, ARMY_MOVE_MARCH, MARCH_RESEARCH, ARMY_UPKEEP_RATE, BARRACKS, BUILDING_SLOTS, CITY_WOOD, BUILDER_HIRE_FOOD, BUILDER_UPKEEP_FOOD, BUILD_TURNS, ELO_PER_RESEARCH,
+  ARMY_MOVE, ARMY_MOVE_MARCH, TECHS, type TechId, ARMY_UPKEEP_RATE, BARRACKS, BUILDING_SLOTS, CITY_WOOD, BUILDER_HIRE_FOOD, BUILDER_UPKEEP_FOOD, BUILD_TURNS, ELO_PER_RESEARCH,
   GENERAL_UPKEEP_FOOD, MAX_RESOURCE_LEVEL, PAWNS_REQUIRED, PIECE_PRICE, RESEARCH, RESOURCE_COST, RESOURCE_OF,
   RESOURCE_OUTPUT, TAVERN, TOWN_HALL_FOUND, TOWN_HALL_MAX_LEVEL, TOWN_HALL_UPGRADE,
   type Piece, type Res, type ResourceBuilding,
@@ -57,7 +57,12 @@ export const resourceCost = (s: GameState, pid: string, kind: ResourceBuilding, 
 export const barracksCost = (s: GameState, pid: string, level: 1 | 2 | 3 | 4 | 5): Res => scale(BARRACKS[level].cost, mods(s, pid).barracksCostMult ?? 1);
 export const researchCost = (s: GameState, pid: string, step: number): Res => scale(RESEARCH[step].cost, mods(s, pid).researchCostMult ?? 1);
 export const researchTurns = (s: GameState, pid: string, step: number): number => Math.max(1, RESEARCH[step].turns - (mods(s, pid).researchTurnsMinus ?? 0));
-export const piecePrice = (s: GameState, pid: string, piece: Piece): number => mods(s, pid).piecePrice?.[piece] ?? PIECE_PRICE[piece];
+export const piecePrice = (s: GameState, pid: string, piece: Piece): number => {
+  const base = mods(s, pid).piecePrice?.[piece] ?? PIECE_PRICE[piece];
+  if (piece === 'p' && hasTech(s, pid, 'militia')) return Math.round(base * 0.8); // «Ополчение»
+  if ((piece === 'n' || piece === 'b') && hasTech(s, pid, 'cavalry')) return Math.round(base * 0.75); // «Кавалерия»
+  return base;
+};
 
 /** Выработка одного ресурсного здания с бонусами нации. */
 export const buildingOutput = (s: GameState, pid: string, cell: Cell): Res => {
@@ -126,7 +131,7 @@ export const hireBuilder = (s: GameState, pid: string, hallId?: string): Result 
 const turnsFor = (s: GameState, pid: string, level: number): number => {
   const base = BUILD_TURNS[level - 1];
   const minus = level >= 4 ? (mods(s, pid).highUpgradeTurnsMinus ?? 0) : 0;
-  return Math.max(1, base - minus);
+  return buildTurns(s, pid, Math.max(1, base - minus));
 };
 
 const isHallCell = (s: GameState, hex: Hex): boolean =>
@@ -136,7 +141,7 @@ const isHallCell = (s: GameState, hex: Hex): boolean =>
 export const citySlots = (s: GameState, hallId: string): { used: number; max: number } => {
   const h = s.halls[hallId];
   const used = Object.values(s.cells).filter((c) => c.hall === hallId && (c.building || c.reserved)).length;
-  return { used, max: h ? BUILDING_SLOTS[Math.min(h.level, BUILDING_SLOTS.length) - 1] : 0 };
+  return { used, max: h ? BUILDING_SLOTS[Math.min(h.level, BUILDING_SLOTS.length) - 1] + (s.players[h.owner] && hasTech(s, h.owner, 'guilds') ? 1 : 0) : 0 };
 };
 
 export const build = (s: GameState, pid: string, hex: Hex, kind: ResourceBuilding): Result => {
@@ -187,7 +192,7 @@ export const upgradeTownHall = (s: GameState, pid: string, hallId: string): Resu
   const cost = cityUpgradeCost(s, pid, (h.level + 1) as 2 | 3);
   if (!canAfford(p.res, cost)) return no('not enough resources');
   pay(p, cost);
-  p.jobs.push({ kind: 'townhall', hallId, level: h.level + 1, finish: s.turn + u.turns });
+  p.jobs.push({ kind: 'townhall', hallId, level: h.level + 1, finish: s.turn + buildTurns(s, pid, u.turns) });
   return ok;
 };
 
@@ -228,7 +233,7 @@ export const upgradeBarracks = (s: GameState, pid: string, hallId?: string): Res
   const cost = barracksCost(s, pid, level as 1 | 2 | 3 | 4 | 5);
   if (!canAfford(p.res, cost)) return no('not enough resources');
   pay(p, cost);
-  p.jobs.push({ kind: 'barracks', hallId: h.id, level, finish: s.turn + b.turns });
+  p.jobs.push({ kind: 'barracks', hallId: h.id, level, finish: s.turn + buildTurns(s, pid, b.turns) });
   return ok;
 };
 
@@ -244,7 +249,7 @@ export const upgradeTavern = (s: GameState, pid: string, hallId?: string): Resul
   const cost = tavernCost(s, pid, level as 1 | 2 | 3 | 4);
   if (!canAfford(p.res, cost)) return no('not enough resources');
   pay(p, cost);
-  p.jobs.push({ kind: 'tavern', hallId: h.id, level, finish: s.turn + t.turns });
+  p.jobs.push({ kind: 'tavern', hallId: h.id, level, finish: s.turn + buildTurns(s, pid, t.turns) });
   return ok;
 };
 
@@ -262,21 +267,34 @@ export const startResearch = (s: GameState, pid: string): Result => {
   return ok;
 };
 
-/** Исследовать «Марш-бросок» (один раз). Идёт параллельно со ступенями «Тактики». */
-export const startMarch = (s: GameState, pid: string): Result => {
-  const p = s.players[pid];
-  if (p.research.march) return no('Forced march is already researched');
-  if (p.research.marchFinish) return no('Forced march is already being researched');
-  if (p.research.done < 2) return no('research Tactics II first');
-  const cost = MARCH_RESEARCH.cost;
-  if (!canAfford(p.res, cost)) return no('not enough resources');
-  pay(p, cost);
-  p.research.marchFinish = s.turn + MARCH_RESEARCH.turns;
-  return ok;
+/** Изучена ли технология дерева. */
+export const hasTech = (s: GameState, pid: string, id: TechId): boolean => !!s.players[pid]?.research.techs?.[id];
+
+/** Открыта ли технология для изучения: нужные до неё изучены. */
+export const techReady = (s: GameState, pid: string, id: TechId): boolean => {
+  const r = s.players[pid].research;
+  return TECHS[id].needs.every((n: string) => (n.startsWith('t') && /^t\d$/.test(n) ? r.done > Number(n.slice(1)) : !!r.techs?.[n]));
 };
 
+/** Начать изучать технологию дерева. Одна за раз, параллельно со ступенями «Тактики». */
+export const startTech = (s: GameState, pid: string, id: TechId): Result => {
+  const p = s.players[pid];
+  const t = TECHS[id];
+  if (p.research.techs?.[id]) return no(`${t.name} is already researched`);
+  if (p.research.tech) return no('another technology is being researched');
+  if (!techReady(s, pid, id)) return no('research the technologies before it first');
+  if (!canAfford(p.res, t.cost)) return no('not enough resources');
+  pay(p, t.cost);
+  p.research.tech = { id, finish: s.turn + t.turns };
+  return ok;
+};
+export const startMarch = (s: GameState, pid: string): Result => startTech(s, pid, 'march');
+
+/** Стройка с «Каменщиками» идёт на ход быстрее (но не меньше хода). */
+export const buildTurns = (s: GameState, pid: string, base: number): number => Math.max(1, base - (hasTech(s, pid, 'masons') ? 1 : 0));
+
 /** Сколько клеток за ход проходят генералы и поселенцы игрока (марш-бросок действует на всех). */
-export const armyMove = (s: GameState, pid: string): number => (s.players[pid]?.research.march ? ARMY_MOVE_MARCH : ARMY_MOVE);
+export const armyMove = (s: GameState, pid: string): number => (hasTech(s, pid, 'march') ? ARMY_MOVE_MARCH : ARMY_MOVE);
 
 /** ELO, с которым придёт следующий нанятый генерал. */
 export const recruitElo = (s: GameState, pid: string): number =>
@@ -403,7 +421,7 @@ export const income = (s: GameState, pid: string): Res => {
 export const upkeep = (s: GameState, pid: string): number => {
   const p = s.players[pid];
   const gens = playerGenerals(s, pid);
-  const rate = mods(s, pid).armyUpkeepRate ?? ARMY_UPKEEP_RATE;
+  const rate = (mods(s, pid).armyUpkeepRate ?? ARMY_UPKEEP_RATE) * (hasTech(s, pid, 'quartermaster') ? 0.75 : 1); // «Интендантство»
   const army = Math.ceil(gens.reduce((sum, g) => sum + armyValue(g.army), 0) * rate);
   const builderFood = mods(s, pid).freeBuilderUpkeep ? 0 : BUILDER_UPKEEP_FOOD;
   const extraBuilders = playerHalls(s, pid).reduce((n, h) => n + hallBuilders(h) - 1, 0); // первый строитель каждого города — бесплатно
@@ -470,7 +488,12 @@ export const completeJobs = (s: GameState, pid: string): void => {
   }
   const r = p.research.active;
   if (r && r.finish <= s.turn) { p.research.done = r.step + 1; p.research.active = undefined; say(s, `Tactics ${p.research.done} researched: new generals +${ELO_PER_RESEARCH} ELO`, pid); }
-  if (p.research.marchFinish && p.research.marchFinish <= s.turn) { p.research.march = true; p.research.marchFinish = undefined; say(s, 'Forced march researched: generals and settlers move 3 cells', pid); }
+  const tech = p.research.tech;
+  if (tech && tech.finish <= s.turn) {
+    (p.research.techs ??= {})[tech.id] = true;
+    p.research.tech = undefined;
+    say(s, `${TECHS[tech.id as TechId].name} researched`, pid);
+  }
   startQueued(s, pid);
 };
 

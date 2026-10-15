@@ -265,3 +265,32 @@ test('места под здания зависят от уровня город
   assert.ok(hirePiece(s, 'p1', g.id, 'q').ok);
   assert.equal(hirePiece(s, 'p1', g.id, 'q').ok, false);
 });
+
+test('дерево технологий: требования, эффекты на цены, места, обзор и дороги', async () => {
+  const { startTech, piecePrice, citySlots, visible, reachable, hasTech, recomputeTerritory } = await import('../src/index.ts');
+  const s = newGame(testMap(), [{ nation: 'germany' }, { nation: 'spain' }], { elo: 1200, seed: 1 });
+  const p = s.players.p1;
+  p.res = { wood: 2000, food: 2000, gold: 2000 };
+  assert.equal(startTech(s, 'p1', 'militia').ok, false, 'нужна Тактика I');
+  p.research.done = 2;
+  assert.ok(startTech(s, 'p1', 'militia').ok);
+  assert.equal(startTech(s, 'p1', 'guilds').ok, false, 'одна технология за раз');
+  p.research.techs = { militia: true, cavalry: true, guilds: true, cartography: true, roads: true };
+  p.research.tech = undefined;
+  assert.ok(hasTech(s, 'p1', 'militia'));
+  assert.equal(piecePrice(s, 'p1', 'p'), 8);
+  assert.equal(piecePrice(s, 'p1', 'n'), 23);
+  const hall = playerHalls(s, 'p1')[0];
+  assert.equal(citySlots(s, hall.id).max, 6);
+  const g = Object.values(s.generals).find((x) => x.owner === 'p1')!;
+  hall.level = 3; recomputeTerritory(s); // широкая своя земля
+  g.hex = { ...hall.hex };
+  g.moveLeft = 2;
+  const far = [...reachable(s, g.id).values()].some((d) => d === 3);
+  assert.ok(far, 'по своей земле на клетку дальше');
+  const far2 = Object.values(s.cells).filter((c) => !c.owner).sort((a, b) => Math.abs(b.hex.q - hall.hex.q) + Math.abs(b.hex.r - hall.hex.r) - Math.abs(a.hex.q - hall.hex.q) - Math.abs(a.hex.r - hall.hex.r))[0];
+  g.hex = { ...far2.hex };
+  const seen = visible(s, 'p1');
+  p.research.techs.cartography = undefined;
+  assert.ok(seen.size > visible(s, 'p1').size, 'картография расширяет обзор');
+});

@@ -5,7 +5,7 @@
 // Конец партии: мат, пат, сдача, троекратное повторение, правило 50 ходов, нет матующего материала, 150 полуходов.
 
 import {
-  MAX_PLIES, armiesFromFen, canForceMate, material, battleFen, bookMove, insufficientMaterial, next, promotions, type BattleEnd, type BattleReport,
+  MAX_PLIES, armiesFromFen, battleSides, canForceMate, material, battleFen, bookMove, insufficientMaterial, next, promotions, type BattleEnd, type BattleReport,
   type GameState, type General,
 } from '../../../core/src/index.ts';
 import { Engine, profile } from '../engine.ts';
@@ -50,12 +50,12 @@ const positionKey = (fen: string) => fen.split(' ').slice(0, 4).join(' ');
 
 /** Ход генерала: из книги, иначе — Stockfish с бюджетом узлов по ELO; слабые иногда берут не лучший из 3. */
 const generalMove = async (
-  e: Engine, s: GameState, g: General, startFen: string, moves: string[], white: boolean, legal: string[] | null, pos: string,
+  e: Engine, s: GameState, g: General, startFen: string, moves: string[], white: boolean, legal: string[] | null, pos: string, elo = g.elo,
 ): Promise<{ move: string; book: boolean }> => {
   const book = bookMove(g, startFen, moves, white);
   if (book && legal?.includes(book)) return { move: book, book: true };
   const ok = (m: string) => (legal ? legal.includes(m) : m !== '(none)' && !!m);
-  const prof = profile(g.elo);
+  const prof = profile(elo);
   if (prof.blunder > 0 && next(s.rng) < prof.blunder) {
     const alts = (await e.searchMulti(pos, prof.nodes, 3)).filter(ok);
     if (alts.length > 1) return { move: alts[1 + Math.floor(next(s.rng) * (alts.length - 1))], book: false };
@@ -69,7 +69,8 @@ const generalMove = async (
 export const runBattle = async (s: GameState, attackerId: string, defenderId: string, hooks: BattleHooks = {}): Promise<BattleRecord> => {
   const e = await getEngine();
   const att = s.generals[attackerId], def = s.generals[defenderId];
-  const startFen = battleFen(att.army, def.army);
+  const sides = battleSides(s, attackerId, defenderId); // «Укрепления» защитника города
+  const startFen = battleFen(sides.white, sides.black);
   const moves: string[] = [];
   const fens = [startFen];
   const seen = new Map<string, number>([[positionKey(startFen), 1]]);
@@ -105,7 +106,7 @@ export const runBattle = async (s: GameState, attackerId: string, defenderId: st
       move = a.move;
     } else {
       const started = performance.now();
-      ({ move, book } = await generalMove(e, s, g, startFen, moves, white, legal, pos()));
+      ({ move, book } = await generalMove(e, s, g, startFen, moves, white, legal, pos(), white ? sides.whiteElo : sides.blackElo));
       if (move === '(none)') { // нет ходов: мат или пат
         if (inCheck) { end = 'mate'; mateWinner = white ? 'black' : 'white'; } else end = 'stalemate';
         break;

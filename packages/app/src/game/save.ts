@@ -30,6 +30,13 @@ export const loadGame = (): GameState | null => {
       delete p.barracks; delete p.tavern;
       for (const j of [...p.jobs, ...(p.queue ?? []).map((q) => q.job)]) if ((j.kind === 'barracks' || j.kind === 'tavern') && !j.hallId && cap) j.hallId = cap.id;
     }
+    // «Марш-бросок» до дерева технологий
+    for (const p of Object.values(s.players)) {
+      const r = p.research;
+      if (r.march) (r.techs ??= {}).march = true;
+      if (r.marchFinish && !r.tech) r.tech = { id: 'march', finish: r.marchFinish };
+      delete r.march; delete r.marchFinish;
+    }
     // генералы до появления имён
     for (const g of Object.values(s.generals)) if (s.players[g.owner] && !g.settler && g.name === 'General') g.name = generalName(s, g.owner);
     // армии больше обычного шахматного набора (до лимита) урезаем

@@ -6,7 +6,7 @@ import { ARMY_UPKEEP_RATE, BARRACKS, GENERAL_UPKEEP_FOOD, PIECES, PIECE_PRICE, H
 import { hireGeneral, hirePiece } from './army.ts';
 import {
   build, buildOptions, freeBuilders, mods, resourceCost, hireBuilder, income, playerGenerals, playerHalls, startResearch, upgrade, upgradeBarracks,
-  upgradeTavern, upgradeTownHall, upkeep, citySlots, cityUpgradeCost, startMarch,
+  upgradeTavern, upgradeTownHall, upkeep, citySlots, cityUpgradeCost, startTech,
 } from './economy.ts';
 import { key } from './hex.ts';
 import { BUILDING_TERRAIN, type GameState } from './state.ts';
@@ -115,5 +115,6 @@ export const aiEconomyTurn = (s: GameState, pid: string): void => {
     }
   }
   if (p.res.gold >= 50) startResearch(s, pid);
-  if (p.research.done >= 2 && p.res.gold >= 90) startMarch(s, pid);
+  // технологии: по порядку, когда хватает золота с запасом на армию
+  if (p.res.gold >= 90) for (const id of ['militia', 'march', 'quartermaster', 'fortify', 'guilds', 'veterans'] as const) if (startTech(s, pid, id).ok || p.research.tech) break;
 };

@@ -2,7 +2,7 @@
 
 import { applyBattle, type BattleOutcome, type BattleReport } from './army.ts';
 import { ARMY_MOVE, FOG_RADIUS, SIEGE_TURNS } from './config.ts';
-import { type Result, armyValue, playerHalls } from './economy.ts';
+import { type Result, armyValue, hasTech, playerHalls } from './economy.ts';
 import { type Hex, distance, key, neighbors, range } from './hex.ts';
 import { NATIONS } from './nations.ts';
 import { type GameState, type General, type TownHall, PASSABLE, recomputeTerritory, say } from './state.ts';
@@ -28,14 +28,19 @@ export const reachable = (s: GameState, gid: string): Map<string, number> => {
   const g = s.generals[gid];
   const dist = new Map<string, number>([[key(g.hex), 0]]);
   const queue: Hex[] = [g.hex];
+  const roads = g.moveLeft > 0 && !!s.players[g.owner] && hasTech(s, g.owner, 'roads');
   while (queue.length) {
     const cur = queue.shift()!;
     const d = dist.get(key(cur))!;
-    if (d >= g.moveLeft) continue;
+    // «Дороги»: по своей земле можно пройти на клетку дальше
+    const road = d === g.moveLeft && roads && s.cells[key(cur)]?.owner === g.owner;
+    if (d >= g.moveLeft && !road) continue;
+    if (d > g.moveLeft) continue;
     for (const n of neighbors(cur)) {
       const k = key(n);
       const c = s.cells[k];
       if (!c || !PASSABLE[c.terrain] || dist.has(k)) continue;
+      if (road && c.owner !== g.owner) continue;
       if (generalsAt(s, n).some((x) => x.owner !== g.owner)) continue; // чужая армия — только атакой
       const h = hallAt(s, n);
       if (h && h.owner !== g.owner) continue; // чужая ратуша — только осадой
@@ -53,7 +58,7 @@ export const move = (s: GameState, gid: string, to: Hex): Result => {
   const d = reachable(s, gid).get(key(to));
   if (d === undefined || d === 0) return no('too far for this turn');
   g.hex = { ...to };
-  g.moveLeft -= d;
+  g.moveLeft = Math.max(0, g.moveLeft - d); // шаг по дороге сверх очков хода съедает остаток
   for (const h of Object.values(s.halls)) if (h.siege?.by === gid && distance(h.hex, g.hex) > 1) h.siege = undefined;
   return { ok: true };
 };
@@ -173,9 +178,10 @@ export const runOrders = (s: GameState, pid: string): { gid: string; text: strin
 /** Видимые игроку клетки: 2 клетки от края его территории и 2 клетки вокруг его генералов. */
 export const visible = (s: GameState, pid: string): Set<string> => {
   const seen = new Set<string>();
-  const add = (h: Hex) => { for (const x of range(h, FOG_RADIUS)) if (s.cells[key(x)]) seen.add(key(x)); };
+  const add = (h: Hex, r = FOG_RADIUS) => { for (const x of range(h, r)) if (s.cells[key(x)]) seen.add(key(x)); };
   for (const c of Object.values(s.cells)) if (c.owner === pid) add(c.hex);
-  for (const g of Object.values(s.generals)) if (g.owner === pid) add(g.hex);
+  const far = s.players[pid] && hasTech(s, pid, 'cartography') ? FOG_RADIUS + 1 : FOG_RADIUS; // «Картография»
+  for (const g of Object.values(s.generals)) if (g.owner === pid) add(g.hex, far);
   return seen;
 };
 
