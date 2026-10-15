@@ -6,7 +6,7 @@ import {
 } from './config.ts';
 import { type Result, mods, piecePrice, playerGenerals, playerHalls, recruitElo } from './economy.ts';
 import { distance, key } from './hex.ts';
-import { type Army, type GameState, emptyArmy, makeGeneral, say } from './state.ts';
+import { type Army, type GameState, emptyArmy, generalName, makeGeneral, say } from './state.ts';
 
 const ok: Result = { ok: true };
 const PIECE_NAMES: Record<Piece, string> = { p: 'pawn', n: 'knight', b: 'bishop', r: 'rook', q: 'queen' };
@@ -64,7 +64,7 @@ export const hireGeneral = (s: GameState, pid: string, hallId?: string): Result 
   const gold = Math.max(0, GENERAL_HIRE_GOLD[(count + 1) as 2 | 3 | 4 | 5] - (mods(s, pid).generalHireDiscount ?? 0));
   if (p.res.gold < gold) return no('not enough gold');
   p.res.gold -= gold;
-  const g = makeGeneral(s, pid, { ...h.hex }, recruitElo(s, pid), emptyArmy(), 'General');
+  const g = makeGeneral(s, pid, { ...h.hex }, recruitElo(s, pid), emptyArmy(), generalName(s, pid));
   say(s, `new general hired in ${h.name} (ELO ${g.elo}, ${g.white})`, pid);
   return ok;
 };

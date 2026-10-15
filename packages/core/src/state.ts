@@ -3,7 +3,7 @@
 
 import { STARTING_ARMY, START_RESOURCES, TOWN_HALL_RADIUS, type Piece, type Res, type ResourceBuilding } from './config.ts';
 import { type Hex, distance, key, range } from './hex.ts';
-import { NATIONS, NEUTRAL_CITIES, type Aggression, type NationId } from './nations.ts';
+import { NATIONS, NEUTRAL_CITIES, commanderNames, type Aggression, type NationId } from './nations.ts';
 import { type Rng, int } from './rng.ts';
 
 export type Terrain = 'field' | 'forest' | 'deposit' | 'tundra' | 'desert' | 'mountain' | 'water';
@@ -175,6 +175,16 @@ export const rollGarrison = (rng: Rng): Army => {
   return a;
 };
 
+/** Свободное имя полководца для нового генерала игрока. */
+export const generalName = (s: GameState, owner: string): string => {
+  const p = s.players[owner];
+  if (!p) return 'General';
+  const used = new Set(Object.values(s.generals).filter((g) => g.owner === owner).map((g) => g.name));
+  const pool = commanderNames(p.nation);
+  const free = pool.filter((n) => !used.has(n));
+  return free.length ? free[int(s.rng, 0, free.length - 1)] : `${pool[0]} ${used.size + 1}`;
+};
+
 export const makeGeneral = (s: GameState, owner: string, hex: Hex, elo: number, army: Army, name: string): General => {
   const g: General = {
     id: newId(s, 'g'), owner, name, elo, stars: 0, army, hex, moveLeft: 0, attacked: false,
@@ -260,7 +270,7 @@ export const createGame = (map: MapDef, setup: PlayerSetup[], opts: { elo: numbe
       research: { done: 0 }, jobs: [], starterKnight: true, alive: true,
     };
     addHall(s, id, hex, 1);
-    makeGeneral(s, id, hex, opts.elo, { ...STARTING_ARMY }, 'General');
+    makeGeneral(s, id, hex, opts.elo, { ...STARTING_ARMY }, generalName(s, id));
   });
   map.spawns.forEach((h, i) => { if (!spawnOf.includes(i)) addNeutral(s, h, map.names?.[key(h)]); });
   const freeSpawns = map.spawns.filter((_, i) => !spawnOf.includes(i));

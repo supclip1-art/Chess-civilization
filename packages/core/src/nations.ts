@@ -165,3 +165,25 @@ export const NATION_ORDER = Object.keys(NATIONS) as NationId[];
 export const NEUTRAL_CITIES: string[] = [
   'Venice', 'Naples', 'Ragusa', 'Trieste', 'Zürich', 'Vienna', 'Prague', 'Kraków', 'Warsaw', 'Budapest', 'Belgrade', 'Athens', 'Lisbon', 'Amsterdam', 'Brussels', 'Bern', 'Copenhagen', 'Stockholm', 'Riga', 'Vilnius', 'Bucharest', 'Sofia', 'Dubrovnik', 'Valletta',
 ];
+
+// ---------- Имена генералов ----------
+
+/** Имена полководцев по культурным регионам: новый генерал игрока получает свободное имя своего региона. */
+const COMMANDERS: Record<string, string[]> = {
+  slavic: ['Suvorov', 'Kutuzov', 'Bagration', 'Skobelev', 'Pozharsky', 'Rumyantsev', 'Zholkiewski', 'Kosciuszko', 'Sirko', 'Doroshenko'],
+  western: ['Turenne', 'Condé', 'Vauban', 'Moltke', 'Blücher', 'Scharnhorst', 'Marlborough', 'Wellington', 'Nelson', 'Cromwell'],
+  southern: ['Gonzalo', 'Alba', 'Spínola', 'Garibaldi', 'Colonna', 'Montecuccoli', 'Cortés', 'Pizarro', 'Doria', 'Sforza'],
+  middle: ['Barbarossa', 'Köprülü', 'Saladin', 'Baibars', 'Khalid', 'Tariq', 'Nader', 'Rostam', 'Shapur', 'Mehmed'],
+  steppe: ['Subutai', 'Jebe', 'Bogenbay', 'Kabanbay', 'Raiymbek', 'Mukhali', 'Toktamysh', 'Edige', 'Shaybani', 'Nogai'],
+  south_asia: ['Bajirao', 'Hari Singh', 'Tipu', 'Haidar', 'Raja Man Singh', 'Isa Khan', 'Shivaji', 'Prithviraj', 'Bairam Khan', 'Malik Ambar'],
+  east_asia: ['Yue Fei', 'Han Xin', 'Qi Jiguang', 'Yi Sun-sin', 'Eulji', 'Kwon Yul', 'Takeda', 'Uesugi', 'Tran Hung Dao', 'Le Loi'],
+  far: ['Gajah Mada', 'Diponegoro', 'Moremi', 'Usman', 'Tlacaelel', 'Zaragoza', 'Grant', 'Lee', 'Caxias', 'Osório'],
+};
+const REGION: Record<NationId, keyof typeof COMMANDERS> = {
+  russia: 'slavic', ukraine: 'slavic', poland: 'slavic', germany: 'western', france: 'western', britain: 'western',
+  spain: 'southern', italy: 'southern', turkey: 'middle', egypt: 'middle', arabia: 'middle', persia: 'middle',
+  uzbekistan: 'steppe', kazakhstan: 'steppe', pakistan: 'south_asia', india: 'south_asia', bangladesh: 'south_asia',
+  china: 'east_asia', korea: 'east_asia', japan: 'east_asia', vietnam: 'east_asia', indonesia: 'far', nigeria: 'far',
+  mexico: 'southern', usa: 'far', brazil: 'far',
+};
+export const commanderNames = (nation: NationId): string[] => COMMANDERS[REGION[nation]];
