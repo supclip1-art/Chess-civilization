@@ -391,6 +391,10 @@ with open(OUT, 'w') as f:
     f.write('  randomSpawns: true,\n')
     f.write(f'  neutralCount: {NEUTRAL_COUNT},\n')
     f.write('  neutrals: [' + ', '.join(f'{{ q: {h[0]}, r: {h[1]} }}' for _, h in neutrals) + '],\n')
+    if 'NO_BANDITS' in CFG:  # «тихий» край: разбойники здесь не появляются и сюда не ходят
+        quiet = sorted(c for c, t in terrain.items() if t != 'water' and CFG['NO_BANDITS'](*center(*c)))
+        print('no bandits', len(quiet))
+        f.write('  noBandits: [' + ', '.join(f"'{q},{r}'" for q, r in quiet) + '],\n')
     f.write('  names: {\n')
     for n, nm, h in spawns:
         f.write(f"    '{h[0]},{h[1]}': {json.dumps(nm, ensure_ascii=False)},\n")

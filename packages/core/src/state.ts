@@ -23,6 +23,7 @@ export type Cell = {
   hall?: string; // id ратуши, к зоне которой относится клетка
   building?: { kind: ResourceBuilding; level: number };
   reserved?: boolean; // здесь идёт постройка нового здания
+  noBandits?: boolean; // разбойники здесь не появляются и сюда не ходят (Греция на карте Европы)
 };
 
 /** Город (в коде — hall): центр территории. Название даётся при основании и сохраняется при захвате. */
@@ -35,7 +36,6 @@ export type TownHall = {
   order: number; // порядок основания: при спорной клетке её держит более ранний город
   barracks?: number; // казарма города: какие фигуры можно нанять на его земле (0 / нет — не построена)
   tavern?: number; // таверна города: в ней нанимают генералов
-  raidedAt?: number; // ход последнего набега разбойников
   builders?: number; // строители города (нет — один)
   siege?: { by: string; since: number }; // id осаждающего генерала и ход начала осады
 };
@@ -140,6 +140,8 @@ export type MapDef = {
   neutralCount?: number;
   /** Названия городов по клеткам («q,r»): нейтралы и свободные столицы получают исторические имена. */
   names?: Record<string, string>;
+  /** Клетки («q,r»), куда разбойники не заходят и возле которых не появляются. */
+  noBandits?: string[];
 };
 
 export type PlayerSetup = { nation: NationId; ruler?: string; ai?: { aggression: Aggression; ruler: string } };
@@ -253,6 +255,7 @@ export const createGame = (map: MapDef, setup: PlayerSetup[], opts: { elo: numbe
     cells: {}, halls: {}, players: {}, generals: {}, neutrals: {}, nextId: 1, log: [],
   };
   for (const c of map.cells) s.cells[key(c)] = { hex: { q: c.q, r: c.r }, terrain: c.terrain };
+  for (const k of map.noBandits ?? []) if (s.cells[k]) s.cells[k].noBandits = true;
   // на географической карте игрок стартует на родине своей нации, иначе — по порядку
   // стартовые точки: случайно (карты наций не привязаны к местам), по нации или по порядку
   let spawnOf: number[];

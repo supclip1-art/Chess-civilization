@@ -2,11 +2,13 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
   <meta http-equiv="Cache-Control" content="no-cache">
   <title>Chess Civilization</title>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <style>
+    /* без двойного тапа-зума и без масштабирования страницы щипком: зумится только карта (#map) */
+    :where(*) { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
     /* Цвета берутся из темы Telegram (переменные --tg-theme-*), вне Telegram — запасные значения. */
     :root {
       --bg: var(--tg-theme-bg-color, #f3f1ec);
@@ -171,6 +173,11 @@
     .standings .who b { display: flex; align-items: center; gap: 6px; } .standings .who .flag { border-radius: 2px; }
     .standings small { color: var(--muted); font-size: 12px; }
     .standings .score { font-weight: 700; font-size: 18px; font-variant-numeric: tabular-nums; }
+    /* цвет державы как на графиках: кольцо вокруг портрета, рамка флага и полоска слева */
+    .standings li { border-left: 5px solid var(--c); }
+    .standings .npc { display: inline-flex; border-radius: 50%; box-shadow: 0 0 0 3px var(--c); flex: none; }
+    .standings .npc svg { border-radius: 50%; display: block; }
+    .standings .fc { display: inline-flex; outline: 2.5px solid var(--c); outline-offset: 1px; border-radius: 2px; }
     .chart { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 10px 10px 8px; margin-top: 12px; }
     .chart h3 { margin: 0 0 6px; font-size: 15px; }
     .chart svg { width: 100%; height: auto; display: block; touch-action: pan-y; }

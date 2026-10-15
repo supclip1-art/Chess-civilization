@@ -4,7 +4,7 @@
 import { STARTING_ARMY, type Piece } from './config.ts';
 import { armyValue } from './economy.ts';
 import { type Hex, distance, key } from './hex.ts';
-import { findPath, move, reachable } from './map.ts';
+import { findPath, move, reachable, seizeByBandits } from './map.ts';
 import { power } from './aiwar.ts';
 import { int } from './rng.ts';
 import { type Army, type GameState, type General, PASSABLE, makeGeneral, say } from './state.ts';
@@ -16,7 +16,6 @@ const HUNT_RANGE = 6; // дальше этого разбойники добыч
 const LEASH = 8; // и не уходят от лагеря дальше
 const CALM_UNTIL = 8; // первые ходы разбойники только бродят — игрокам нужно время на армию
 const RAIDS_FROM = 12; // на города — ещё позже
-const RAID_COOLDOWN = 8; // один город грабят не чаще
 
 /** Состав шайки: в начале — как стартовая армия игрока, потом крепче. */
 export const banditArmy = (turn: number): Army =>
@@ -28,9 +27,9 @@ export const bandits = (s: GameState): General[] => Object.values(s.generals).fi
 /** Поставить шайку недалеко от столицы игрока: на ничейной земле в 5–7 клетках от неё, не вплотную к чужим городам и армиям. */
 const spawnNear = (s: GameState, pid: string): boolean => {
   const cap = Object.values(s.halls).filter((h) => h.owner === pid).sort((a, b) => a.order - b.order)[0];
-  if (!cap) return false;
+  if (!cap || s.cells[key(cap.hex)]?.noBandits) return false; // у столицы в «тихом» крае шаек нет
   const halls = Object.values(s.halls);
-  const spots = Object.values(s.cells).filter((c) => PASSABLE[c.terrain] && !c.owner
+  const spots = Object.values(s.cells).filter((c) => PASSABLE[c.terrain] && !c.owner && !c.noBandits
     && distance(c.hex, cap.hex) >= 5 && distance(c.hex, cap.hex) <= 7
     && halls.every((h) => distance(h.hex, c.hex) >= 4)
     && Object.values(s.generals).every((g) => distance(g.hex, c.hex) >= 3));
@@ -55,26 +54,8 @@ const hasBand = (s: GameState, pid: string): boolean => {
   return !!cap && bandits(s).some((b) => distance(b.camp ?? b.hex, cap.hex) <= 9);
 };
 
-/** Набег на город без защиты: разбойники уносят треть золота и ломают одно здание на его земле. */
-export const raidCity = (s: GameState, gid: string, hallId: string): void => {
-  const g = s.generals[gid];
-  const h = s.halls[hallId];
-  const p = s.players[h.owner];
-  g.attacked = true;
-  g.moveLeft = 0;
-  h.raidedAt = s.turn;
-  if (!p) return;
-  const gold = Math.floor(p.res.gold / 3);
-  p.res.gold -= gold;
-  const built = Object.values(s.cells).filter((c) => c.hall === hallId && c.building);
-  let ruined = '';
-  if (built.length) {
-    const c = built[int(s.rng, 0, built.length - 1)];
-    ruined = c.building!.kind;
-    if (c.building!.level > 1) c.building!.level--; else c.building = undefined;
-  }
-  say(s, `bandits raided ${h.name}: ${gold} gold stolen${ruined ? `, a ${ruined} damaged` : ''}`, h.owner);
-};
+/** Город без армии разбойники берут сразу: он становится вольным (нейтральным), шайка — его гарнизоном. */
+export const raidCity = (s: GameState, gid: string, hallId: string): void => seizeByBandits(s, gid, hallId);
 
 export type BanditAttack = { gid: string; target: Hex };
 
@@ -86,7 +67,7 @@ export const banditsTurn = (s: GameState): BanditAttack[] => {
   // раз в RESPAWN_EVERY ходов — новая шайка у одного игрока, рядом с которым своей шайки уже нет
   if (s.turn > 1 && s.turn % RESPAWN_EVERY === 0) {
     const lonely = s.order.filter((pid) => s.players[pid].alive && !hasBand(s, pid));
-    if (lonely.length) spawnNear(s, lonely[int(s.rng, 0, lonely.length - 1)]);
+    while (lonely.length && !spawnNear(s, lonely.splice(int(s.rng, 0, lonely.length - 1), 1)[0])); // у кого можно
   }
   const out: BanditAttack[] = [];
   for (const b of bandits(s)) {
@@ -95,6 +76,7 @@ export const banditsTurn = (s: GameState): BanditAttack[] => {
     if (armyValue(b.army) === 0) { delete s.generals[b.id]; continue; }
     const camp = b.camp ?? b.hex;
     // добыча: поселенцы, армии слабее, города без армии
+    // d — «цена» цели: расстояние; города ещё и по уровню — разбойники выбирают малоразвитые
     const prey: { hex: Hex; d: number; hallId?: string }[] = [];
     if (s.turn >= CALM_UNTIL) for (const x of Object.values(s.generals)) {
       if (!s.players[x.owner] || distance(x.hex, b.hex) > HUNT_RANGE || distance(x.hex, camp) > LEASH) continue;
@@ -103,9 +85,9 @@ export const banditsTurn = (s: GameState): BanditAttack[] => {
     }
     for (const h of Object.values(s.halls)) {
       if (s.turn < RAIDS_FROM || !s.players[h.owner] || distance(h.hex, b.hex) > HUNT_RANGE || distance(h.hex, camp) > LEASH) continue;
-      if (h.raidedAt !== undefined && s.turn - h.raidedAt < RAID_COOLDOWN) continue;
-      const guarded = Object.values(s.generals).some((x) => x.owner === h.owner && key(x.hex) === key(h.hex) && armyValue(x.army) > 0);
-      if (!guarded) prey.push({ hex: h.hex, d: distance(h.hex, b.hex), hallId: h.id });
+      const guard = Object.values(s.generals).find((x) => x.owner === h.owner && key(x.hex) === key(h.hex) && armyValue(x.army) > 0);
+      if (guard && power(b) < power(guard)) continue; // крепкий гарнизон не трогают
+      prey.push({ hex: h.hex, d: distance(h.hex, b.hex) + (h.level - 1) * 3, hallId: guard ? undefined : h.id });
     }
     prey.sort((a, z) => a.d - z.d);
     const goal = prey.find((t) => findPath(s, b.id, t.hex));

@@ -74,25 +74,34 @@ test('память карты: под туманом виден город та�
 
 test('разбойники: по шайке на игрока недалеко от его столицы, грабят город без армии, ведут историю для графиков', async () => {
   const { bandits, banditsTurn, raidCity, BANDITS, endTurn } = await import('../src/index.ts');
-  const s = newGame(europeMap(), [{ nation: 'spain' }, { nation: 'italy' }], { elo: 1200, seed: 7, bandits: 6 });
+  const m = europeMap();
+  m.randomSpawns = false; // Мадрид и Рим (не Афины — там разбойников нет)
+  m.spawnNations = ['italy', 'germany', 'france', 'spain', 'britain', 'poland', 'turkey', 'russia'];
+  const s = newGame(m, [{ nation: 'spain' }, { nation: 'italy' }], { elo: 1200, seed: 7, bandits: 6 });
   const bs = bandits(s);
+  const bs0 = bs.map((b) => b.id);
   assert.equal(bs.length, 2, 'по шайке на каждого из двух игроков');
   for (const pid of ['p1', 'p2']) {
     const cap = playerHalls(s, pid)[0];
     assert.equal(bs.filter((b) => distance(b.hex, cap.hex) >= 5 && distance(b.hex, cap.hex) <= 7).length >= 1, true, pid);
   }
   for (const b of bs) for (const h of Object.values(s.halls)) assert.ok(distance(b.hex, h.hex) >= 4);
-  // набег: треть золота и одно здание
+  // город без армии разбойники берут: он становится вольным, шайка — его гарнизоном
+  const g1 = Object.values(s.generals).find((x) => x.owner === 'p1')!;
   const cap = playerHalls(s, 'p1')[0];
-  s.players.p1.res.gold = 90;
-  raidCity(s, bs[0].id, cap.id);
-  assert.equal(s.players.p1.res.gold, 60);
+  g1.hex = { q: g1.hex.q + 5, r: g1.hex.r }; // армия ушла из города
+  const band = bs[0];
+  raidCity(s, band.id, cap.id);
+  assert.ok(s.neutrals[cap.owner], 'город стал нейтральным');
+  assert.equal(s.generals[band.id].owner, cap.owner, 'шайка стала гарнизоном');
+  assert.equal(key(s.generals[band.id].hex), key(cap.hex));
+  assert.equal(s.players.p1.alive, false, 'последний город потерян');
   // ходят раз в круг
   const before = bs.map((b) => key(b.hex)).join();
   banditsTurn(s);
   assert.deepEqual(banditsTurn(s), []);
   assert.ok(bandits(s).every((b) => b.owner === BANDITS));
-  void before;
+  void before; void bs0;
   for (let i = 0; i < 4; i++) endTurn(s);
   assert.ok((s.history?.length ?? 0) >= 2, 'сводка пишется каждый круг');
 });
@@ -113,4 +122,42 @@ test('два генерала не встают на одну клетку: ск
   assert.ok(!move(s, fresh.id, g.hex).ok);
   const path = findPath(s, fresh.id, g.hex)!;
   assert.equal(distance(path[path.length - 1], g.hex) <= 1, true, 'приказ ведёт к соседней клетке');
+});
+
+test('разбойники не появляются у Афин и не заходят в Грецию; малоразвитый город им милее', async () => {
+  const { bandits, spawnBandits, reachable, banditsTurn } = await import('../src/index.ts');
+  const m = europeMap();
+  m.randomSpawns = false;
+  m.spawnNations = ['italy', 'germany', 'france', 'spain', 'britain', 'poland', 'turkey', 'russia']; // Афины — турки
+  const s = newGame(m, [{ nation: 'turkey' }, { nation: 'italy' }], { elo: 1200, seed: 5, bandits: 6 });
+  const athens = playerHalls(s, 'p1')[0];
+  assert.equal(key(athens.hex), key(m.spawns[6]));
+  assert.ok(s.cells[key(athens.hex)].noBandits);
+  for (let i = 0; i < 5; i++) spawnBandits(s);
+  for (const b of bandits(s)) {
+    assert.ok(distance(b.hex, athens.hex) > 7, 'шайки не у Афин');
+    b.moveLeft = 30;
+    for (const k of reachable(s, b.id).keys()) assert.ok(!s.cells[k].noBandits, 'в Грецию не пройти');
+  }
+  void banditsTurn;
+});
+
+test('разбойники, разбившие армию в городе, забирают город; из двух городов выбирают менее развитый', async () => {
+  const { bandits, attack, resolveBattle, banditsTurn } = await import('../src/index.ts');
+  const m = europeMap();
+  m.randomSpawns = false;
+  m.spawnNations = ['italy', 'germany', 'france', 'spain', 'britain', 'poland', 'turkey', 'russia'];
+  const s = newGame(m, [{ nation: 'spain' }, { nation: 'italy' }], { elo: 1200, seed: 7, bandits: 6 });
+  const cap = playerHalls(s, 'p1')[0];
+  const g = Object.values(s.generals).find((x) => x.owner === 'p1')!;
+  const b = bandits(s)[0];
+  b.hex = Object.values(s.cells).find((c) => distance(c.hex, cap.hex) === 1 && c.terrain !== 'water' && c.terrain !== 'mountain')!.hex;
+  b.moveLeft = 2;
+  const r = attack(s, b.id, cap.hex);
+  assert.equal(r.kind, 'battle');
+  if (r.kind !== 'battle') return;
+  resolveBattle(s, r.attacker, r.defender, { end: 'mate', mateWinner: 'white', white: { ...b.army }, black: { p: 0, n: 0, b: 0, r: 0, q: 0 } });
+  assert.ok(s.neutrals[s.halls[cap.id].owner], 'город стал вольным');
+  assert.equal(s.generals[b.id].owner, s.halls[cap.id].owner);
+  void g; void banditsTurn;
 });

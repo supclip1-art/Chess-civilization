@@ -93,9 +93,9 @@ export const showSummary = (app: HTMLElement, s: GameState, me: string, how: 'vi
     el.innerHTML = `<div class="sumbox">
       <h1>${head}</h1><p class="muted">${esc(sub)}</p>
       <h2>Final standings</h2>
-      <ol class="standings">${rows.map((r, i) => `<li class="${r.id === me ? 'me' : ''} ${r.p.alive ? '' : 'dead'}">
-        <span class="place">${i + 1}</span>${portraitSvg(r.p.nation, rulerOf(s, r.id), 40)}
-        <div class="who"><b>${flagSvg(r.p.nation, 20)} ${esc(NATIONS[r.p.nation].name)}${r.id === me ? ' · you' : ''}</b>
+      <ol class="standings">${rows.map((r, i) => `<li class="${r.id === me ? 'me' : ''} ${r.p.alive ? '' : 'dead'}" style="--c:${ownerColor(s, r.id)}">
+        <span class="place">${i + 1}</span><span class="npc">${portraitSvg(r.p.nation, rulerOf(s, r.id), 40)}</span>
+        <div class="who"><b><span class="fc">${flagSvg(r.p.nation, 20)}</span> ${esc(NATIONS[r.p.nation].name)}${r.id === me ? ' · you' : ''}</b>
           <small>${esc(rulerOf(s, r.id))}${r.p.alive ? '' : ' · eliminated'}</small>
           <small>${r.v.cities} cit${r.v.cities === 1 ? 'y' : 'ies'} · area ${r.v.area} · army ${r.v.military} · economy ${r.v.economy}</small></div>
         <span class="score">${r.p.alive ? r.score : '—'}</span></li>`).join('')}</ol>

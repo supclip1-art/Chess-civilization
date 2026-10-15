@@ -239,4 +239,18 @@ const run = async (log: (t: string) => void) => {
 };
 
 initTelegram();
+// iOS не слушается user-scalable=no: щипок и двойной тап вне карты гасим сами (быстрые тапы по меню найма не зумят экран)
+document.addEventListener('gesturestart', (e) => e.preventDefault());
+document.addEventListener('touchmove', (e) => {
+  if (e.touches.length > 1 && !(e.target as Element | null)?.closest?.('#map')) e.preventDefault();
+}, { passive: false });
+let lastTouch = 0;
+document.addEventListener('touchend', (e) => {
+  const now = Date.now();
+  if (now - lastTouch < 350 && !(e.target as Element | null)?.closest?.('#map')) {
+    e.preventDefault(); // второй быстрый тап — не зум; сам клик отдаём кнопке вручную
+    (e.target as HTMLElement | null)?.closest<HTMLElement>('button, [data-a], label')?.click();
+  }
+  lastTouch = now;
+}, { passive: false });
 home();

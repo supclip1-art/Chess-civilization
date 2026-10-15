@@ -5,7 +5,7 @@ import { ARMY_MOVE, FOG_RADIUS, SIEGE_TURNS } from './config.ts';
 import { type Result, armyValue, hasTech, playerHalls } from './economy.ts';
 import { type Hex, distance, key, neighbors, range } from './hex.ts';
 import { NATIONS } from './nations.ts';
-import { type GameState, type General, type TownHall, PASSABLE, recomputeTerritory, say } from './state.ts';
+import { type GameState, type General, type TownHall, PASSABLE, newId, recomputeTerritory, say } from './state.ts';
 
 const no = (reason: string): Result => ({ ok: false, reason });
 
@@ -40,6 +40,7 @@ export const reachable = (s: GameState, gid: string): Map<string, number> => {
       const k = key(n);
       const c = s.cells[k];
       if (!c || !PASSABLE[c.terrain] || dist.has(k)) continue;
+      if (c.noBandits && g.owner === 'bandits') continue; // в эти края разбойники не ходят
       if (road && c.owner !== g.owner) continue;
       if (generalsAt(s, n).some((x) => x.owner !== g.owner)) continue; // чужая армия — только атакой
       const h = hallAt(s, n);
@@ -97,6 +98,7 @@ export const move = (s: GameState, gid: string, to: Hex): Result => {
 const passableFor = (s: GameState, g: General, n: Hex): boolean => {
   const c = s.cells[key(n)];
   if (!c || !PASSABLE[c.terrain]) return false;
+  if (c.noBandits && g.owner === 'bandits') return false;
   if (generalsAt(s, n).some((x) => x.owner !== g.owner)) return false;
   const h = hallAt(s, n);
   return !(h && h.owner !== g.owner);
@@ -289,7 +291,8 @@ export const resolveBattle = (s: GameState, attackerId: string, defenderId: stri
   if (out.winner !== 'attacker') return out;
   const h = hallAt(s, defHex);
   if (!h || h.owner === att.owner) return out;
-  if (!s.players[att.owner]) return out; // разбойники города не захватывают
+  if (att.owner === 'bandits') { if (!defenderAt(s, defHex, att.owner)) seizeByBandits(s, att.id, h.id); return out; }
+  if (!s.players[att.owner]) return out; // нейтралы города не захватывают
   // защитники города разбиты: если других армий в городе нет — город сразу переходит к победителю
   if (defenderAt(s, defHex, att.owner)) { h.siege = { by: att.id, since: s.turn }; return out; }
   const old = h.owner;
@@ -303,6 +306,28 @@ export const resolveBattle = (s: GameState, attackerId: string, defenderId: stri
     if (spot) { g.hex = spot; g.moveLeft = 0; } else delete s.generals[g.id];
   }
   return out;
+};
+
+/** Разбойники захватили город: он становится нейтральным, шайка садится в нём гарнизоном. */
+export const seizeByBandits = (s: GameState, gid: string, hallId: string): void => {
+  const b = s.generals[gid];
+  const h = s.halls[hallId];
+  const old = h.owner;
+  const nid = newId(s, 'n');
+  s.neutrals[nid] = { id: nid, hallId };
+  say(s, `bandits seized ${h.name} — it is a free city now`, old);
+  capture(s, hallId, nid);
+  // кто из прежних хозяев остался на клетке города (поселенец) — уходит рядом или гибнет
+  for (const g of Object.values(s.generals)) {
+    if (g.id === gid || g.owner !== old || key(g.hex) !== key(h.hex)) continue;
+    const spot = freeCellNear(s, h.hex, old, g.id);
+    if (spot && key(spot) !== key(h.hex)) g.hex = spot; else delete s.generals[g.id];
+  }
+  b.owner = nid;
+  b.hex = { ...h.hex };
+  b.name = 'Bandit garrison';
+  b.camp = undefined;
+  b.moveLeft = 0;
 };
 
 /** Начало хода осаждающего: если прошёл полный ход и подкрепление не пришло — ратуша сдаётся. */
