@@ -144,9 +144,10 @@ export const ACHIEVEMENTS: Ach[] = [
   { id: 'bandit_bane', name: 'Bandit bane', text: 'defeat bandits 3 times', xp: 200, check: () => dyn.bandits >= 3 },
   { id: 'treasure', name: 'Treasure hunter', text: 'open an epic trophy chest', xp: 200, check: (_s, _m, b) => !!b?.epic },
   { id: 'conqueror', name: 'Conqueror', text: 'take a city by force', xp: 150, check: (s, me) => playerHalls(s, me).some((h) => h.takenAt !== undefined) },
-  { id: 'constantinople', name: 'Take Constantinople', text: 'take the great neutral city of Constantinople by force', xp: 500, check: (s, me) => playerHalls(s, me).some((h) => h.name === 'Constantinople' && h.takenAt !== undefined) },
-  { id: 'genghis', name: 'Heir of Genghis Khan', text: 'conquer all of Asia: rule every city on the Asia map', xp: 1000, check: (s, me) => s.settings.map === 'Asia' && Object.values(s.halls).every((h) => h.owner === me) },
-  { id: 'charlemagne', name: 'Heir of Charlemagne', text: 'conquer all of Europe: rule every city on the Europe map', xp: 1000, check: (s, me) => s.settings.map === 'Europe' && Object.values(s.halls).every((h) => h.owner === me) },
+  { id: 'constantinople', name: 'Take Constantinople', text: 'take the great free city of Constantinople by force (Asia map)', xp: 400, check: (s, me) => playerHalls(s, me).some((h) => h.name === 'Constantinople' && h.takenAt !== undefined) },
+  { id: 'changan', name: "Take Chang'an", text: "take the great free city of Chang'an, the eastern end of the Silk Road (Asia map)", xp: 400, check: (s, me) => playerHalls(s, me).some((h) => h.name === "Chang'an" && h.takenAt !== undefined) },
+  { id: 'genghis', name: 'Heir of Genghis Khan', text: 'conquer all of Asia: rule every city on the Asia map', xp: 900, check: (s, me) => s.settings.map === 'Asia' && Object.values(s.halls).every((h) => h.owner === me) },
+  { id: 'charlemagne', name: 'Heir of Charlemagne', text: 'conquer all of Europe: rule every city on the Europe map', xp: 900, check: (s, me) => s.settings.map === 'Europe' && Object.values(s.halls).every((h) => h.owner === me) },
   { id: 'rome', name: 'All roads lead to Rome', text: 'rule Rome', xp: 200, check: (s, me) => rules(s, me, 'Rome') },
   { id: 'silk_road', name: 'Silk Road', text: 'rule Samarkand, Bukhara and Kashgar', xp: 400, check: (s, me) => ['Samarkand', 'Bukhara', 'Kashgar'].every((n) => rules(s, me, n)) },
   { id: 'kingslayer', name: 'Throne breaker', text: 'knock a nation out of the game', xp: 400, check: (s, me) => eliminatedBy(s, me) },
@@ -163,7 +164,7 @@ export const ACHIEVEMENTS: Ach[] = [
   { id: 'hero', name: 'Hero of the realm', text: 'a general with two traits', xp: 200, check: (s, me) => playerGenerals(s, me).some((g) => (g.traits?.length ?? 0) >= 2) },
   { id: 'survivor', name: 'Long reign', text: 'reach turn 50', xp: 200, check: (s, me) => s.turn >= 50 && s.players[me].alive },
   { id: 'army', name: 'Grand army', text: 'field an army worth 390 (a full set)', xp: 200, check: (s, me) => playerGenerals(s, me).some((g) => armyValue(g.army) >= 390) },
-  { id: 'victory', name: 'Unifier', text: 'win a campaign', xp: 750, check: () => dyn.wins >= 1 },
+  { id: 'victory', name: 'Unifier', text: 'win a campaign', xp: 650, check: () => dyn.wins >= 1 },
 ];
 
 /** Сумма опыта всех достижений равна опыту последней награды (Легенда, 10-й уровень): собрав все достижения,

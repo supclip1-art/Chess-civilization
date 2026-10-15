@@ -612,7 +612,10 @@ export const DICT: [string, string, string][] = [
   ["King's Indian Defense", 'Defensa india de rey', 'Староиндийская защита'], ['Slav Defense', 'Defensa eslava', 'Славянская защита'],
   ['Nimzo-Indian Defense', 'Defensa nimzoindia', 'Защита Нимцовича'], ['Grünfeld Defense', 'Defensa Grünfeld', 'Защита Грюнфельда'], ['Dutch Defense', 'Defensa holandesa', 'Голландская защита'],
   // династия
-  ['take the great neutral city of Constantinople by force', 'toma por la fuerza la gran ciudad neutral de Constantinopla', 'возьмите силой великий нейтральный город Константинополь'],
+  ['Next:', 'Siguiente:', 'Дальше:'], ['Settings', 'Ajustes', 'Настройки'], ['Build an empire. Every war is a real game of chess.', 'Construye un imperio. Cada guerra es una partida de ajedrez de verdad.', 'Постройте империю. Каждая война — настоящая шахматная партия.'],
+  ['take the great free city of Constantinople by force (Asia map)', 'toma por la fuerza la gran ciudad libre de Constantinopla (mapa de Asia)', 'возьмите силой великий вольный город Константинополь (карта «Азия»)'],
+  ["Take Chang'an", 'Tomar Chang’an', 'Взять Чанъань'],
+  ["take the great free city of Chang'an, the eastern end of the Silk Road (Asia map)", 'toma por la fuerza la gran ciudad libre de Chang’an, el extremo oriental de la Ruta de la Seda (mapa de Asia)', 'возьмите силой великий вольный город Чанъань, восточный конец Шёлкового пути (карта «Азия»)'],
   ['Heir of Charlemagne', 'Heredero de Carlomagno', 'Наследник Карла Великого'],
   ['conquer all of Europe: rule every city on the Europe map', 'conquista toda Europa: gobierna todas las ciudades del mapa de Europa', 'завоюйте всю Европу: владейте всеми городами карты «Европа»'],
   ['Throne breaker', 'Rompetronos', 'Сокрушитель тронов'],

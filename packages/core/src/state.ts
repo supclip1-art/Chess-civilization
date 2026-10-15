@@ -253,12 +253,12 @@ const addHall = (s: GameState, owner: string, hex: Hex, level: number, name?: st
   return h;
 };
 
-/** Великий город: если появляется нейтралом — второй уровень, сильный гарнизон и богатая округа. */
-export const GREAT_CITY = 'Constantinople';
+/** Великие вольные города (карта «Азия»): есть в каждой партии, второй уровень, крепкий гарнизон и богатая округа. */
+export const GREAT_CITIES = ['Constantinople', "Chang'an"];
 
 const addNeutral = (s: GameState, hex: Hex, name?: string): void => {
   const id = newId(s, 'n');
-  const great = name === GREAT_CITY;
+  const great = !!name && GREAT_CITIES.includes(name);
   const hall = addHall(s, id, hex, great ? 2 : 1, name);
   s.neutrals[id] = { id, hallId: hall.id };
   if (great) {
@@ -266,7 +266,7 @@ const addNeutral = (s: GameState, hex: Hex, name?: string): void => {
     const land = (d: number) => range(hex, d).filter((h) => distance(h, hex) === d).map((h) => s.cells[key(h)]).filter((c) => c && c.terrain !== 'water');
     land(1).forEach((c, i) => { c.terrain = i < 2 ? 'deposit' : i === 2 ? 'forest' : 'field'; });
     land(2).forEach((c, i) => { if (i === 0) c.terrain = 'deposit'; else if (i % 3 === 1 && c.terrain === 'mountain') c.terrain = 'forest'; });
-    makeGeneral(s, id, hex, s.settings.elo + 200, { ...emptyArmy(), p: 6, n: 2, b: 2, r: 1, q: 1 }, 'Garrison');
+    makeGeneral(s, id, hex, s.settings.elo + 100, { ...emptyArmy(), p: 5, n: 2, b: 1, r: 1 }, 'Garrison');
     return;
   }
   makeGeneral(s, id, hex, s.settings.elo, rollGarrison(s.rng), 'Garrison');
@@ -279,7 +279,8 @@ const pickNeutrals = (s: GameState, map: MapDef, cities: Hex[]): Hex[] => {
   if (want >= map.neutrals.length) return map.neutrals;
   const pool = [...map.neutrals];
   for (let i = pool.length - 1; i > 0; i--) { const j = int(s.rng, 0, i); [pool[i], pool[j]] = [pool[j], pool[i]]; }
-  const chosen: Hex[] = [];
+  // великие города — всегда
+  const chosen: Hex[] = pool.filter((h) => GREAT_CITIES.includes(map.names?.[key(h)] ?? ''));
   for (let gap = 7; chosen.length < want && gap >= 0; gap--) {
     for (const h of pool) {
       if (chosen.length >= want) break;

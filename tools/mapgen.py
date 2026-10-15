@@ -264,7 +264,7 @@ for name, lon, lat in NEUTRALS:
     if not (LON_MIN + 0.3 < lon < LON_MAX - 0.3 and LAT_MIN + 0.3 < lat < LAT_MAX - 0.3):
         continue  # за краем карты
     h = nearest_land(lon, lat, [s[2] for s in spawns] + [n[1] for n in neutrals])
-    if any(hdist(h, s[2]) < 5 for s in spawns):
+    if any(hdist(h, s[2]) < (4 if name in CFG.get('GREAT', ()) else 5) for s in spawns):
         continue  # слишком близко к столице игрока
     neutrals.append((name, h))
 

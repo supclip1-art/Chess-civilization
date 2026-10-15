@@ -6,6 +6,7 @@ import {
 import { Engine, profile } from './engine.ts';
 import { openGame } from './game/screen.ts';
 import { flagSvg } from './game/flags.ts';
+import { drawHero } from './hero.ts';
 import { resetTutorial } from './game/tutorial.ts';
 import { clearSave, loadGame, saveGame } from './game/save.ts';
 import { MUSIC_STYLES, audioPrefs, initAudio, page, setMusic, setMusicStyle, setSfx } from './audio.ts';
@@ -30,28 +31,56 @@ const home = () => {
   const name = userName();
   const saved = loadGame();
   const alive = saved && saved.players?.p1?.alive && saved.order.filter((id) => saved.players[id].alive).length > 1;
+  let lastNation: NationId = 'italy';
+  try { const n = localStorage.getItem('chessciv.nation') as NationId | null; if (n && NATIONS[n]) lastNation = n; } catch { /* по умолчанию */ }
+  const heroNation = alive ? saved!.players.p1.nation : lastNation;
+  const cont = alive ? (() => {
+    const s = saved!;
+    const cities = Object.values(s.halls).filter((h) => h.owner === 'p1').length;
+    const gens = Object.values(s.generals).filter((g) => g.owner === 'p1').length;
+    return `<div class="contcard"><span class="contflag">${flagSvg(s.players.p1.nation, 44)}</span>
+      <div class="conttext"><b>${esc(NATIONS[s.players.p1.nation].name)}</b><small><span>Turn ${s.turn}</span> · <span>${cities} cit${cities === 1 ? 'y' : 'ies'}</span> · <span>${gens} general${gens === 1 ? '' : 's'}</span></small></div>
+      <button id="continue" class="contbtn">Continue</button></div>`;
+  })() : '';
   render(`
-    <div><h1>Chess Civilization</h1><p class="muted">Build an empire. Every war is a real chess game.</p></div>
-    ${name ? `<p>Welcome, ${esc(name)}.</p>` : ''}
-    ${alive ? `<button id="continue">Continue · ${esc(NATIONS[saved!.players.p1.nation].name)}</button>` : ''}
-    <button id="new" ${alive ? 'class="ghost"' : ''}>New game</button>
-    ${dynastyButton()}
-    <button id="howto" class="ghost">How to play</button>
-    <div class="row"><span>Language</span><div class="seg notr" id="langs">${LANGS.map(([l, n]) => `<button data-l="${l}" class="${l === lang ? 'on' : ''}">${n}</button>`).join('')}</div></div>
-    <div class="row soundrow"><button id="music" class="ghost">Music: ${audioPrefs().music ? 'on' : 'off'}</button><button id="sfx" class="ghost">Sounds: ${audioPrefs().sfx ? 'on' : 'off'}</button></div>
-    <div class="row"><span>Music style</span><select id="mstyle">${MUSIC_STYLES.map((m) => `<option value="${m.id}" ${m.id === (audioPrefs().style || 1) ? 'selected' : ''}>${m.id}. ${esc(m.name)}</option>`).join('')}</select></div>
-    <button id="bench" class="ghost">Engine speed test</button>
-    <p class="muted">Version ${esc(__BUILD__)} · ${esc(platformLabel())}</p>
-    <p class="muted">Chess engine: <a href="https://github.com/official-stockfish/Stockfish" target="_blank" rel="noopener">Stockfish</a> (GPL-3.0). Pieces: cburnett by Colin M.L. Burnett (GPLv2+).</p>`);
+    <div class="hero"><canvas id="herocv" aria-hidden="true"></canvas>
+      <div class="herotext"><h1 class="wordmark">Chess<br>Civilization</h1><p>Build an empire. Every war is a real game of chess.</p></div></div>
+    <div class="homebody">
+      ${name ? `<p class="hello">Welcome, ${esc(name)}.</p>` : ''}
+      ${cont}
+      <button id="new" class="playbtn ${alive ? 'second' : ''}">New game</button>
+      ${dynastyButton()}
+      <div class="homerow"><button id="howto" class="ghost">How to play</button><button id="settingsbtn" class="ghost" aria-expanded="false">Settings</button></div>
+      <div class="settings" id="settings" hidden>
+        <div class="row"><span>Language</span><div class="seg notr" id="langs">${LANGS.map(([l, n]) => `<button data-l="${l}" class="${l === lang ? 'on' : ''}">${n}</button>`).join('')}</div></div>
+        <div class="row soundrow"><button id="music" class="ghost">Music: ${audioPrefs().music ? 'on' : 'off'}</button><button id="sfx" class="ghost">Sounds: ${audioPrefs().sfx ? 'on' : 'off'}</button></div>
+        <div class="row"><span>Music style</span><select id="mstyle">${MUSIC_STYLES.map((m) => `<option value="${m.id}" ${m.id === (audioPrefs().style || 1) ? 'selected' : ''}>${m.id}. ${esc(m.name)}</option>`).join('')}</select></div>
+        <button id="bench" class="ghost">Engine speed test</button>
+        <p class="muted">Version ${esc(__BUILD__)} · ${esc(platformLabel())}</p>
+        <p class="muted">Chess engine: <a href="https://github.com/official-stockfish/Stockfish" target="_blank" rel="noopener">Stockfish</a> (GPL-3.0). Pieces: cburnett by Colin M.L. Burnett (GPLv2+).</p>
+      </div>
+    </div>`);
+  void drawHero(document.getElementById('herocv') as HTMLCanvasElement, heroNation);
+  let settingsOpen = false;
+  try { settingsOpen = sessionStorage.getItem('chessciv.settings') === '1'; } catch { /* ничего */ }
+  const showSettings = (on: boolean) => {
+    settingsOpen = on;
+    document.getElementById('settings')!.hidden = !on;
+    document.getElementById('settingsbtn')!.setAttribute('aria-expanded', String(on));
+    try { sessionStorage.setItem('chessciv.settings', on ? '1' : '0'); } catch { /* ничего */ }
+  };
+  showSettings(settingsOpen);
+  on('settingsbtn', () => showSettings(!settingsOpen));
   on('continue', () => { if (saved) { onHome = false; openGame(app, saved, home); } });
   on('new', () => { page(); setup(); });
-  on('dynasty', () => { page(); openDynasty(app, home); });
+  on('dynasty', () => { page(); onHome = false; openDynasty(app, home); });
   for (const b of document.querySelectorAll<HTMLButtonElement>('#langs button')) b.addEventListener('click', () => { if (b.dataset.l !== lang) setLang(b.dataset.l as typeof lang); });
   on('music', () => { setMusic(!audioPrefs().music); home(); });
   on('sfx', () => { setSfx(!audioPrefs().sfx); home(); });
   document.getElementById('mstyle')?.addEventListener('change', (e) => setMusicStyle(Number((e.target as HTMLSelectElement).value)));
   on('bench', () => { onHome = false; bench(); });
   on('howto', () => {
+    onHome = false;
     resetTutorial();
     if (alive && saved) openGame(app, saved, home); else setup();
   });

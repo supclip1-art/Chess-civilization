@@ -1,6 +1,8 @@
 <!doctype html>
 <html lang="en">
 <head>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700&display=swap" rel="stylesheet">
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
   <meta http-equiv="Cache-Control" content="no-cache">
@@ -50,6 +52,28 @@
     .nation b { display: block; font-size: 15px; }
     .nation span { display: block; font-size: 12px; font-weight: 600; color: var(--accent); margin-top: 2px; }
     .nation small { display: block; font-size: 12px; line-height: 1.35; color: var(--muted); margin-top: 4px; }
+    /* ---------- главный экран ---------- */
+    .hero { position: relative; margin: -16px -16px 0; height: min(64vh, 420px); overflow: hidden; border-radius: 0 0 26px 26px; background: #2b2f5a; }
+    .hero canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+    .herotext { position: absolute; left: 22px; right: 22px; top: calc(20px + env(safe-area-inset-top, 0px)); color: #fbf3e2; text-shadow: 0 2px 14px rgba(20, 18, 60, .55); }
+    .wordmark { font-family: 'Cinzel', 'Trajan Pro', Georgia, serif; font-weight: 700; font-size: clamp(32px, 9.5vw, 46px); line-height: 1.02; letter-spacing: .02em; margin: 0 0 8px; }
+    .herotext p { margin: 0; font-size: 14px; line-height: 1.4; max-width: 19em; color: #f6e7c8; }
+    .homebody { position: relative; z-index: 1; display: flex; flex-direction: column; gap: 12px; margin-top: -30px; }
+    .hello { margin: 0 4px; color: var(--muted); font-size: 14px; order: 9; }
+    .contcard { display: flex; align-items: center; gap: 12px; padding: 12px 12px 12px 14px; border-radius: 18px; background: var(--card); box-shadow: 0 8px 24px rgba(40, 30, 70, .2); }
+    .contflag svg { display: block; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,.25); }
+    .conttext { flex: 1; min-width: 0; } .conttext b { display: block; font-size: 16px; } .conttext small { color: var(--muted); font-size: 12.5px; } .conttext small span { white-space: nowrap; }
+    button.contbtn { flex: none; width: auto; padding: 12px 20px; border-radius: 12px; }
+    button.playbtn { padding: 17px; border-radius: 18px; font-family: 'Cinzel', Georgia, serif; font-size: 19px; font-weight: 700; letter-spacing: .04em; color: #3a2604;
+      background: linear-gradient(#f6cf6a, #d89e2c); border: 1px solid #b07b18; box-shadow: 0 4px 0 #94650f, 0 12px 24px rgba(160, 105, 20, .35); transition: transform .08s, box-shadow .08s; }
+    button.playbtn:active { transform: translateY(3px); box-shadow: 0 1px 0 #94650f, 0 6px 12px rgba(160, 105, 20, .3); }
+    button.playbtn.second { font-size: 16px; color: var(--ink); background: var(--card); border: 1.5px solid var(--line); box-shadow: none; }
+    .dynnext { font-size: 12px; color: #6b5320; }
+    .homerow { display: flex; gap: 10px; } .homerow button { flex: 1; }
+    .settings { display: flex; flex-direction: column; gap: 10px; padding: 14px; border-radius: 16px; background: var(--card); }
+    .settings[hidden] { display: none; }
+    .settings p { margin: 0; }
+    @media (min-width: 600px) { .hero { border-radius: 0 0 26px 26px; } }
     /* ---------- династия ---------- */
     .nation.locked { opacity: .55; } .nation .lock { display: block; font-style: normal; font-size: 12px; font-weight: 600; color: var(--warn); margin-top: 6px; }
     .seg button:disabled { opacity: .5; }

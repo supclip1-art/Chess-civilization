@@ -223,6 +223,20 @@ const synth = (t: number, freq: number, dur: number, vol: number, kind: 'pad' | 
   }
 };
 
+/** Тёплый бас: долгая мягкая нота на корне аккорда (не щипок, без ритма), только низ — фильтр на 260 Гц. */
+const softBass = (t: number, freq: number, dur: number, vol: number) => {
+  const c = ctx!;
+  const g = c.createGain();
+  g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol, t + 0.08);
+  g.gain.setValueAtTime(vol * 0.8, t + Math.max(0.1, dur - 0.3)); g.gain.linearRampToValueAtTime(0, t + dur);
+  const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 260; lp.Q.value = 0.5;
+  lp.connect(g); g.connect(musicBus);
+  for (const [type, m] of [['sine', 1], ['triangle', 0.5]] as const) {
+    const o = c.createOscillator(); o.type = type; o.frequency.value = freq;
+    const og = c.createGain(); og.gain.value = m; o.connect(og); og.connect(lp); o.start(t); o.stop(t + dur + 0.05);
+  }
+};
+
 /** Мягкая «бочка» электроники и лоу-фая. */
 const kick = (t: number, vol: number) => {
   const c = ctx!;
@@ -393,7 +407,10 @@ const scheduleBar = (t: number) => {
   const st = style();
   if (!phrase || barNo % 8 === 0) phrase = makePhrase();
   const bar = barNo % 8;
-  st.accomp(t, st.chords[phrase.prog[Math.floor(bar / 2)]], bar, st);
+  const chord = st.chords[phrase.prog[Math.floor(bar / 2)]];
+  st.accomp(t, chord, bar, st);
+  // бас: корень аккорда во второй октаве, на два такта, если аккорд не меняется
+  if (bar % 2 === 0) { let r = chord[0]; while (r > 45) r -= 12; while (r < 33) r += 12; softBass(t, NOTE(r), st.beat * st.beats * 2, 0.03); }
   if (phrase.voice === 'rest') return;
   for (const x of phrase.notes[bar]) {
     const at = t + x.at * st.beat, dur = x.len * st.beat * 0.96;

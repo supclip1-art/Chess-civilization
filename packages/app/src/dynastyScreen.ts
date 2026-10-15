@@ -20,7 +20,9 @@ export const xpBar = (xp: number): string => {
 /** Кнопка династии на главном экране. */
 export const dynastyButton = (): string => {
   const d = dynasty(), l = levelOf(d.xp);
-  return `<button id="dynasty" class="dynbtn"><span class="dyncrest">${l}</span><span class="dyntext"><b>Dynasty · ${TITLES[l - 1]}</b>${xpBar(d.xp)}</span></button>`;
+  const next = UNLOCKS.filter((u) => u.level === l + 1);
+  return `<button id="dynasty" class="dynbtn"><span class="dyncrest">${l}</span><span class="dyntext"><b>Dynasty · ${TITLES[l - 1]}</b>${xpBar(d.xp)}
+    ${next.length ? `<small class="dynnext">Next: ${next.map((u) => esc(u.name)).join(', ')}</small>` : ''}</span></button>`;
 };
 
 const KIND_LABEL: Record<Unlock['kind'], string> = { skin: 'Pieces', board: 'Board', bonus: 'Start bonus', nation: 'Nation', map: 'Map' };
