@@ -256,7 +256,7 @@ export const startMarch = (s: GameState, pid: string): Result => {
   return ok;
 };
 
-/** Сколько клеток за ход проходят генералы игрока. */
+/** Сколько клеток за ход проходят генералы и поселенцы игрока (марш-бросок действует на всех). */
 export const armyMove = (s: GameState, pid: string): number => (s.players[pid]?.research.march ? ARMY_MOVE_MARCH : ARMY_MOVE);
 
 /** ELO, с которым придёт следующий нанятый генерал. */
@@ -443,7 +443,7 @@ export const completeJobs = (s: GameState, pid: string): void => {
   }
   const r = p.research.active;
   if (r && r.finish <= s.turn) { p.research.done = r.step + 1; p.research.active = undefined; }
-  if (p.research.marchFinish && p.research.marchFinish <= s.turn) { p.research.march = true; p.research.marchFinish = undefined; say(s, 'Forced march researched: generals move 3 cells', pid); }
+  if (p.research.marchFinish && p.research.marchFinish <= s.turn) { p.research.march = true; p.research.marchFinish = undefined; say(s, 'Forced march researched: generals and settlers move 3 cells', pid); }
   startQueued(s, pid);
 };
 

@@ -9,7 +9,7 @@ import {
   RESOURCE_OUTPUT, TAVERN, TOWN_HALL_FOUND, TOWN_HALL_UPGRADE, BUILDER_HIRE_FOOD, BUILDER_UPKEEP_FOOD, GENERAL_UPKEEP_FOOD, cityUpgradeCost, tavernCost, PIECES, barracksCost, buildOptions, buildingOutput, maxLevelAt, piecePrice, researchCost, researchTurns, resourceCost, aiEconomyTurn, aiMilitaryTurn, attack, endTurn, say,
   foundTownHall, freeBuilders, hireBuilder, hireGeneral, hirePiece, income, key, maxBuilders, move, playerGenerals,
   reachable, recruitElo, resolveBattle, startResearch, upgrade, upgradeBarracks, upgradeTavern, upgradeTownHall,
-  remember, upkeep, visible, winner, build, enqueue, cancelQueued, ELO_PER_RESEARCH, ARMY_MAX, hireSettler, settlerCost, SETTLER_MOVE, findPath, runOrders, armyMove, startMarch, MARCH_RESEARCH, ARMY_MOVE_MARCH, BUILDING_SLOTS, citySlots, generalLimit, nationStats, type QueueOrder, type Job, type GameState, type Hex, type Piece, type Res, type ResourceBuilding,
+  remember, upkeep, visible, winner, build, enqueue, cancelQueued, ELO_PER_RESEARCH, ARMY_MAX, hireSettler, settlerCost, findPath, runOrders, armyMove, startMarch, MARCH_RESEARCH, ARMY_MOVE_MARCH, BUILDING_SLOTS, citySlots, generalLimit, nationStats, type QueueOrder, type Job, type GameState, type Hex, type Piece, type Res, type ResourceBuilding,
 } from '../../../core/src/index.ts';
 import { autobattle, type BattleRecord } from './battle.ts';
 import { playManual, showReplay } from './fight.ts';
@@ -227,7 +227,7 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
           ${nb <= maxBuilders(s, ME) ? btn('builder', `Hire builder ${nb}`, `${NATIONS[p.nation].mods.freeBuilderHire ? 'free' : `${amount('food', BUILDER_HIRE_FOOD[nb as 2 | 3])}`} · ${NATIONS[p.nation].mods.freeBuilderUpkeep ? 'eats nothing' : `eats ${amount('food', BUILDER_UPKEEP_FOOD)}/turn`}`) : ''}
           ${barNext ? btn(`barracks:${hall.id}`, hb ? `Barracks → ${hb + 1}` : 'Build barracks', `${cost(barracksCost(s, ME, (hb + 1) as 1 | 2 | 3 | 4 | 5))} · ${barNext.turns} turn${barNext.turns > 1 ? 's' : ''} · ${PIECE_NAME[PIECES[hb]].toLowerCase()}s here`) : ''}
           ${tavNext ? btn(`tavern:${hall.id}`, ht ? `Tavern → ${ht + 1}` : 'Build tavern', `${cost(tavernCost(s, ME, (ht + 1) as 1 | 2 | 3 | 4))} · ${tavNext.turns} turn${tavNext.turns > 1 ? 's' : ''} · up to ${Math.min(5, ht + 2)} generals`) : ''}
-          ${btn(`settler:${hall.id}`, 'Train a settler', `${cost(settlerCost(s, ME))} · founds a new city · moves ${SETTLER_MOVE} cells`)}
+          ${btn(`settler:${hall.id}`, 'Train a settler', `${cost(settlerCost(s, ME))} · founds a new city · moves ${armyMove(s, ME)} cells`)}
           ${ht && gCount < generalLimit(s, ME) ? btn(`general:${hall.id}`, 'Hire a general here', `${amount('gold', gCost)} · ELO ${recruitElo(s, ME)} · eats ${amount('food', GENERAL_UPKEEP_FOOD)}/turn`) : ''}
         </div>
         <p class="muted">Buildings on its land ${citySlots(s, hall.id).used}/${citySlots(s, hall.id).max}${hall.level < 3 ? ` · level ${hall.level + 1}: ${BUILDING_SLOTS[hall.level]}` : ''} · Barracks ${hb || '—'} · Tavern ${ht || '—'}</p>
@@ -351,7 +351,7 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
       <p class="muted">Next general: ELO ${recruitElo(s, ME)}. Research needs no builder.</p>
       ${body}
       <h3 class="withico">Forced march</h3>
-      <p>A one-time upgrade: all your generals move <b>${ARMY_MOVE_MARCH} cells</b> per turn instead of 2.</p>
+      <p>A one-time upgrade: all your generals and settlers move <b>${ARMY_MOVE_MARCH} cells</b> per turn instead of 2.</p>
       ${r.march ? '<p class="muted">Researched.</p>' : r.marchFinish ? `<p class="withico">${iconSvg('clock', 16)}Researching · ${left(r.marchFinish)}</p>`
         : `<div class="acts">${btn('march', 'Research Forced march', `${cost(MARCH_RESEARCH.cost)} · ${MARCH_RESEARCH.turns} turns · generals move ${ARMY_MOVE_MARCH} cells`)}</div>`}
       <div class="acts">${btn('close', 'Close', '')}</div>`);

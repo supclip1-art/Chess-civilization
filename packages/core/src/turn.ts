@@ -2,7 +2,6 @@
 // (новое здание приносит ресурсы уже в ход, когда достроено), осады, армии готовы.
 // Конец хода — передача хода следующему живому игроку.
 
-import { SETTLER_MOVE } from './config.ts';
 import { armyMove, completeJobs, settleEconomy } from './economy.ts';
 import { resolveSieges } from './map.ts';
 import { type GameState, createGame } from './state.ts';
@@ -14,7 +13,7 @@ export const startTurn = (s: GameState): void => {
   completeJobs(s, pid);
   if (s.turn > 1) settleEconomy(s, pid); // в 1-й ход доходов ещё нет
   for (const g of Object.values(s.generals)) {
-    if (g.owner === pid) { g.moveLeft = g.settler ? SETTLER_MOVE : armyMove(s, pid); g.attacked = false; }
+    if (g.owner === pid) { g.moveLeft = armyMove(s, pid); g.attacked = false; }
     // поселенец, который основывает город, стоит на месте
     if (g.owner === pid && g.settler && s.players[pid]?.jobs.some((j) => j.kind === 'found' && j.general === g.id)) g.moveLeft = 0;
   }
