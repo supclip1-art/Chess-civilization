@@ -7,7 +7,7 @@ import {
   RESOURCE_OUTPUT, TAVERN, TOWN_HALL_FOUND, TOWN_HALL_UPGRADE, BUILDER_HIRE_FOOD, BUILDER_UPKEEP_FOOD, GENERAL_UPKEEP_FOOD, cityUpgradeCost, tavernCost, PIECES, barracksCost, buildOptions, buildingOutput, maxLevelAt, piecePrice, researchCost, researchTurns, resourceCost, aiEconomyTurn, aiMilitaryTurn, attack, endTurn, say,
   foundTownHall, freeBuilders, hireBuilder, hireGeneral, hirePiece, income, key, maxBuilders, move, playerGenerals,
   reachable, recruitElo, resolveBattle, startResearch, upgrade, upgradeBarracks, upgradeTavern, upgradeTownHall,
-  remember, upkeep, visible, winner, build, enqueue, cancelQueued, ELO_PER_RESEARCH, type QueueOrder, type Job, type GameState, type Hex, type Piece, type Res, type ResourceBuilding,
+  remember, upkeep, visible, winner, build, enqueue, cancelQueued, ELO_PER_RESEARCH, ARMY_MAX, BUILDING_SLOTS, citySlots, type QueueOrder, type Job, type GameState, type Hex, type Piece, type Res, type ResourceBuilding,
 } from '../../../core/src/index.ts';
 import { autobattle, type BattleRecord } from './battle.ts';
 import { playManual, showReplay } from './fight.ts';
@@ -154,8 +154,8 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
         if (cell.owner === ME) {
           // кнопки найма не отключаем: нажатие объясняет, чего не хватает (казарма, золото, пешки)
           html += `<p class="muted hirehead">Hire pieces into this army${p.barracks ? '' : ' — first build <b>barracks</b> in your city'}:</p>
-            <div class="acts">${PIECES.map((x) => btn(`hire:${g.id}:${x}`, PIECE_NAME[x], `${amount('gold', piecePrice(s, ME, x))}${p.barracks < HIRE_LEVEL[x] ? ` · barracks ${HIRE_LEVEL[x]}` : ''}`)
-              .replace('class="act"', `class="act${p.barracks >= HIRE_LEVEL[x] && p.res.gold >= piecePrice(s, ME, x) ? '' : ' off'}"`)).join('')}</div>`;
+            <div class="acts">${PIECES.map((x) => btn(`hire:${g.id}:${x}`, PIECE_NAME[x], `${amount('gold', piecePrice(s, ME, x))}${g.army[x] >= ARMY_MAX[x] ? ` · max ${ARMY_MAX[x]}` : p.barracks < HIRE_LEVEL[x] ? ` · barracks ${HIRE_LEVEL[x]}` : ''}`)
+              .replace('class="act"', `class="act${p.barracks >= HIRE_LEVEL[x] && p.res.gold >= piecePrice(s, ME, x) && g.army[x] < ARMY_MAX[x] ? '' : ' off'}"`)).join('')}</div>`;
         }
         if (!cell.owner && cell.terrain !== 'water' && cell.terrain !== 'mountain') {
           const m = NATIONS[p.nation].mods;
@@ -179,13 +179,13 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
       const gCost = gCount < 5 ? Math.max(0, GENERAL_HIRE_GOLD[(gCount + 1) as 2 | 3 | 4 | 5] - (NATIONS[p.nation].mods.generalHireDiscount ?? 0)) : 0;
       parts.push(`<div class="card"><div class="row"><b>${esc(hall.name)} · level ${hall.level}</b><span class="muted">builders ${freeBuilders(p)}/${p.builders} free</span></div>
         <div class="acts">
-          ${thUp ? btn(`th:${hall.id}`, `City → ${hall.level + 1}`, `${cost(cityUpgradeCost(s, ME, (hall.level + 1) as 2 | 3))} · ${thUp.turns} turn · +1 builder slot, wider land`) : ''}
+          ${thUp ? btn(`th:${hall.id}`, `City → ${hall.level + 1}`, `${cost(cityUpgradeCost(s, ME, (hall.level + 1) as 2 | 3))} · ${thUp.turns} turn · ${BUILDING_SLOTS[hall.level]} building slots, +1 builder, wider land`) : ''}
           ${nb <= maxBuilders(s, ME) ? btn('builder', `Hire builder ${nb}`, `${NATIONS[p.nation].mods.freeBuilderHire ? 'free' : `${amount('food', BUILDER_HIRE_FOOD[nb as 2 | 3])}`} · ${NATIONS[p.nation].mods.freeBuilderUpkeep ? 'eats nothing' : `eats ${amount('food', BUILDER_UPKEEP_FOOD)}/turn`}`) : ''}
           ${barNext ? btn('barracks', p.barracks ? `Barracks → ${p.barracks + 1}` : 'Build barracks', `${cost(barracksCost(s, ME, (p.barracks + 1) as 1 | 2 | 3 | 4 | 5))} · ${barNext.turns} turn${barNext.turns > 1 ? 's' : ''} · unlocks ${PIECE_NAME[PIECES[p.barracks]].toLowerCase()}s`) : ''}
           ${tavNext ? btn('tavern', p.tavern ? `Tavern → ${p.tavern + 1}` : 'Build tavern', `${cost(tavernCost(s, ME, (p.tavern + 1) as 1 | 2 | 3 | 4))} · ${tavNext.turns} turn${tavNext.turns > 1 ? 's' : ''} · ${p.tavern + 2} generals`) : ''}
           ${gCount < Math.min(5, p.tavern + 1) ? btn('general', 'Hire a general', `${amount('gold', gCost)} · ELO ${recruitElo(s, ME)} · eats ${amount('food', GENERAL_UPKEEP_FOOD)}/turn`) : ''}
         </div>
-        <p class="muted">Barracks ${p.barracks} · Tavern ${p.tavern}</p>
+        <p class="muted">Buildings on its land ${citySlots(s, hall.id).used}/${citySlots(s, hall.id).max}${hall.level < 3 ? ` · level ${hall.level + 1}: ${BUILDING_SLOTS[hall.level]}` : ''} · Barracks ${p.barracks} · Tavern ${p.tavern}</p>
         ${jobs.length ? `<p class="muted withico">${iconSvg('clock', 15)}In progress: ${jobs.map(esc).join('; ')}</p>` : ''}
         ${queue.length ? `<p class="muted">Queued — start when a builder is free:</p><div class="queue">${queue.map((q, i) => `<span>${esc(jobName(q.job))}<button class="ghost" data-a="unqueue:${i}">Cancel</button></span>`).join('')}</div>` : ''}</div>`);
     } else if (hall) {
@@ -209,7 +209,11 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
         const qi = (p.queue ?? []).findIndex((q) => q.job.kind === 'resource' && key(q.job.hex) === k);
         parts.push(`<div class="card"><p class="muted withico">${iconSvg('clock', 15)}${job ? `${esc(jobName(job))} · ${left(job.finish)}` : qi >= 0 ? `${esc(jobName(p.queue![qi].job))} queued — starts when a builder is free` : 'Construction in progress'}</p>
           ${qi >= 0 ? `<div class="acts">${btn(`unqueue:${qi}`, 'Cancel', 'resources are returned')}</div>` : ''}</div>`);
+      } else if (kinds.length && cell.hall && citySlots(s, cell.hall).used >= citySlots(s, cell.hall).max) {
+        const h = s.halls[cell.hall], sl = citySlots(s, cell.hall);
+        parts.push(`<div class="card"><p><b>${esc(h.name)}</b> has no free building slots (${sl.used}/${sl.max}).</p><p class="muted">${h.level < 3 ? `Grow the city to level ${h.level + 1} for ${BUILDING_SLOTS[h.level]} slots, ` : ''}upgrade the buildings you have, or found a new city.</p></div>`);
       } else if (kinds.length) {
+        if (cell.hall) { const sl = citySlots(s, cell.hall); parts.push(`<p class="muted">${esc(s.halls[cell.hall].name)}: ${sl.used}/${sl.max} building slots used</p>`); }
         parts.push(`<div class="acts">${kinds.map((b) => btn(`build:${k}:${b}`, `Build ${BUILDING_NAME[b].toLowerCase()}`, `${cost(resourceCost(s, ME, b, 1))} · 1 turn · +${amount(RES_OF[b], RESOURCE_OUTPUT[b][0])}/turn`)).join('')}</div>`);
       } else {
         parts.push(`<p class="muted">Nothing can be built on ${TERRAIN_NAME[cell.terrain].toLowerCase()}.</p>`);
@@ -367,9 +371,10 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
         await fightBattle(r.attacker, r.defender, true);
         continue;
       }
-      banner(`${name}: battle${target ? ` for ${target}` : ''}…`);
+      const title = `${name}: battle${target ? ` for ${target}` : ''}`;
+      banner(`${title}…`);
       const defName = ownerName(s, def.owner);
-      const rec = await autobattle(s, r.attacker, r.defender);
+      const rec = await autobattle(s, r.attacker, r.defender, (n) => banner(`${title} · move ${Math.ceil(n / 2)}`), true);
       const out = resolveBattle(s, r.attacker, r.defender, rec.report);
       say(s, `${out.winner === 'attacker' ? 'defeated' : out.winner === 'defender' ? 'was beaten by' : 'was repelled by'} ${defName}${target ? ` at ${target}` : ''}`, pid);
     }

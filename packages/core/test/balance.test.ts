@@ -6,19 +6,22 @@ import { test } from 'node:test';
 import {
   ARMY_UPKEEP_RATE, PIECES, PIECE_PRICE, RESOURCE_COST, RESOURCE_OUTPUT, HIRE_LEVEL, BUILDING_TERRAIN, armyValue, build, endTurn,
   freeBuilders, hireBuilder, hirePiece, income, newGame, playerGenerals, playerHalls, upgrade, upgradeBarracks,
-  upgradeTownHall, upkeep, type GameState, type Piece, type ResourceBuilding,
+  upgradeTownHall, upkeep, citySlots, type GameState, type Piece, type ResourceBuilding,
 } from '../src/index.ts';
 import { testMap } from './helpers.ts';
 
 const TARGET: Record<Piece, number> = { p: 8, n: 2, b: 2, r: 2, q: 1 };
 const FULL = PIECES.reduce((s, p) => s + TARGET[p] * PIECE_PRICE[p], 0);
 
-const botTurn = (s: GameState, pid: string) => {
+export const botTurn = (s: GameState, pid: string) => {
   const p = s.players[pid];
   const farms = Object.values(s.cells).filter((c) => c.owner === pid && c.building?.kind === 'farm').length;
-  const mines = Object.values(s.cells).filter((c) => c.owner === pid && c.building?.kind === 'mine').length;
+  const mines = Object.values(s.cells).filter((c) => c.owner === pid && c.building?.kind === 'mine').length
+    + p.jobs.filter((j) => j.kind === 'resource' && j.building === 'mine').length;
   const hall = playerHalls(s, pid)[0];
   if (hall.level < 2 && farms >= 2) upgradeTownHall(s, pid, hall.id);
+  const slots = citySlots(s, hall.id);
+  if (slots.used >= slots.max && hall.level < 3) upgradeTownHall(s, pid, hall.id); // мест под здания нет — город растёт
   while (hireBuilder(s, pid).ok);
   const g = playerGenerals(s, pid)[0];
   const need = Math.max(0, ...PIECES.filter((x) => g.army[x] < TARGET[x]).map((x) => HIRE_LEVEL[x]));
@@ -29,6 +32,7 @@ const botTurn = (s: GameState, pid: string) => {
     let best: { score: number; act: () => void } | null = null;
     for (const c of Object.values(s.cells)) {
       if (c.owner !== pid || c.reserved) continue;
+      if (!c.building && c.hall) { const sl = citySlots(s, c.hall); if (sl.used >= sl.max) continue; }
       const kinds = Object.keys(BUILDING_TERRAIN) as ResourceBuilding[];
       for (const kind of kinds) {
         const lvl = c.building ? (c.building.kind === kind ? c.building.level + 1 : 0) : (c.terrain === BUILDING_TERRAIN[kind] ? 1 : 0);
@@ -38,7 +42,8 @@ const botTurn = (s: GameState, pid: string) => {
         const cost = RESOURCE_COST[kind][lvl - 1];
         if (p.res.wood < cost.wood || p.res.food < cost.food) continue;
         const gain = RESOURCE_OUTPUT[kind][lvl - 1] - (RESOURCE_OUTPUT[kind][lvl - 2] ?? 0);
-        const w = kind === 'mine' ? 2.5 : kind === 'farm' && fn < 1 ? 3 : 1;
+        if (kind === 'farm' && p.res.food > 150 && fn > 15) continue; // еды в избытке — место нужнее под другое
+        const w = kind === 'mine' ? (mines || farms < 2 ? 6 : 50) : kind === 'farm' && fn < 1 ? 3 : 1;
         const score = (gain * w) / (cost.wood + cost.food);
         const hex = c.hex;
         if (!best || score > best.score) best = { score, act: () => (lvl === 1 ? build(s, pid, hex, kind) : upgrade(s, pid, hex)) };

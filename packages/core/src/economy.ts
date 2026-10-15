@@ -2,7 +2,7 @@
 // доход, содержание и голод.
 
 import {
-  ARMY_UPKEEP_RATE, BARRACKS, CITY_WOOD, BUILDER_HIRE_FOOD, BUILDER_UPKEEP_FOOD, BUILD_TURNS, ELO_PER_RESEARCH,
+  ARMY_UPKEEP_RATE, BARRACKS, BUILDING_SLOTS, CITY_WOOD, BUILDER_HIRE_FOOD, BUILDER_UPKEEP_FOOD, BUILD_TURNS, ELO_PER_RESEARCH,
   GENERAL_UPKEEP_FOOD, MAX_RESOURCE_LEVEL, PAWNS_REQUIRED, PIECE_PRICE, RESEARCH, RESOURCE_COST, RESOURCE_OF,
   RESOURCE_OUTPUT, TAVERN, TOWN_HALL_FOUND, TOWN_HALL_MAX_LEVEL, TOWN_HALL_UPGRADE,
   type Piece, type Res, type ResourceBuilding,
@@ -114,6 +114,13 @@ const turnsFor = (s: GameState, pid: string, level: number): number => {
 const isHallCell = (s: GameState, hex: Hex): boolean =>
   Object.values(s.halls).some((h) => h.hex.q === hex.q && h.hex.r === hex.r);
 
+/** Места под ресурсные здания у города: занято (здания и стройки на его земле) и всего (по уровню). */
+export const citySlots = (s: GameState, hallId: string): { used: number; max: number } => {
+  const h = s.halls[hallId];
+  const used = Object.values(s.cells).filter((c) => c.hall === hallId && (c.building || c.reserved)).length;
+  return { used, max: h ? BUILDING_SLOTS[Math.min(h.level, BUILDING_SLOTS.length) - 1] : 0 };
+};
+
 export const build = (s: GameState, pid: string, hex: Hex, kind: ResourceBuilding): Result => {
   const p = s.players[pid];
   const c = s.cells[key(hex)];
@@ -121,6 +128,10 @@ export const build = (s: GameState, pid: string, hex: Hex, kind: ResourceBuildin
   if (c.owner !== pid) return no('this land is not yours');
   if (!maxLevelAt(s, pid, c, kind)) return no('wrong terrain for this building');
   if (c.building || c.reserved || isHallCell(s, hex)) return no('the cell is taken');
+  if (c.hall) {
+    const sl = citySlots(s, c.hall);
+    if (sl.used >= sl.max) return no(`${s.halls[c.hall].name} has no free building slots (${sl.used}/${sl.max}): upgrade the city or found a new one`);
+  }
   if (freeBuilders(p) < 1) return no('no free builder');
   const cost = resourceCost(s, pid, kind, 1);
   if (!canAfford(p.res, cost)) return no('not enough resources');

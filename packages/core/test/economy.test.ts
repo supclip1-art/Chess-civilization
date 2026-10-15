@@ -202,3 +202,26 @@ test('очередь строек: оплата сразу, старт, когд
   assert.ok(p.res.wood > w2);
   assert.equal(p.queue!.length, 0);
 });
+
+test('места под здания зависят от уровня города; армия не больше шахматного набора', async () => {
+  const { citySlots, BUILDING_SLOTS, hirePiece } = await import('../src/index.ts');
+  const s = newGame(testMap(), [{ nation: 'germany' }, { nation: 'france' }], { elo: 1200, seed: 3 });
+  const p = s.players.p1;
+  p.res = { wood: 5000, food: 5000, gold: 5000 };
+  p.builders = 9;
+  const hall = playerHalls(s, 'p1')[0];
+  const free = Object.values(s.cells).filter((c) => c.owner === 'p1' && c.hall === hall.id && (c.terrain === 'field' || c.terrain === 'forest' || c.terrain === 'deposit') && !(c.hex.q === hall.hex.q && c.hex.r === hall.hex.r));
+  hall.level = 3; // все клетки радиуса 3, но мест на 1-м уровне меньше
+  hall.level = 1;
+  let built = 0;
+  for (const c of free) if (build(s, 'p1', c.hex, c.terrain === 'field' ? 'farm' : c.terrain === 'forest' ? 'sawmill' : 'mine').ok) built++;
+  assert.equal(built, Math.min(free.length, BUILDING_SLOTS[0]));
+  assert.equal(citySlots(s, hall.id).used, built);
+  const g = Object.values(s.generals).find((x) => x.owner === 'p1')!;
+  p.barracks = 5;
+  g.army = { p: 8, n: 2, b: 0, r: 0, q: 0 };
+  assert.equal(hirePiece(s, 'p1', g.id, 'p').ok, false);
+  assert.equal(hirePiece(s, 'p1', g.id, 'n').ok, false);
+  assert.ok(hirePiece(s, 'p1', g.id, 'q').ok);
+  assert.equal(hirePiece(s, 'p1', g.id, 'q').ok, false);
+});

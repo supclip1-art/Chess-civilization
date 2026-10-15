@@ -45,6 +45,8 @@ export const TOWN_HALL_UPGRADE: Record<2 | 3, { cost: Res; turns: number }> = {
 export const TOWN_HALL_FOUND = { cost: res(100, 80), turns: 2 };
 /** Радиус зоны охвата по уровню ратуши. */
 export const TOWN_HALL_RADIUS = [1, 2, 3] as const;
+/** Сколько ресурсных зданий (вместе со стройками) может быть на земле города по его уровню. */
+export const BUILDING_SLOTS = [5, 8, 12] as const;
 /** Найм 2-го и 3-го строителя (еда). Предел строителей = уровень самой высокой ратуши. */
 export const BUILDER_HIRE_FOOD: Record<2 | 3, number> = { 2: 40, 3: 80 };
 export const BUILDER_UPKEEP_FOOD = 10; // за каждого нанятого, первый бесплатный
@@ -64,6 +66,9 @@ export const HIRE_LEVEL: Record<Piece, number> = { p: 1, n: 2, b: 3, r: 4, q: 5 
 /** Цена фигур в золоте = шахматная ценность × 10: пешка 10, конь и слон 30, ладья 50, ферзь 90. */
 export const PIECE_PRICE: Record<Piece, number> = { p: 10, n: 30, b: 30, r: 50, q: 90 };
 /** Шахматная ценность для подсчёта материала на 150-м полуходе. */
+/** Больше, чем в обычном шахматном наборе, в армии не бывает: 8 пешек, по 2 коня, слона и ладьи, 1 ферзь. */
+export const ARMY_MAX: Record<Piece, number> = { p: 8, n: 2, b: 2, r: 2, q: 1 };
+
 export const PIECE_VALUE: Record<Piece, number> = { p: 1, n: 3, b: 3, r: 5, q: 9 };
 /** Правило строя: сколько пешек нужно в армии, чтобы держать фигуру. */
 export const PAWNS_REQUIRED: Record<Piece, number> = { p: 0, n: 4, b: 6, r: 8, q: 8 };

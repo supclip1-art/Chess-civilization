@@ -1,6 +1,6 @@
 // Автосохранение партии в хранилище устройства (localStorage). Сервер с копиями — позже.
 
-import { type GameState, cityName } from '../../../core/src/index.ts';
+import { ARMY_MAX, PIECES, type GameState, cityName } from '../../../core/src/index.ts';
 
 const KEY = 'chessciv.save.v1';
 
@@ -20,6 +20,8 @@ export const loadGame = (): GameState | null => {
     }
     // сохранения до появления названий городов
     for (const h of Object.values(s.halls).sort((a, b) => a.order - b.order)) h.name ??= cityName(s, h.owner);
+    // армии больше обычного шахматного набора (до лимита) урезаем
+    for (const g of Object.values(s.generals)) for (const x of PIECES) g.army[x] = Math.min(g.army[x], ARMY_MAX[x]);
     return s;
   } catch { return null; }
 };

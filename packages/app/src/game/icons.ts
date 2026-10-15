@@ -60,13 +60,24 @@ const CLOCK = `
   <path d="M12 6.4V12l3.8 2.4" stroke="#2a2a26" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
   <g fill="#2a2a26"><circle cx="12" cy="3.9" r="0.8"/><circle cx="20.1" cy="12" r="0.8"/><circle cx="12" cy="20.1" r="0.8"/><circle cx="3.9" cy="12" r="0.8"/></g>`;
 
-/** Тактика — свиток с планом боя. */
+/** Шестерёнка: n зубьев, внешний и внутренний радиус. */
+const gearPath = (cx: number, cy: number, ro: number, ri: number, n: number, rot = 0): string => {
+  const pts: string[] = [];
+  for (let i = 0; i < n * 4; i++) {
+    const a = ((i / (n * 4)) * 360 + rot) * Math.PI / 180;
+    const r = i % 4 < 2 ? ro : ri;
+    pts.push(`${(cx + r * Math.cos(a)).toFixed(2)} ${(cy + r * Math.sin(a)).toFixed(2)}`);
+  }
+  return `M${pts.join('L')}Z`;
+};
+
+/** Тактика — круглый медальон с двумя сцепленными шестерёнками. */
 const TACTICS = `
-  <path d="M5 4.5h11.5a2.5 2.5 0 0 1 2.5 2.5v12.5H7.5A2.5 2.5 0 0 1 5 17z" fill="#f4e6c3" stroke="#6b4f1d" stroke-width="1.2" stroke-linejoin="round"/>
-  <path d="M5 17a2.5 2.5 0 0 0 2.5 2.5h11" stroke="#6b4f1d" stroke-width="1.2" fill="none"/>
-  <path d="M8.5 8.5l2.5 2.5M11 8.5l-2.5 2.5" stroke="#c0392b" stroke-width="1.4" stroke-linecap="round"/>
-  <path d="M10.5 15.5q3-0.5 4.5-4.5" stroke="#2a2a26" stroke-width="1.1" stroke-dasharray="1.4 1.1" fill="none"/>
-  <path d="M15.8 9.6l-0.9 1.9-1.6-1.3" stroke="#2a2a26" stroke-width="1.1" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`;
+  <circle cx="12" cy="12" r="11" fill="#2f4a6b" stroke="#c9a54a" stroke-width="1.4"/>
+  <path d="${gearPath(9.4, 10.2, 5.4, 4.2, 8)}" fill="#e8c766" stroke="#7a5a12" stroke-width="0.6" stroke-linejoin="round"/>
+  <circle cx="9.4" cy="10.2" r="1.7" fill="#2f4a6b"/>
+  <path d="${gearPath(15.6, 15.4, 3.9, 3, 7, 12)}" fill="#cfd6de" stroke="#4b535b" stroke-width="0.6" stroke-linejoin="round"/>
+  <circle cx="15.6" cy="15.4" r="1.2" fill="#2f4a6b"/>`;
 
 const BODY: Record<IconName, string> = { food: WHEAT, farm: WHEAT, wood: LOG, gold: COIN, sawmill: SAW, mine: PICK, fishery: FISH, clock: CLOCK, tactics: TACTICS };
 

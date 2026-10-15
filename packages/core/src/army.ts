@@ -1,7 +1,7 @@
 // Армии и генералы: правило строя, найм фигур и генералов, обмен фигурами, итог боя.
 
 import {
-  ELO_PER_WIN, GENERAL_HIRE_GOLD, HIRE_LEVEL, MAX_GENERALS, MAX_STARS, PAWNS_REQUIRED, PIECES, PIECE_PRICE,
+  ARMY_MAX, ELO_PER_WIN, GENERAL_HIRE_GOLD, HIRE_LEVEL, MAX_GENERALS, MAX_STARS, PAWNS_REQUIRED, PIECES, PIECE_PRICE,
   PIECE_VALUE, type Piece,
 } from './config.ts';
 import { type Result, mods, piecePrice, playerGenerals, playerHalls, recruitElo } from './economy.ts';
@@ -9,6 +9,7 @@ import { distance, key } from './hex.ts';
 import { type Army, type GameState, emptyArmy, makeGeneral, say } from './state.ts';
 
 const ok: Result = { ok: true };
+const PIECE_NAMES: Record<Piece, string> = { p: 'pawn', n: 'knight', b: 'bishop', r: 'rook', q: 'queen' };
 const no = (reason: string): Result => ({ ok: false, reason });
 
 /** Правило строя: коням нужно 4 пешки, слонам 6, ладьям и ферзю 8. */
@@ -25,6 +26,7 @@ export const hirePiece = (s: GameState, pid: string, gid: string, piece: Piece):
   if (!g || g.owner !== pid) return no('not your general');
   if (!inOwnTerritory(s, pid, gid)) return no('the general must stand on your land');
   if (p.barracks < HIRE_LEVEL[piece]) return no(p.barracks ? `needs barracks level ${HIRE_LEVEL[piece]} — upgrade it in your city` : 'build barracks in your city first: tap the city, then Build barracks');
+  if (g.army[piece] >= ARMY_MAX[piece]) return no(`an army holds at most ${ARMY_MAX[piece]} ${PIECE_NAMES[piece]}${ARMY_MAX[piece] > 1 ? 's' : ''}`);
   const price = piecePrice(s, pid, piece);
   if (p.res.gold < price) return no('not enough gold');
   const next = { ...g.army, [piece]: g.army[piece] + 1 };
@@ -63,6 +65,7 @@ export const transfer = (s: GameState, pid: string, fromId: string, toId: string
     from[p] -= n; to[p] += n;
   }
   if (!formationOk(from) || !formationOk(to)) return no('the exchange would break the formation rule');
+  if (PIECES.some((x) => to[x] > ARMY_MAX[x])) return no('too many pieces of one kind for one army');
   a.army = from; b.army = to;
   return ok;
 };

@@ -6,7 +6,7 @@ import { ARMY_UPKEEP_RATE, BARRACKS, GENERAL_UPKEEP_FOOD, PIECES, PIECE_PRICE, H
 import { hireGeneral, hirePiece } from './army.ts';
 import {
   build, buildOptions, freeBuilders, mods, resourceCost, hireBuilder, income, playerGenerals, playerHalls, startResearch, upgrade, upgradeBarracks,
-  upgradeTavern, upgradeTownHall, upkeep,
+  upgradeTavern, upgradeTownHall, upkeep, citySlots, cityUpgradeCost,
 } from './economy.ts';
 import { key } from './hex.ts';
 import { BUILDING_TERRAIN, type GameState } from './state.ts';
@@ -38,16 +38,39 @@ export const aiEconomyTurn = (s: GameState, pid: string): void => {
       if (!upgradeBarracks(s, pid).ok) reserve = BARRACKS[(p.barracks + 1) as 1 | 2 | 3 | 4 | 5].cost;
     }
   }
+  // города, где кончились места под здания, растут, если на это хватает ресурсов сверх резерва на казарму
+  for (const h of playerHalls(s, pid).sort((a, b) => a.level - b.level)) {
+    const sl = citySlots(s, h.id);
+    if (h.level >= 3 || sl.used < sl.max || freeBuilders(p) < 1) continue;
+    const c = cityUpgradeCost(s, pid, (h.level + 1) as 2 | 3);
+    if (p.res.wood - c.wood >= reserve.wood && p.res.food - c.food >= reserve.food) upgradeTownHall(s, pid, h.id);
+  }
   const halls = new Set(Object.values(s.halls).map((h) => key(h.hex)));
   for (let guard = 0; guard < 6 && freeBuilders(p) > 0; guard++) {
     const foodNet = income(s, pid).food - upkeep(s, pid);
+    const have = (k: ResourceBuilding) => count(s, pid, k) + p.jobs.filter((j) => j.kind === 'resource' && j.building === k).length;
+    const reserveCache = new Map<string, ResourceBuilding[]>();
+    const reserveFor = (hallId: string): ResourceBuilding[] => {
+      if (reserveCache.has(hallId)) return reserveCache.get(hallId)!;
+      const sl = citySlots(s, hallId);
+      const land = Object.values(s.cells).filter((x) => x.hall === hallId && !x.building && !x.reserved);
+      const missing = (['sawmill', 'mine'] as const).filter((k) => !have(k) && land.some((x) => x.terrain === BUILDING_TERRAIN[k]));
+      const out = sl.max - sl.used <= missing.length ? [...missing] : [];
+      reserveCache.set(hallId, out);
+      return out;
+    };
+    const full = new Set(playerHalls(s, pid).filter((h) => { const sl = citySlots(s, h.id); return sl.used >= sl.max; }).map((h) => h.id));
     let best: { score: number; run: () => void } | null = null;
     for (const c of Object.values(s.cells)) {
       if (c.owner !== pid || c.reserved || halls.has(key(c.hex))) continue;
       if (c.building && p.jobs.some((j) => j.kind === 'resource' && key(j.hex) === key(c.hex))) continue;
+      if (!c.building && c.hall && full.has(c.hall)) continue; // у города нет мест под новые здания
+      // последние места города держим под ещё не построенные лесопилку и рудник, если для них есть земля
+      const reserved = !c.building && c.hall ? reserveFor(c.hall) : [];
       for (const { kind, maxLevel } of buildOptions(s, pid, c)) {
         const level = c.building ? (c.building.kind === kind ? c.building.level + 1 : 0) : 1;
         if (!level || level > maxLevel) continue;
+        if (level === 1 && reserved.length && !reserved.includes(kind)) continue;
         const cost = resourceCost(s, pid, kind, level);
         if (p.res.wood < cost.wood || p.res.food < cost.food) continue;
         const food = kind === 'farm' || kind === 'fishery';
@@ -56,7 +79,11 @@ export const aiEconomyTurn = (s: GameState, pid: string): void => {
         if (kind !== 'sawmill' && p.res.wood - cost.wood < keepForSaw) continue;
         const gain = RESOURCE_OUTPUT[kind][level - 1] - (RESOURCE_OUTPUT[kind][level - 2] ?? 0);
         // золото в масштабе ×10 дороже еды; при большом избытке еды фермы не нужны
-        const weight = kind === 'sawmill' && !sawmills && farms >= 2 ? 50 : kind === 'mine' ? 6 : hungry ? 3 : food && foodNet > 40 ? 0.3 : 1;
+        // мест под здания мало: ресурс, которого и так в избытке, не строим — место нужнее под дефицитный
+        const glut = food ? p.res.food > 150 && foodNet > 15 : kind === 'sawmill' && sawmills > 0 && p.res.wood > 250;
+        const weight = kind === 'sawmill' && !sawmills && farms >= 2 ? 50 : kind === 'mine' ? (sawmills && have('mine') === 1 && farms >= 3 ? 15 : 6)
+          : hungry ? 3 : glut ? 0 : food && foodNet > 40 ? 0.3 : 1;
+        if (!weight) continue;
         const score = (gain * weight) / (cost.wood + cost.food);
         const hex = c.hex;
         if (!best || score > best.score) best = { score, run: () => { level === 1 ? build(s, pid, hex, kind) : upgrade(s, pid, hex); } };
