@@ -350,10 +350,14 @@ export const resolveSieges = (s: GameState, pid: string): void => {
 export const capture = (s: GameState, hallId: string, newOwner: string): void => {
   const h = s.halls[hallId];
   const old = h.owner;
+  // Япония («Замки»): взятый ею город ничего не теряет — ни здания, ни уровень
+  const keep = !!s.players[newOwner] && !!NATIONS[s.players[newOwner].nation].mods.castles;
   for (const c of Object.values(s.cells)) {
     if (c.hall !== hallId) continue;
-    if (c.building && c.building.level > 1) c.building.level--;
-    else c.building = undefined;
+    if (!keep) {
+      if (c.building && c.building.level > 1) c.building.level--;
+      else c.building = undefined;
+    }
     c.reserved = false;
   }
   const oldPlayer = s.players[old];
@@ -362,7 +366,7 @@ export const capture = (s: GameState, hallId: string, newOwner: string): void =>
       !(j.kind === 'resource' && s.cells[key(j.hex)]?.hall === hallId) && !((j.kind === 'townhall' || j.kind === 'barracks' || j.kind === 'tavern') && j.hallId === hallId));
     oldPlayer.queue = oldPlayer.queue?.filter((q) => !('hallId' in q.job && q.job.hallId === hallId));
   }
-  if (!(oldPlayer && NATIONS[oldPlayer.nation].mods.castles)) { // японский замок ничего не теряет
+  if (!keep) {
     h.level = Math.max(1, h.level - 1);
     h.builders = Math.min(h.builders ?? 1, h.level);
     if (h.barracks) h.barracks--;

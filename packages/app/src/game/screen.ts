@@ -588,10 +588,11 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
     }
     const mineId = mineG.id;
     const before = { ...mineG.army };
+    const vsBandits = [attackerId, defenderId].some((id) => s.generals[id]?.owner === 'bandits');
     const out = resolveBattle(s, attackerId, defenderId, rec.report);
     saveGame(s);
     const iWon = out.winner === (defending ? 'defender' : 'attacker');
-    const headline = out.winner === null ? (defending ? 'The attack is repelled' : 'Draw') : iWon ? 'Victory' : 'Defeat';
+    const headline = out.winner === null ? (vsBandits ? 'The bandits scattered' : defending ? 'The attack is repelled' : 'Draw') : iWon ? 'Victory' : 'Defeat';
     const mine = s.generals[mineId];
     const left = mine ? PIECES.filter((x) => mine.army[x]).map((x) => `${mine.army[x]} ${PIECE_NAME[x].toLowerCase()}${mine.army[x] > 1 ? 's' : ''}`).join(', ') || 'no pieces' : 'your general fell';
     const lost = mine ? PIECES.reduce((n, x) => n + Math.max(0, before[x] - mine.army[x]), 0) : null;

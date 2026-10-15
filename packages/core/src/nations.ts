@@ -43,7 +43,7 @@ export type Mods = {
   researchTurnsMinus?: number; // Индия
   researchCostMult?: number; // Корея
   startBonus?: Res; // Бангладеш
-  castles?: boolean; // Япония: город не теряет уровень при захвате, осада — 2 хода
+  castles?: boolean; // Япония: захваченный ею город не теряет уровень и здания, осада японского города — 2 хода
   piecePrice?: Partial<Record<Piece, number>>; // Вьетнам
 };
 
@@ -128,7 +128,7 @@ export const NATIONS: Record<NationId, Nation> = {
     ['Gwanggaeto the Great', 'Taejo of Goryeo', 'Sejong the Great'],
     'Seoul, Gyeongju, Kaesong, Pyongyang, Busan, Daegu, Gwangju, Jeonju, Suwon, Incheon, Daejeon, Ulsan',
     { researchCostMult: 0.75 }),
-  japan: N('japan', 'Japan', 'Castles', 'Your cities keep their level when captured, and a siege of a Japanese city lasts 2 turns.',
+  japan: N('japan', 'Japan', 'Castles', 'Cities you capture keep their level, buildings, barracks and tavern, and a siege of a Japanese city lasts 2 turns.',
     ['Oda Nobunaga', 'Tokugawa Ieyasu', 'Prince Shōtoku'],
     'Kyoto, Edo, Osaka, Nara, Kamakura, Nagoya, Sendai, Hiroshima, Kanazawa, Nagasaki, Fukuoka, Sapporo',
     { castles: true }),

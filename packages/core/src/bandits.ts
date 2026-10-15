@@ -1,7 +1,7 @@
 // Бродячие разбойники, как варвары в «Цивилизации»: несколько армий бродят по карте, нападают на слабые армии,
 // убивают поселенцев и грабят города без защиты. Их можно разбить — это обычный шахматный бой.
 
-import { STARTING_ARMY, type Piece } from './config.ts';
+import { ARMY_MAX, PIECE_PRICE, STARTING_ARMY, type Piece } from './config.ts';
 import { armyValue } from './economy.ts';
 import { type Hex, distance, key } from './hex.ts';
 import { findPath, move, reachable, seizeByBandits } from './map.ts';
@@ -17,9 +17,22 @@ const LEASH = 8; // и не уходят от лагеря дальше
 const CALM_UNTIL = 8; // первые ходы разбойники только бродят — игрокам нужно время на армию
 const RAIDS_FROM = 12; // на города — ещё позже
 
-/** Состав шайки: в начале — как стартовая армия игрока, потом крепче. */
-export const banditArmy = (turn: number): Army =>
-  turn < 20 ? { ...STARTING_ARMY } : turn < 40 ? { p: 6, n: 1, b: 1, r: 0, q: 0 } : { p: 8, n: 2, b: 1, r: 1, q: 0 };
+/** Состав новой шайки: по средней силе самой мощной армии каждого живого игрока (не слабее стартовой армии). */
+export const banditArmy = (s: GameState): Army => {
+  const alive = s.order.filter((pid) => s.players[pid].alive);
+  const best = alive.map((pid) => Math.max(0, ...Object.values(s.generals).filter((g) => g.owner === pid && !g.settler).map((g) => armyValue(g.army))));
+  const target = best.length ? best.reduce((a, b) => a + b, 0) / best.length : 0;
+  const army: Army = { ...STARTING_ARMY };
+  // докупаем фигуры по порядку, пока не дотянем до цели (не больше полного состава)
+  const ORDER: Piece[] = ['p', 'p', 'p', 'p', 'b', 'r', 'n', 'b', 'r', 'q'];
+  let value = armyValue(army);
+  for (const p of ORDER) {
+    if (army[p] >= ARMY_MAX[p] || value + PIECE_PRICE[p] / 2 > target) continue;
+    army[p]++;
+    value += PIECE_PRICE[p];
+  }
+  return army;
+};
 
 export const isBandit = (s: GameState, gid: string): boolean => s.generals[gid]?.owner === BANDITS;
 export const bandits = (s: GameState): General[] => Object.values(s.generals).filter((g) => g.owner === BANDITS);
@@ -35,7 +48,7 @@ const spawnNear = (s: GameState, pid: string): boolean => {
     && Object.values(s.generals).every((g) => distance(g.hex, c.hex) >= 3));
   if (!spots.length) return false;
   const c = spots[int(s.rng, 0, spots.length - 1)];
-  const g = makeGeneral(s, BANDITS, { ...c.hex }, s.settings.elo, banditArmy(s.turn), 'Bandits');
+  const g = makeGeneral(s, BANDITS, { ...c.hex }, s.settings.elo, banditArmy(s), 'Bandits');
   g.moveLeft = 0;
   g.camp = { ...c.hex };
   return true;

@@ -199,6 +199,8 @@ export const applyBattle = (s: GameState, attackerId: string, defenderId: string
   say(s, `battle: ${out.note}`, att.owner);
   const loser = out.winner === 'attacker' ? def : out.winner === 'defender' ? att : null;
   if (loser) defeat(s, loser.id);
+  // ничья с разбойниками: шайка рассеивается; новая появится по расписанию, уже по силе армий игроков
+  else for (const g of [att, def]) if (g.owner === 'bandits') { delete s.generals[g.id]; say(s, 'the bandits scattered after a drawn battle', g === att ? def.owner : att.owner); }
   for (const pid of [att.owner, def.owner]) {
     if (s.players[pid] && playerGenerals(s, pid).every((g) => g.army.n === 0)) s.players[pid].starterKnight = false;
   }

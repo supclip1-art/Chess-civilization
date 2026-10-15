@@ -161,3 +161,37 @@ test('разбойники, разбившие армию в городе, за�
   assert.equal(s.generals[b.id].owner, s.halls[cap.id].owner);
   void g; void banditsTurn;
 });
+
+test('Япония: взятый японцами город ничего не теряет, а японский город при захвате теряет уровень', async () => {
+  const { capture } = await import('../src/index.ts');
+  const s = newGame(europeMap(), [{ nation: 'japan' }, { nation: 'italy' }], { elo: 1200, seed: 2 });
+  const jp = playerHalls(s, 'p1')[0], it = playerHalls(s, 'p2')[0];
+  for (const h of [jp, it]) { h.level = 3; h.barracks = 2; }
+  const farmOf = (hallId: string) => Object.values(s.cells).find((c) => c.hall === hallId && c.terrain === 'field' && key(c.hex) !== key(s.halls[hallId].hex))!;
+  const jf = farmOf(jp.id), itf = farmOf(it.id);
+  jf.building = { kind: 'farm', level: 2 };
+  itf.building = { kind: 'farm', level: 2 };
+  capture(s, it.id, 'p1');
+  assert.equal(it.level, 3); assert.equal(it.barracks, 2);
+  assert.equal(itf.building?.level, 2, 'японцы здания не ломают');
+  capture(s, jp.id, 'p2');
+  assert.equal(jp.level, 2); assert.equal(jp.barracks, 1); assert.equal(jf.building?.level, 1);
+});
+
+test('разбойники: ничья — шайка рассеивается; новая шайка по средней силе лучших армий игроков', async () => {
+  const { bandits, banditArmy, applyBattle, armyValue } = await import('../src/index.ts');
+  const m = europeMap();
+  m.randomSpawns = false;
+  m.spawnNations = ['italy', 'germany', 'france', 'spain', 'britain', 'poland', 'turkey', 'russia'];
+  const s = newGame(m, [{ nation: 'spain' }, { nation: 'italy' }], { elo: 1200, seed: 7, bandits: 6 });
+  assert.equal(armyValue(banditArmy(s)), 70, 'в начале — как стартовая армия');
+  const [g1, g2] = ['p1', 'p2'].map((pid) => Object.values(s.generals).find((x) => x.owner === pid)!);
+  g1.army = { p: 8, n: 2, b: 2, r: 2, q: 1 }; // 390
+  g2.army = { p: 8, n: 1, b: 1, r: 0, q: 0 }; // 140
+  const v = armyValue(banditArmy(s));
+  assert.ok(Math.abs(v - 265) <= 30, `сила шайки ${v}`);
+  const b = bandits(s)[0];
+  applyBattle(s, b.id, g2.id, { end: 'draw', white: { ...b.army }, black: { ...g2.army } } as never);
+  assert.equal(s.generals[b.id], undefined, 'шайка рассеялась');
+  assert.ok(s.generals[g2.id]);
+});
