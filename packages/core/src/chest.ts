@@ -11,7 +11,7 @@ export type ChestReward =
   | { kind: 'piece'; piece: Piece; rarity: 'rare' }
   | { kind: 'scroll'; elo: number; rarity: 'rare' };
 
-/** Шансы: золото 45%, припасы 25%, фигура 15%, свиток ELO 10%, клад 5%. */
+/** Шансы: припасы 45%, золото 25%, фигура 15%, свиток ELO 10%, клад 5% (клад — с 15-го хода, до этого его доля уходит свитку: 15%). */
 export const openChest = (s: GameState, pid: string, gid: string): ChestReward | undefined => {
   const p = s.players[pid];
   const g = s.generals[gid];
@@ -19,10 +19,11 @@ export const openChest = (s: GameState, pid: string, gid: string): ChestReward |
   const roll = next(s.rng);
   let r: ChestReward;
   const piece = (['n', 'b', 'p', 'r'] as Piece[]).find((x) => g.army[x] < ARMY_MAX[x]);
-  if (roll < 0.05) r = { kind: 'gold', amount: int(s.rng, 100, 150), rarity: 'epic' };
+  const hoard = s.turn >= 15;
+  if (hoard && roll < 0.05) r = { kind: 'gold', amount: int(s.rng, 100, 150), rarity: 'epic' };
   else if (roll < 0.15 && g.elo + 25 <= eloCap(s)) r = { kind: 'scroll', elo: 25, rarity: 'rare' };
   else if (roll < 0.30 && piece) r = { kind: 'piece', piece, rarity: 'rare' };
-  else if (roll < 0.55) r = { kind: 'supplies', res: { wood: int(s.rng, 6, 12) * 10, food: int(s.rng, 5, 10) * 10, gold: 0 }, rarity: 'common' };
+  else if (roll < 0.75) r = { kind: 'supplies', res: { wood: int(s.rng, 6, 12) * 10, food: int(s.rng, 5, 10) * 10, gold: 0 }, rarity: 'common' };
   else r = { kind: 'gold', amount: int(s.rng, 2, 4) * 10, rarity: 'common' };
   if (r.kind === 'gold') p.res.gold += r.amount;
   if (r.kind === 'supplies') { p.res.wood += r.res.wood; p.res.food += r.res.food; }

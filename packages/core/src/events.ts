@@ -39,8 +39,9 @@ const candidates = (s: GameState, pid: string): { kind: EventKind; w: number; ha
   }
   const upgradable = sick.filter((h) => buildingsOf(s, h.id).some((c) => c.building!.level < 5));
   if (upgradable.length) out.push({ kind: 'master', w: 0.8, hallId: upgradable[int(s.rng, 0, upgradable.length - 1)].id });
-  const taken = halls.filter((h) => h.takenAt !== undefined);
-  if (taken.length) out.push({ kind: 'revolt', w: 3, hallId: taken[int(s.rng, 0, taken.length - 1)].id });
+  // бунт — только в последнем покорённом городе
+  const last = halls.filter((h) => h.takenAt !== undefined).sort((a, b) => b.takenAt! - a.takenAt!)[0];
+  if (last) out.push({ kind: 'revolt', w: 3, hallId: last.id });
   if (p.res.gold >= MERCENARY_GOLD && playerGenerals(s, pid).length < MAX_GENERALS && halls.length) out.push({ kind: 'mercenaries', w: 2 });
   if (p.res.wood >= 60) out.push({ kind: 'fire', w: 1.5 });
   return out;
@@ -166,7 +167,9 @@ export const resolveEvent = (s: GameState, pid: string, ev: PendingEvent, choice
 /** Карта каравана: неизведанная суша радиусом 4 вокруг случайной неизвестной клетки — в память игрока. */
 const revealRegion = (s: GameState, pid: string): boolean => {
   const mem = ((s.memory ??= {})[pid] ??= {});
-  const unknown = Object.values(s.cells).filter((c) => c.terrain !== 'water' && !mem[key(c.hex)]);
+  // центр участка — неизведанная суша, вокруг которой суши не меньше половины
+  const landShare = (h: { q: number; r: number }) => { const area = range(h, 4).map((x) => s.cells[key(x)]); return area.filter((c) => c && c.terrain !== 'water').length / area.length; };
+  const unknown = Object.values(s.cells).filter((c) => c.terrain !== 'water' && !mem[key(c.hex)] && landShare(c.hex) >= 0.5);
   if (!unknown.length) return false;
   const center = unknown[int(s.rng, 0, unknown.length - 1)].hex;
   for (const h of range(center, 4)) {
