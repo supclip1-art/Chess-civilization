@@ -27,11 +27,12 @@ export const botTurn = (s: GameState, pid: string) => {
   const need = Math.max(0, ...PIECES.filter((x) => g.army[x] < TARGET[x]).map((x) => HIRE_LEVEL[x]));
   if (mines >= 1 && (hall.barracks ?? 0) < need) upgradeBarracks(s, pid, hall.id);
   // жадная стройка: лучшая выработка на единицу цены
-  for (let guard = 0; guard < 4 && freeBuilders(p) > 0; guard++) {
+  for (let guard = 0; guard < 4 && freeBuilders(s, pid) > 0; guard++) {
     const fn = income(s, pid).food - upkeep(s, pid);
     let best: { score: number; act: () => void } | null = null;
     for (const c of Object.values(s.cells)) {
       if (c.owner !== pid || c.reserved) continue;
+      if (!c.hall || freeBuilders(s, pid, c.hall) < 1) continue;
       if (!c.building && c.hall) { const sl = citySlots(s, c.hall); if (sl.used >= sl.max) continue; }
       const kinds = Object.keys(BUILDING_TERRAIN) as ResourceBuilding[];
       for (const kind of kinds) {

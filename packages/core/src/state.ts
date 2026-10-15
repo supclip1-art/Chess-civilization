@@ -36,6 +36,7 @@ export type TownHall = {
   barracks?: number; // казарма города: какие фигуры можно нанять на его земле (0 / нет — не построена)
   tavern?: number; // таверна города: в ней нанимают генералов
   raidedAt?: number; // ход последнего набега разбойников
+  builders?: number; // строители города (нет — один)
   siege?: { by: string; since: number }; // id осаждающего генерала и ход начала осады
 };
 
@@ -72,7 +73,6 @@ export type Player = {
   nation: NationId;
   ai?: { aggression: Aggression; ruler: string; lastWar?: number }; // lastWar — ход последнего нападения на игрока
   res: Res;
-  builders: number;
   /** Правитель игрока (у ИИ — ai.ruler). */
   ruler?: string;
   /** «Тактика»: done ступеней +ELO; march — марш-бросок (генералы ходят на 3 клетки), marchFinish — когда изучится. */
@@ -101,6 +101,8 @@ export type GameState = {
   log: { turn: number; player?: string; text: string }[];
   /** Ход, в котором разбойники уже походили. */
   banditsAt?: number;
+  /** С кем игрок уже знаком: видел его земли, генерала или поселенца. */
+  met?: Record<string, Record<string, true>>;
   /** Сводки держав по ходам — для графиков в конце кампании. */
   history?: { turn: number; p: Record<string, { economy: number; military: number; cities: number; area: number }> }[];
   /** Что игрок видел на клетках, когда они были открыты (как в «Цивилизации»): под туманом войны
@@ -253,7 +255,7 @@ export const createGame = (map: MapDef, setup: PlayerSetup[], opts: { elo: numbe
     const hex = map.spawns[spawnOf[i]];
     s.order.push(id);
     s.players[id] = {
-      id, nation: p.nation, ai: p.ai, builders: 1, ruler: p.ruler ?? p.ai?.ruler,
+      id, nation: p.nation, ai: p.ai, ruler: p.ruler ?? p.ai?.ruler,
       res: { wood: START_RESOURCES.wood + (NATIONS[p.nation].mods.startBonus?.wood ?? 0), food: START_RESOURCES.food + (NATIONS[p.nation].mods.startBonus?.food ?? 0), gold: START_RESOURCES.gold + (NATIONS[p.nation].mods.startBonus?.gold ?? 0) },
       research: { done: 0 }, jobs: [], starterKnight: true, alive: true,
     };

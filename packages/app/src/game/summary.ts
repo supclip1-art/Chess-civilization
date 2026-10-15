@@ -80,7 +80,7 @@ export const showSummary = (app: HTMLElement, s: GameState, me: string, how: 'vi
       const score = p.alive ? finalScore(v) : 0;
       return { id, p, v, score, peak: Math.max(0, ...hist.map((h) => (h.p[id] ? finalScore(h.p[id]) : 0))) };
     }).sort((a, b) => b.score - a.score || b.peak - a.peak);
-    const series = (k: 'economy' | 'military'): Series[] => s.order.map((id) => ({
+    const series = (k: 'economy' | 'military' | 'area'): Series[] => s.order.map((id) => ({
       id, name: NATIONS[s.players[id].nation].name, color: ownerColor(s, id)!,
       points: hist.filter((h) => h.p[id]).map((h) => ({ turn: h.turn, v: h.p[id][k] })),
     })).filter((x) => x.points.length);
@@ -102,6 +102,7 @@ export const showSummary = (app: HTMLElement, s: GameState, me: string, how: 'vi
       <p class="muted">Strength = economy × 2 + military + area × 3 + 25 per city. Eliminated nations score nothing.</p>
       ${lineChart('Economy', series('economy'), 'Income per turn after feeding the army, gold counted ×4. Tap the chart to see a turn.')}
       ${lineChart('Military', series('military'), 'Value of all pieces, stronger with the generals’ ELO. Tap the chart to see a turn.')}
+      ${lineChart('Territory', series('area'), 'Cells of land each nation holds. Tap the chart to see a turn.')}
       <div class="legend">${series('economy').map((x) => `<span><i style="background:${x.color}"></i>${esc(x.name)}</span>`).join('')}</div>
       <button id="sumdone">Back to menu</button></div>`;
     app.appendChild(el);

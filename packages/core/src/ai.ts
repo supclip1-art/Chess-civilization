@@ -28,7 +28,7 @@ export const aiEconomyTurn = (s: GameState, pid: string): void => {
   const farms = count(s, pid, 'farm') + count(s, pid, 'fishery') + p.jobs.filter((j) => j.kind === 'resource' && (j.building === 'farm' || j.building === 'fishery')).length;
   const keepForSaw = sawmills || farms < 2 ? 0 : resourceCost(s, pid, 'sawmill', 1).wood;
   if (sawmills && capital.level < 2 && count(s, pid, 'farm') + count(s, pid, 'fishery') >= 2) upgradeTownHall(s, pid, capital.id);
-  while (hireBuilder(s, pid).ok);
+  for (const h of playerHalls(s, pid)) while (hireBuilder(s, pid, h.id).ok);
   const g = playerGenerals(s, pid).sort((a, b) => Number(a.id.slice(1)) - Number(b.id.slice(1)))[0];
   // казарма — узкое место армии: если она нужна, но не хватило ресурсов, копим на неё и не тратим на стройку
   let reserve = { wood: 0, food: 0 };
@@ -42,12 +42,12 @@ export const aiEconomyTurn = (s: GameState, pid: string): void => {
   // города, где кончились места под здания, растут, если на это хватает ресурсов сверх резерва на казарму
   for (const h of playerHalls(s, pid).sort((a, b) => a.level - b.level)) {
     const sl = citySlots(s, h.id);
-    if (h.level >= 3 || sl.used < sl.max || freeBuilders(p) < 1) continue;
+    if (h.level >= 3 || sl.used < sl.max || freeBuilders(s, pid, h.id) < 1) continue;
     const c = cityUpgradeCost(s, pid, (h.level + 1) as 2 | 3);
     if (p.res.wood - c.wood >= reserve.wood && p.res.food - c.food >= reserve.food) upgradeTownHall(s, pid, h.id);
   }
   const halls = new Set(Object.values(s.halls).map((h) => key(h.hex)));
-  for (let guard = 0; guard < 6 && freeBuilders(p) > 0; guard++) {
+  for (let guard = 0; guard < 6 && freeBuilders(s, pid) > 0; guard++) {
     const foodNet = income(s, pid).food - upkeep(s, pid);
     const have = (k: ResourceBuilding) => count(s, pid, k) + p.jobs.filter((j) => j.kind === 'resource' && j.building === k).length;
     const reserveCache = new Map<string, ResourceBuilding[]>();
@@ -64,6 +64,7 @@ export const aiEconomyTurn = (s: GameState, pid: string): void => {
     let best: { score: number; run: () => void } | null = null;
     for (const c of Object.values(s.cells)) {
       if (c.owner !== pid || c.reserved || halls.has(key(c.hex))) continue;
+      if (!c.hall || freeBuilders(s, pid, c.hall) < 1) continue; // строители этого города заняты
       if (c.building && p.jobs.some((j) => j.kind === 'resource' && key(j.hex) === key(c.hex))) continue;
       if (!c.building && c.hall && full.has(c.hall)) continue; // у города нет мест под новые здания
       // последние места города держим под ещё не построенные лесопилку и рудник, если для них есть земля

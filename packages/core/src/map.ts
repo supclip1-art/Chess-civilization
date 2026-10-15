@@ -182,10 +182,13 @@ export const visible = (s: GameState, pid: string): Set<string> => {
 /** Запомнить, что игрок видит сейчас: владельцев клеток, здания и города. Под туманом карта показывает эту память. */
 export const remember = (s: GameState, pid: string, seen: Set<string> = visible(s, pid)): void => {
   const mem = ((s.memory ??= {})[pid] ??= {});
+  const met = ((s.met ??= {})[pid] ??= {});
+  for (const g of Object.values(s.generals)) if (g.owner !== pid && s.players[g.owner] && seen.has(key(g.hex))) met[g.owner] = true;
   const hallAt = new Map(Object.values(s.halls).map((h) => [key(h.hex), h]));
   for (const k of seen) {
     const c = s.cells[k];
     const h = hallAt.get(k);
+    if (c.owner && c.owner !== pid && s.players[c.owner]) met[c.owner] = true;
     mem[k] = {
       turn: s.turn,
       owner: c.owner,
@@ -194,6 +197,10 @@ export const remember = (s: GameState, pid: string, seen: Set<string> = visible(
     };
   }
 };
+
+/** Знаком ли игрок pid с державой other (видел её земли, генерала или поселенца). */
+export const hasMet = (s: GameState, pid: string, other: string): boolean =>
+  pid === other || !!s.met?.[pid]?.[other] || Object.values(s.memory?.[pid] ?? {}).some((m) => m.owner === other);
 
 // ---------- Атака и осада ----------
 
@@ -296,6 +303,7 @@ export const capture = (s: GameState, hallId: string, newOwner: string): void =>
   }
   if (!(oldPlayer && NATIONS[oldPlayer.nation].mods.castles)) { // японский замок ничего не теряет
     h.level = Math.max(1, h.level - 1);
+    h.builders = Math.min(h.builders ?? 1, h.level);
     if (h.barracks) h.barracks--;
     if (h.tavern) h.tavern--;
   }

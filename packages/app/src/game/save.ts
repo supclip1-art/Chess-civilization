@@ -24,6 +24,9 @@ export const loadGame = (): GameState | null => {
     for (const p of Object.values(s.players) as (typeof s.players[string] & { barracks?: number; tavern?: number })[]) {
       const cap = Object.values(s.halls).filter((h) => h.owner === p.id).sort((a, b) => a.order - b.order)[0];
       if (cap && p.barracks !== undefined) { cap.barracks = Math.max(cap.barracks ?? 0, p.barracks); cap.tavern = Math.max(cap.tavern ?? 0, p.tavern ?? 0); }
+      const pb = (p as { builders?: number }).builders;
+      if (cap && pb && cap.builders === undefined) cap.builders = Math.min(pb, cap.level); // строители были общими — теперь у столицы
+      delete (p as { builders?: number }).builders;
       delete p.barracks; delete p.tavern;
       for (const j of [...p.jobs, ...(p.queue ?? []).map((q) => q.job)]) if ((j.kind === 'barracks' || j.kind === 'tavern') && !j.hallId && cap) j.hallId = cap.id;
     }

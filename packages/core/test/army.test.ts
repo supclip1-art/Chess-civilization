@@ -218,3 +218,13 @@ test('осада снимается, если защитник привёл ар
   endTurn(s);
   assert.equal(playerHalls(s, 'p2').length, 1);
 });
+
+test('после потерь строй нарушен — пешку нанять всё равно можно', () => {
+  const s = game();
+  const g = gen(s, 'p1');
+  playerHalls(s, 'p1')[0].barracks = 2;
+  s.players.p1.res.gold = 500;
+  g.army = army({ p: 2, n: 1 }); // коню нужно 4 пешки
+  assert.ok(hirePiece(s, 'p1', g.id, 'p').ok);
+  assert.equal(hirePiece(s, 'p1', g.id, 'n').ok, false);
+});

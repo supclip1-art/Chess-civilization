@@ -9,7 +9,7 @@ import {
   RESOURCE_OUTPUT, TAVERN, TOWN_HALL_FOUND, TOWN_HALL_UPGRADE, BUILDER_HIRE_FOOD, BUILDER_UPKEEP_FOOD, GENERAL_UPKEEP_FOOD, cityUpgradeCost, tavernCost, PIECES, barracksCost, buildOptions, buildingOutput, maxLevelAt, piecePrice, researchCost, researchTurns, resourceCost, aiEconomyTurn, aiMilitaryTurn, attack, endTurn, say,
   foundTownHall, freeBuilders, hireBuilder, hireGeneral, hirePiece, income, key, maxBuilders, move, playerGenerals,
   reachable, recruitElo, resolveBattle, startResearch, upgrade, upgradeBarracks, upgradeTavern, upgradeTownHall,
-  remember, upkeep, visible, winner, build, enqueue, cancelQueued, ELO_PER_RESEARCH, ARMY_MAX, banditsTurn, recordHistory, hireSettler, settlerCost, findPath, runOrders, armyMove, startMarch, MARCH_RESEARCH, ARMY_MOVE_MARCH, BUILDING_SLOTS, citySlots, generalLimit, nationStats, type QueueOrder, type Job, type GameState, type Hex, type Piece, type Res, type ResourceBuilding,
+  remember, upkeep, visible, winner, build, enqueue, cancelQueued, ELO_PER_RESEARCH, ARMY_MAX, hasMet, jobHall, hallBuilders, banditsTurn, recordHistory, hireSettler, settlerCost, findPath, runOrders, armyMove, startMarch, MARCH_RESEARCH, ARMY_MOVE_MARCH, BUILDING_SLOTS, citySlots, generalLimit, nationStats, type QueueOrder, type Job, type GameState, type Hex, type Piece, type Res, type ResourceBuilding,
 } from '../../../core/src/index.ts';
 import { autobattle, type BattleRecord } from './battle.ts';
 import { playManual, showReplay } from './fight.ts';
@@ -80,8 +80,9 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
     if (!on) return;
     app.querySelector('#veilturn')!.textContent = 'Other rulers are making their moves';
     const who = [...s.order.filter((id) => s.players[id].alive), 'bandits'];
+    // о незнакомых державах игрок ничего не знает: вместо флага — знак вопроса
     app.querySelector('#veilflags')!.innerHTML = who.map((id) => `<span class="${id === active ? 'on' : ''} ${who.indexOf(id) < who.indexOf(active ?? '') ? 'done' : ''}">${id === 'bandits'
-      ? '<b class="bandflag">☠</b>' : flagSvg(s.players[id].nation, 34)}</span>`).join('');
+      ? '<b class="bandflag">☠</b>' : hasMet(s, ME, id) ? flagSvg(s.players[id].nation, 34) : '<b class="bandflag unknown">?</b>'}</span>`).join('');
   };
   const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
   const act = (r: { ok: boolean; reason?: string }) => {
@@ -233,19 +234,20 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
     if (hall && unitPicked) {
       parts.push(`<p class="muted">Tap the cell again to open ${esc(hall.name)}.</p>`);
     } else if (hall && hall.owner === ME) {
-      const jobs = p.jobs.map((j) => `${jobName(j)} (${left(j.finish)})`);
-      const queue = p.queue ?? [];
+      // стройки и очередь — только этого города (у каждого города свои строители)
+      const jobs = p.jobs.filter((j) => jobHall(s, j) === hall.id).map((j) => `${jobName(j)} (${left(j.finish)})`);
+      const queue = (p.queue ?? []).map((q, i) => ({ q, i })).filter(({ q }) => jobHall(s, q.job) === hall.id);
       const thUp = hall.level < 3 ? TOWN_HALL_UPGRADE[(hall.level + 1) as 2 | 3] : null;
-      const nb = p.builders + 1;
+      const nb = hallBuilders(hall) + 1;
       const hb = hall.barracks ?? 0, ht = hall.tavern ?? 0;
       const barNext = hb < 5 ? BARRACKS[(hb + 1) as 1 | 2 | 3 | 4 | 5] : null;
       const tavNext = ht < 4 ? TAVERN[(ht + 1) as 1 | 2 | 3 | 4] : null;
       const gCount = playerGenerals(s, ME).length;
       const gCost = gCount < 5 ? Math.max(0, GENERAL_HIRE_GOLD[(gCount + 1) as 2 | 3 | 4 | 5] - (NATIONS[p.nation].mods.generalHireDiscount ?? 0)) : 0;
-      parts.push(`<div class="card"><div class="row"><b>${esc(hall.name)} · level ${hall.level}</b><span class="muted">builders ${freeBuilders(p)}/${p.builders} free</span></div>
+      parts.push(`<div class="card"><div class="row"><b>${esc(hall.name)} · level ${hall.level}</b><span class="muted">builders ${freeBuilders(s, ME, hall.id)}/${hallBuilders(hall)} free</span></div>
         <div class="acts">
           ${thUp ? btn(`th:${hall.id}`, `City → ${hall.level + 1}`, `${cost(cityUpgradeCost(s, ME, (hall.level + 1) as 2 | 3))} · ${thUp.turns} turn · ${BUILDING_SLOTS[hall.level]} building slots, +1 builder, wider land`) : ''}
-          ${nb <= maxBuilders(s, ME) ? btn('builder', `Hire builder ${nb}`, `${NATIONS[p.nation].mods.freeBuilderHire ? 'free' : `${amount('food', BUILDER_HIRE_FOOD[nb as 2 | 3])}`} · ${NATIONS[p.nation].mods.freeBuilderUpkeep ? 'eats nothing' : `eats ${amount('food', BUILDER_UPKEEP_FOOD)}/turn`}`) : ''}
+          ${nb <= maxBuilders(s, ME, hall.id) ? btn(`builder:${hall.id}`, `Hire builder ${nb}`, `${NATIONS[p.nation].mods.freeBuilderHire ? 'free' : `${amount('food', BUILDER_HIRE_FOOD[nb as 2 | 3])}`} · ${NATIONS[p.nation].mods.freeBuilderUpkeep ? 'eats nothing' : `eats ${amount('food', BUILDER_UPKEEP_FOOD)}/turn`}`) : ''}
           ${barNext ? btn(`barracks:${hall.id}`, hb ? `Barracks → ${hb + 1}` : 'Build barracks', `${cost(barracksCost(s, ME, (hb + 1) as 1 | 2 | 3 | 4 | 5))} · ${barNext.turns} turn${barNext.turns > 1 ? 's' : ''} · ${PIECE_NAME[PIECES[hb]].toLowerCase()}s here`) : ''}
           ${tavNext ? btn(`tavern:${hall.id}`, ht ? `Tavern → ${ht + 1}` : 'Build tavern', `${cost(tavernCost(s, ME, (ht + 1) as 1 | 2 | 3 | 4))} · ${tavNext.turns} turn${tavNext.turns > 1 ? 's' : ''} · up to ${Math.min(5, ht + 2)} generals`) : ''}
           ${btn(`settler:${hall.id}`, 'Train a settler', `${cost(settlerCost(s, ME))} · founds a new city · moves ${armyMove(s, ME)} cells`)}
@@ -253,7 +255,7 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
         </div>
         <p class="muted">Buildings on its land ${citySlots(s, hall.id).used}/${citySlots(s, hall.id).max}${hall.level < 3 ? ` · level ${hall.level + 1}: ${BUILDING_SLOTS[hall.level]}` : ''} · Barracks ${hb || '—'} · Tavern ${ht || '—'}</p>
         ${jobs.length ? `<p class="muted withico">${iconSvg('clock', 15)}In progress: ${jobs.map(esc).join('; ')}</p>` : ''}
-        ${queue.length ? `<p class="muted">Queued — start when a builder is free:</p><div class="queue">${queue.map((q, i) => `<span>${esc(jobName(q.job))}<button class="ghost" data-a="unqueue:${i}">Cancel</button></span>`).join('')}</div>` : ''}</div>`);
+        ${queue.length ? `<p class="muted">Queued — start when a builder is free:</p><div class="queue">${queue.map(({ q, i }) => `<span>${esc(jobName(q.job))}<button class="ghost" data-a="unqueue:${i}">Cancel</button></span>`).join('')}</div>` : ''}</div>`);
     } else if (hall) {
       parts.push(`<div class="card"><div class="row"><b>${esc(hall.name)} · city level ${hall.level}</b>${s.players[hall.owner] ? nationBtn(hall.owner) : ''}</div><p class="muted">${esc(ownerName(s, hall.owner))}${hall.siege ? ' · under siege' : ''}${hall.barracks ? ` · barracks ${hall.barracks}` : ''}${hall.tavern ? ` · tavern ${hall.tavern}` : ''}</p></div>`);
     }
@@ -302,7 +304,7 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
     if (order) { construct(order, b.querySelector('b')?.textContent ?? 'this'); return; }
     if (a === 'hire') act(hirePiece(s, ME, x, y as Piece));
     else if (a === 'found') { const r = foundTownHall(s, ME, x); act(r); if (r.ok) { sel = {}; refresh(); } }
-    else if (a === 'builder') act(hireBuilder(s, ME));
+    else if (a === 'builder') act(hireBuilder(s, ME, x));
     else if (a === 'general') act(hireGeneral(s, ME, x));
     else if (a === 'settler') { const r = hireSettler(s, ME, x); act(r); if (r.ok) toast('A settler is ready in the city. He can move next turn.'); }
     else if (a === 'unqueue') act(cancelQueued(s, ME, Number(x)));
@@ -320,14 +322,15 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
   });
 
   const construct = async (order: QueueOrder, label: string) => { // label — надпись кнопки
-    if (freeBuilders(s.players[ME]) > 0) { act(enqueue(s, ME, order)); return; }
+    const hid = order.kind === 'build' || order.kind === 'upgrade' ? s.cells[key(order.hex)]?.hall : order.hallId;
+    if (!hid || freeBuilders(s, ME, hid) > 0) { act(enqueue(s, ME, order)); return; }
     if (order.kind === 'upgrade') { const b = s.cells[key(order.hex)]?.building; if (b) label = `${BUILDING_NAME[b.kind]} → ${b.level + 1}`; }
     if (order.kind === 'build') label = BUILDING_NAME[order.building];
     // сначала проверяем на копии, что стройку вообще можно оплатить и начать
     const dry = enqueue(structuredClone(s), ME, order);
     if (!dry.ok) { act(dry); return; }
-    const busyWith = s.players[ME].jobs.filter((j) => j.kind !== 'found').map((j) => `${jobName(j)} (${left(j.finish)})`).join(', ');
-    modal(`<h2>All builders are busy</h2><p>${esc(busyWith)}</p><p>Put <b>${esc(label)}</b> in the queue? You pay now; construction starts as soon as a builder is free. You can cancel it in the city and get the resources back.</p>
+    const busyWith = s.players[ME].jobs.filter((j) => jobHall(s, j) === hid).map((j) => `${jobName(j)} (${left(j.finish)})`).join(', ');
+    modal(`<h2>All builders of ${esc(s.halls[hid].name)} are busy</h2><p>${esc(busyWith)}</p><p>Put <b>${esc(label)}</b> in the queue? You pay now; construction starts as soon as a builder is free. You can cancel it in the city and get the resources back.</p>
       <div class="acts">${btn('queue', 'Add to queue', 'starts when a builder is free')}${btn('cancel', 'Not now', '')}</div>`);
     const c = await ask();
     modal(null);
@@ -480,15 +483,16 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
         veil(true, 'bandits');
         continue;
       }
-      banner(`Bandits attack ${ownerName(s, def.owner)}…`);
-      const rec = await autobattle(s, r.attacker, r.defender, (n) => banner(`Bandits attack ${ownerName(s, def.owner)} · move ${Math.ceil(n / 2)}`), true);
+      const victim = hasMet(s, ME, def.owner) ? ownerName(s, def.owner) : 'an unknown nation';
+      banner(`Bandits attack ${victim}…`);
+      const rec = await autobattle(s, r.attacker, r.defender, (n) => banner(`Bandits attack ${victim} · move ${Math.ceil(n / 2)}`), true);
       resolveBattle(s, r.attacker, r.defender, rec.report);
     }
   };
 
   /** Ход компьютерной страны: экономика, затем походы и бои. Бои ИИ против ИИ и нейтралов идут без показа. */
   const aiTurn = async (pid: string) => {
-    const name = ownerName(s, pid);
+    const name = hasMet(s, ME, pid) ? ownerName(s, pid) : 'An unknown ruler';
     aiEconomyTurn(s, pid);
     for (const a of aiMilitaryTurn(s, pid)) {
       const r = attack(s, a.gid, a.target);
@@ -504,7 +508,8 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
         veil(true, pid);
         continue;
       }
-      const title = `${name}: battle${target ? ` for ${target}` : ''}`;
+      // название чужого города — только если игрок его видел
+      const title = `${name}: battle${target && hasMet(s, ME, def.owner) ? ` for ${target}` : ''}`;
       banner(`${title}…`);
       const defName = ownerName(s, def.owner);
       const rec = await autobattle(s, r.attacker, r.defender, (n) => banner(`${title} · move ${Math.ceil(n / 2)}`), true);
@@ -552,7 +557,7 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
       while (s.order[s.current] !== ME && s.players[ME].alive && !winner(s)) {
         const pid = s.order[s.current];
         veil(true, pid);
-        banner(`${ownerName(s, pid)} is thinking…`);
+        banner(`${hasMet(s, ME, pid) ? ownerName(s, pid) : 'An unknown ruler'} is thinking…`);
         const t0 = performance.now();
         await aiTurn(pid);
         await sleep(Math.max(0, 450 - (performance.now() - t0))); // чтобы глаз успевал заметить каждую страну
@@ -576,7 +581,7 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
     const marched = s.players[ME].alive ? runOrders(s, ME) : [];
     saveGame(s);
     const news = s.log.slice(from).filter((e) => e.player === ME || /captured|out of the game|siege of/.test(e.text));
-    const notes = [...news.map((e) => `${e.player && e.player !== ME ? ownerName(s, e.player) + ': ' : ''}${e.text[0].toUpperCase()}${e.text.slice(1)}`), ...marched.map((m) => `General ${m.text}`)];
+    const notes = [...news.map((e) => `${e.player && e.player !== ME ? (hasMet(s, ME, e.player) ? ownerName(s, e.player) : 'An unknown nation') + ': ' : ''}${e.text[0].toUpperCase()}${e.text.slice(1)}`), ...marched.map((m) => `General ${m.text}`)];
     if (notes.length) toast(notes.map((n) => `• ${n}`).join('\n'));
     const stopped = marched.find((m) => s.generals[m.gid] && /stopped|blocked/.test(m.text));
     if (stopped) { sel = { hex: s.generals[stopped.gid].hex, gid: stopped.gid }; view.centerOn(s.generals[stopped.gid].hex); }
@@ -634,7 +639,7 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
     if (r.kind === 'siege') {
       saveGame(s);
       toast('Siege begins: the city falls at the start of your next turn unless reinforcements arrive.');
-      sel = { hex: s.generals[gid].hex, gid };
+      sel = {};
       refresh();
       return;
     }

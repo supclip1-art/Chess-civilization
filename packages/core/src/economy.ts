@@ -81,24 +81,42 @@ export const tavernCost = (s: GameState, pid: string, level: 1 | 2 | 3 | 4): Res
 // ---------- Строители ----------
 
 /** Стройки, которые занимают строителя (основание ратуши ведёт генерал, а не строитель). */
-export const busyBuilders = (p: Player): number => p.jobs.filter((j) => j.kind !== 'found').length;
-export const freeBuilders = (p: Player): number => p.builders - busyBuilders(p);
+/** Строители у каждого города свои (по умолчанию один). */
+export const hallBuilders = (h: { builders?: number }): number => h.builders ?? 1;
+
+/** Город, чей строитель занят этой стройкой (основание города ведёт поселенец — строитель не нужен). */
+export const jobHall = (s: GameState, j: Job): string | undefined =>
+  j.kind === 'resource' ? s.cells[key(j.hex)]?.hall : j.kind === 'found' ? undefined : j.hallId;
+
+export const busyBuilders = (s: GameState, pid: string, hallId: string): number =>
+  s.players[pid].jobs.filter((j) => jobHall(s, j) === hallId).length;
+/** Свободные строители города; без hallId — всех городов игрока вместе. */
+export const freeBuilders = (s: GameState, pid: string, hallId?: string): number => {
+  if (hallId) { const h = s.halls[hallId]; return h && h.owner === pid ? hallBuilders(h) - busyBuilders(s, pid, hallId) : 0; }
+  return playerHalls(s, pid).reduce((n, h) => n + Math.max(0, hallBuilders(h) - busyBuilders(s, pid, h.id)), 0);
+};
+const noBuilder = (s: GameState, hallId?: string) => no(`all builders of ${hallId ? s.halls[hallId]?.name ?? 'this city' : 'this city'} are busy`);
 
 export const playerHalls = (s: GameState, pid: string) => Object.values(s.halls).filter((h) => h.owner === pid);
 
-/** Предел строителей задаёт самая высокая ратуша страны. */
-export const maxBuilders = (s: GameState, pid: string): number =>
-  Math.min(TOWN_HALL_MAX_LEVEL, Math.max(0, ...playerHalls(s, pid).map((h) => h.level)));
+/** Предел строителей города — его уровень. Без hallId — столица. */
+export const maxBuilders = (s: GameState, pid: string, hallId?: string): number => {
+  const h = hallId ? s.halls[hallId] : playerHalls(s, pid).sort((a, b) => a.order - b.order)[0];
+  return h ? Math.min(TOWN_HALL_MAX_LEVEL, h.level) : 0;
+};
 
-export const hireBuilder = (s: GameState, pid: string): Result => {
+/** Нанять строителя в город (без hallId — в первый город, где есть место). */
+export const hireBuilder = (s: GameState, pid: string, hallId?: string): Result => {
   const p = s.players[pid];
-  const n = p.builders + 1;
-  if (n > maxBuilders(s, pid)) return no('upgrade your city first');
+  const h = hallId ? s.halls[hallId] : playerHalls(s, pid).sort((a, b) => a.order - b.order).find((x) => hallBuilders(x) < Math.min(TOWN_HALL_MAX_LEVEL, x.level));
+  if (!h || h.owner !== pid) return no(hallId ? 'not your city' : 'upgrade a city first');
+  const n = hallBuilders(h) + 1;
+  if (n > maxBuilders(s, pid, h.id)) return no(`${h.name} needs a higher level for another builder`);
   const food = mods(s, pid).freeBuilderHire ? 0 : BUILDER_HIRE_FOOD[n as 2 | 3];
   if (p.res.food < food) return no('not enough food');
   p.res.food -= food;
-  p.builders = n;
-  say(s, `builder ${n} hired`, pid);
+  h.builders = n;
+  say(s, `builder ${n} hired in ${h.name}`, pid);
   startQueued(s, pid);
   return ok;
 };
@@ -132,7 +150,7 @@ export const build = (s: GameState, pid: string, hex: Hex, kind: ResourceBuildin
     const sl = citySlots(s, c.hall);
     if (sl.used >= sl.max) return no(`${s.halls[c.hall].name} has no free building slots (${sl.used}/${sl.max}): upgrade the city or found a new one`);
   }
-  if (freeBuilders(p) < 1) return no('no free builder');
+  if (!c.hall || freeBuilders(s, pid, c.hall) < 1) return noBuilder(s, c.hall);
   const cost = resourceCost(s, pid, kind, 1);
   if (!canAfford(p.res, cost)) return no('not enough resources');
   pay(p, cost);
@@ -147,7 +165,7 @@ export const upgrade = (s: GameState, pid: string, hex: Hex): Result => {
   if (!c?.building || c.owner !== pid) return no('no building of yours here');
   if (c.building.level >= Math.min(MAX_RESOURCE_LEVEL, maxLevelAt(s, pid, c, c.building.kind) || MAX_RESOURCE_LEVEL)) return no('already at the top level');
   if (p.jobs.some((j) => j.kind === 'resource' && key(j.hex) === key(hex))) return no('already being upgraded');
-  if (freeBuilders(p) < 1) return no('no free builder');
+  if (!c.hall || freeBuilders(s, pid, c.hall) < 1) return noBuilder(s, c.hall);
   const level = c.building.level + 1;
   const cost = resourceCost(s, pid, c.building.kind, level);
   if (!canAfford(p.res, cost)) return no('not enough resources');
@@ -164,7 +182,7 @@ export const upgradeTownHall = (s: GameState, pid: string, hallId: string): Resu
   if (!h || h.owner !== pid) return no('not your city');
   if (h.level >= TOWN_HALL_MAX_LEVEL) return no('already at the top level');
   if (p.jobs.some((j) => j.kind === 'townhall' && j.hallId === hallId)) return no('already being upgraded');
-  if (freeBuilders(p) < 1) return no('no free builder');
+  if (freeBuilders(s, pid, hallId) < 1) return noBuilder(s, hallId);
   const u = TOWN_HALL_UPGRADE[(h.level + 1) as 2 | 3];
   const cost = cityUpgradeCost(s, pid, (h.level + 1) as 2 | 3);
   if (!canAfford(p.res, cost)) return no('not enough resources');
@@ -204,7 +222,7 @@ export const upgradeBarracks = (s: GameState, pid: string, hallId?: string): Res
   if (!h) return no('not your city');
   if ((h.barracks ?? 0) >= 5) return no('already at the top level');
   if (p.jobs.some((j) => j.kind === 'barracks' && j.hallId === h.id)) return no('already under construction');
-  if (freeBuilders(p) < 1) return no('no free builder');
+  if (freeBuilders(s, pid, h.id) < 1) return noBuilder(s, h.id);
   const level = (h.barracks ?? 0) + 1;
   const b = BARRACKS[level as 1 | 2 | 3 | 4 | 5];
   const cost = barracksCost(s, pid, level as 1 | 2 | 3 | 4 | 5);
@@ -220,7 +238,7 @@ export const upgradeTavern = (s: GameState, pid: string, hallId?: string): Resul
   if (!h) return no('not your city');
   if ((h.tavern ?? 0) >= 4) return no('already at the top level');
   if (p.jobs.some((j) => j.kind === 'tavern' && j.hallId === h.id)) return no('already under construction');
-  if (freeBuilders(p) < 1) return no('no free builder');
+  if (freeBuilders(s, pid, h.id) < 1) return noBuilder(s, h.id);
   const level = (h.tavern ?? 0) + 1;
   const t = TAVERN[level as 1 | 2 | 3 | 4];
   const cost = tavernCost(s, pid, level as 1 | 2 | 3 | 4);
@@ -288,12 +306,16 @@ const runOrder = (s: GameState, pid: string, o: QueueOrder): Result =>
 export const enqueue = (s: GameState, pid: string, o: QueueOrder): Result => {
   const p = s.players[pid];
   const queue = (p.queue ??= []);
-  if (freeBuilders(p) > 0) return runOrder(s, pid, o);
+  const hallId = o.kind === 'build' || o.kind === 'upgrade' ? s.cells[key(o.hex)]?.hall : o.kind === 'townhall' || o.kind === 'barracks' || o.kind === 'tavern' ? o.hallId : undefined;
+  const h = hallId ? s.halls[hallId] : undefined;
+  if (!h || h.owner !== pid) return runOrder(s, pid, o); // пусть обычная проверка объяснит, что не так
+  if (freeBuilders(s, pid, h.id) > 0) return runOrder(s, pid, o);
   const before = { ...p.res };
   const jobs = p.jobs.length;
-  p.builders++; // временный строитель: проверки и оплата идут обычным путём
+  const had = h.builders;
+  h.builders = hallBuilders(h) + 1; // временный строитель: проверки и оплата идут обычным путём
   const r = runOrder(s, pid, o);
-  p.builders--;
+  h.builders = had;
   if (!r.ok) return r;
   const job = p.jobs.splice(jobs, 1)[0];
   if (queue.some((q) => sameTarget(q.job, job))) {
@@ -321,15 +343,17 @@ export const cancelQueued = (s: GameState, pid: string, index: number): Result =
  *  (клетку или город захватили), убираем и возвращаем ресурсы. */
 export const startQueued = (s: GameState, pid: string): void => {
   const p = s.players[pid];
-  while (p.queue?.length && freeBuilders(p) > 0) {
-    const q = p.queue[0];
+  for (let i = 0; p.queue && i < p.queue.length;) {
+    const q = p.queue[i];
     const j = q.job;
     const valid = j.kind === 'resource' ? s.cells[key(j.hex)]?.owner === pid && (j.level === 1 || s.cells[key(j.hex)].building?.level === j.level - 1)
       : j.kind === 'townhall' ? s.halls[j.hallId]?.owner === pid && s.halls[j.hallId].level === j.level - 1
         : j.kind === 'barracks' ? s.halls[j.hallId]?.owner === pid && (s.halls[j.hallId].barracks ?? 0) === j.level - 1
           : j.kind === 'tavern' ? s.halls[j.hallId]?.owner === pid && (s.halls[j.hallId].tavern ?? 0) === j.level - 1 : false;
-    if (!valid) { cancelQueued(s, pid, 0); say(s, 'a queued construction was cancelled, resources returned', pid); continue; }
-    p.queue.shift();
+    if (!valid) { cancelQueued(s, pid, i); say(s, 'a queued construction was cancelled, resources returned', pid); continue; }
+    const hid = jobHall(s, j);
+    if (!hid || freeBuilders(s, pid, hid) < 1) { i++; continue; } // у этого города строители пока заняты
+    p.queue.splice(i, 1);
     p.jobs.push({ ...j, finish: s.turn + q.turns });
   }
 };
@@ -381,7 +405,8 @@ export const upkeep = (s: GameState, pid: string): number => {
   const rate = mods(s, pid).armyUpkeepRate ?? ARMY_UPKEEP_RATE;
   const army = Math.ceil(gens.reduce((sum, g) => sum + armyValue(g.army), 0) * rate);
   const builderFood = mods(s, pid).freeBuilderUpkeep ? 0 : BUILDER_UPKEEP_FOOD;
-  return army + (p.builders - 1) * builderFood + Math.max(0, gens.length - 1) * GENERAL_UPKEEP_FOOD;
+  const extraBuilders = playerHalls(s, pid).reduce((n, h) => n + hallBuilders(h) - 1, 0); // первый строитель каждого города — бесплатно
+  return army + extraBuilders * builderFood + Math.max(0, gens.length - 1) * GENERAL_UPKEEP_FOOD;
 };
 
 /** Какую фигуру армия теряет следующей при голоде, не нарушая правило строя:
@@ -409,7 +434,8 @@ const famine = (s: GameState, pid: string, foodIncome: number): void => {
       lost.push(piece);
       continue;
     }
-    if (p.builders > 1) { p.builders--; lost.push('builder'); continue; }
+    const crowded = playerHalls(s, pid).find((h) => hallBuilders(h) > 1);
+    if (crowded) { crowded.builders = hallBuilders(crowded) - 1; lost.push('builder'); continue; }
     break; // последний строитель и генералы не уходят никогда
   }
   if (lost.length) say(s, `famine: lost ${lost.join(', ')}`, pid);

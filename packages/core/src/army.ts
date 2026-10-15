@@ -40,7 +40,8 @@ export const hirePiece = (s: GameState, pid: string, gid: string, piece: Piece):
   const price = piecePrice(s, pid, piece);
   if (p.res.gold < price) return no('not enough gold');
   const next = { ...g.army, [piece]: g.army[piece] + 1 };
-  if (!formationOk(next)) return no(`this army needs ${PAWNS_REQUIRED[piece]} pawns first`);
+  // пешку нанять можно всегда (она только чинит строй); фигуре нужно достаточно пешек
+  if (piece !== 'p' && next.p < PAWNS_REQUIRED[piece]) return no(`this army needs ${PAWNS_REQUIRED[piece]} pawns first — hire pawns`);
   p.res.gold -= price;
   g.army = next;
   return ok;

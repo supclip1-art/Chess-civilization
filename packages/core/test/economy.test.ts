@@ -125,6 +125,23 @@ test('поселенец гибнет, если на него напасть; с
   assert.equal(s.players.p1.jobs.filter((j) => j.kind === 'found').length, 0);
 });
 
+test('строители у каждого города свои', async () => {
+  const { hireSettler: hs, freeBuilders } = await import('../src/index.ts');
+  const s = newGame(testMap(), [{ nation: 'germany' }, { nation: 'spain' }], { elo: 1200, seed: 1 });
+  s.players.p1.res = { wood: 1000, food: 1000, gold: 0 };
+  const cap = playerHalls(s, 'p1')[0];
+  assert.ok(hs(s, 'p1', cap.id).ok);
+  const st = Object.values(s.generals).find((x) => x.owner === 'p1' && x.settler)!;
+  st.hex = { q: -1, r: -3 };
+  foundTownHall(s, 'p1', st.id);
+  round(s); round(s);
+  const second = playerHalls(s, 'p1').find((h) => h.id !== cap.id)!;
+  assert.ok(upgradeTownHall(s, 'p1', cap.id).ok, 'строитель столицы занят');
+  assert.equal(freeBuilders(s, 'p1', cap.id), 0);
+  assert.equal(freeBuilders(s, 'p1', second.id), 1, 'у нового города свой строитель');
+  assert.ok(upgradeTownHall(s, 'p1', second.id).ok);
+});
+
 test('порядок дезертирства при голоде сохраняет правило строя', () => {
   const a = { p: 8, n: 2, b: 2, r: 2, q: 1 };
   const order: string[] = [];
@@ -135,11 +152,12 @@ test('порядок дезертирства при голоде сохраня
 test('голод: сначала фигуры, потом строители, последний строитель остаётся', () => {
   const s = game();
   const g = Object.values(s.generals).find((x) => x.owner === 'p1')!;
-  s.players.p1.builders = 3;
+  const cap = playerHalls(s, 'p1')[0];
+  cap.builders = 3;
   s.players.p1.res = { wood: 0, food: 0, gold: 0 };
   settleEconomy(s, 'p1');
   assert.deepEqual(g.army, emptyArmy());
-  assert.equal(s.players.p1.builders, 1);
+  assert.equal(cap.builders, 1);
 });
 
 test('исследование «Тактики» поднимает ELO только будущих генералов', () => {
@@ -230,8 +248,8 @@ test('места под здания зависят от уровня город
   const s = newGame(testMap(), [{ nation: 'germany' }, { nation: 'france' }], { elo: 1200, seed: 3 });
   const p = s.players.p1;
   p.res = { wood: 5000, food: 5000, gold: 5000 };
-  p.builders = 9;
   const hall = playerHalls(s, 'p1')[0];
+  hall.builders = 9;
   const free = Object.values(s.cells).filter((c) => c.owner === 'p1' && c.hall === hall.id && (c.terrain === 'field' || c.terrain === 'forest' || c.terrain === 'deposit') && !(c.hex.q === hall.hex.q && c.hex.r === hall.hex.r));
   hall.level = 3; // все клетки радиуса 3, но мест на 1-м уровне меньше
   hall.level = 1;
