@@ -1,6 +1,6 @@
 // Звук без файлов: всё синтезируется на лету (Web Audio), поэтому нет ни лицензий, ни лишних загрузок.
-//  • Музыка — пять спокойных вариантов (очаг, лютня, вальс, вечер, баллада): арфа и гитара (Карплус — Стронг),
-//    струнные, скрипка, виолончель, флейта, валторна, родес. Аккорды и мелодия каждый раз складываются заново.
+//  • Музыка — пять стилей: северный фолк, аравийский мотив, электроника, восточный сад, лоу-фай.
+//    Струны — алгоритм Карплуса — Стронга, остальное — осцилляторы и шум. Аккорды и мелодия каждый раз складываются заново.
 //  • Звуки интерфейса — деревянный щелчок кнопки и шелест перелистываемой бумаги при открытии меню.
 // Браузер разрешает звук только после первого касания — до него всё молчит.
 
@@ -140,16 +140,12 @@ const drum = (t: number, vol: number) => {
 };
 
 // ---------- музыка ----------
-// Пять вариантов спокойной музыки (выбираются в меню). Общее: ре мажор, строй ля = 432 Гц, без ритмичного баса,
-// верхние частоты срезаны общим фильтром. Каждые 8 тактов — новая фраза: аккорды по два такта, мелодия плавно
-// переходит между звуками аккордов, 4-й такт — вздох, в конце — тоника. Иногда мелодия молчит — передышка.
+// Пять вариантов в разных стилях (выбираются в меню): северный фолк, аравийский мотив, современная электроника,
+// восточный сад и лоу-фай. Строй ля = 432 Гц, верхние частоты срезаны общим фильтром, ритмичного баса нет.
+// Каждые 8 тактов — новая фраза: аккорды по два такта, мелодия плавно переходит между звуками аккордов,
+// 4-й такт — вздох, в конце — тоника. Иногда мелодия молчит — передышка.
 
 const NOTE = (n: number) => 432 * 2 ** ((n - 69) / 12); // MIDI → Гц, строй ля = 432 Гц
-const CH: Record<string, number[]> = {
-  D: [50, 54, 57], A: [45, 49, 52], Bm: [47, 50, 54], G: [43, 47, 50], Em: [52, 55, 59], 'F#m': [54, 57, 61],
-};
-const PROGS = [['D', 'A', 'Bm', 'G'], ['G', 'D', 'A', 'D'], ['D', 'Bm', 'G', 'A'], ['Bm', 'G', 'D', 'A'], ['D', 'G', 'Em', 'A'], ['G', 'A', 'F#m', 'Bm']];
-const SCALE = [62, 64, 66, 67, 69, 71, 73, 74, 76, 78, 79, 81]; // ре мажор, от ре первой октавы
 
 /** Смычковые: тёплая «подушка» (медленная атака) или напевная скрипка (быстрее, с вибрато). */
 const bowed = (t: number, freq: number, dur: number, vol: number, solo: boolean, dark = 1) => {
@@ -165,7 +161,7 @@ const bowed = (t: number, freq: number, dur: number, vol: number, solo: boolean,
   lp.connect(g); g.connect(musicBus);
   const vib = c.createOscillator(); vib.frequency.value = solo ? 5.2 : 4.5;
   const vg = c.createGain();
-  vg.gain.setValueAtTime(0, t); vg.gain.linearRampToValueAtTime(freq * (solo ? 0.005 : 0.002), t + Math.min(0.45, dur / 2)); // вибрато вступает не сразу
+  vg.gain.setValueAtTime(0, t); vg.gain.linearRampToValueAtTime(freq * (solo ? 0.005 : 0.002), t + Math.min(0.45, dur / 2));
   vib.connect(vg);
   for (const cents of solo ? [-3, 3] : [-6, 0, 6]) {
     const o = c.createOscillator(); o.type = 'sawtooth'; o.frequency.value = freq; o.detune.value = cents;
@@ -174,20 +170,18 @@ const bowed = (t: number, freq: number, dur: number, vol: number, solo: boolean,
   vib.start(t); vib.stop(t + dur + 0.05);
 };
 
-/** Мягкая валторна: два пилообразных тона за тёмным фильтром, фильтр чуть «раскрывается» в начале ноты. */
-const horn = (t: number, freq: number, dur: number, vol: number) => {
+/** Дыхание духового (ней, сякухати): шум, отфильтрованный вокруг высоты ноты. */
+const breath = (t: number, freq: number, dur: number, vol: number) => {
   const c = ctx!;
+  const src = c.createBufferSource(); src.buffer = noise(); src.loop = true;
+  const f = c.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = freq; f.Q.value = 8;
   const g = c.createGain();
-  g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol, t + 0.14);
-  g.gain.setValueAtTime(vol * 0.9, t + Math.max(0.15, dur - 0.2)); g.gain.linearRampToValueAtTime(0, t + dur);
-  const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.Q.value = 0.6;
-  lp.frequency.setValueAtTime(freq * 1.2, t); lp.frequency.linearRampToValueAtTime(freq * 2.6, t + 0.18); lp.frequency.linearRampToValueAtTime(freq * 2, t + dur);
-  lp.connect(g); g.connect(musicBus);
-  for (const cents of [-4, 4]) {
-    const o = c.createOscillator(); o.type = 'sawtooth'; o.frequency.value = freq; o.detune.value = cents;
-    o.connect(lp); o.start(t); o.stop(t + dur + 0.05);
-  }
+  g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol, t + 0.05); g.gain.linearRampToValueAtTime(vol * 0.4, t + 0.25);
+  g.gain.setValueAtTime(vol * 0.4, t + Math.max(0.26, dur - 0.1)); g.gain.linearRampToValueAtTime(0, t + dur);
+  src.connect(f); f.connect(g); g.connect(musicBus);
+  src.start(t, Math.random() * 0.5); src.stop(t + dur + 0.05);
 };
+const ney = (t: number, freq: number, dur: number, vol: number) => { flute(t, freq, dur, vol); breath(t, freq, dur, vol * 2.2); };
 
 /** Электропиано (родес): синус с мягким призвуком октавы, долгое затухание. */
 const epiano = (t: number, freq: number, vol: number, len = 2.8) => {
@@ -202,59 +196,146 @@ const epiano = (t: number, freq: number, vol: number, len = 2.8) => {
   o.start(t); o2.start(t); o.stop(t + len + 0.05); o2.stop(t + len + 0.05);
 };
 
-type Voice = 'fiddle' | 'flute' | 'cello' | 'horn' | 'epiano' | 'harp' | 'rest';
+/** Синтезатор: пилы за фильтром. pad — широкий и медленный, pluck — короткий щипок для арпеджио, lead — певучая мелодия. */
+const synth = (t: number, freq: number, dur: number, vol: number, kind: 'pad' | 'pluck' | 'lead') => {
+  const c = ctx!;
+  const g = c.createGain();
+  const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.Q.value = kind === 'pluck' ? 3 : 1;
+  if (kind === 'pad') {
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol, t + 1.2); g.gain.setValueAtTime(vol, t + Math.max(1.2, dur - 1.2)); g.gain.linearRampToValueAtTime(0, t + dur);
+    lp.frequency.setValueAtTime(500, t); lp.frequency.linearRampToValueAtTime(1100, t + dur / 2); lp.frequency.linearRampToValueAtTime(600, t + dur);
+  } else if (kind === 'pluck') {
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.008); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    lp.frequency.setValueAtTime(freq * 6, t); lp.frequency.exponentialRampToValueAtTime(freq * 1.2, t + dur * 0.8);
+  } else {
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol, t + 0.05); g.gain.setValueAtTime(vol * 0.85, t + Math.max(0.06, dur - 0.1)); g.gain.linearRampToValueAtTime(0, t + dur);
+    lp.frequency.value = Math.min(1800, freq * 3);
+  }
+  lp.connect(g); g.connect(musicBus);
+  const det = kind === 'pad' ? [-12, -4, 4, 12] : kind === 'pluck' ? [-5, 5] : [0];
+  for (const cents of det) {
+    const o = c.createOscillator(); o.type = kind === 'lead' ? 'triangle' : 'sawtooth'; o.frequency.value = freq; o.detune.value = cents;
+    if (kind === 'lead') { // лёгкое вибрато
+      const v = c.createOscillator(); v.frequency.value = 5; const vg = c.createGain(); vg.gain.value = freq * 0.004;
+      v.connect(vg); vg.connect(o.frequency); v.start(t); v.stop(t + dur + 0.05);
+    }
+    o.connect(lp); o.start(t); o.stop(t + dur + 0.05);
+  }
+};
+
+/** Мягкая «бочка» электроники и лоу-фая. */
+const kick = (t: number, vol: number) => {
+  const c = ctx!;
+  const o = c.createOscillator(); o.type = 'sine';
+  o.frequency.setValueAtTime(130, t); o.frequency.exponentialRampToValueAtTime(42, t + 0.12);
+  const g = c.createGain(); g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.4);
+  o.connect(g); g.connect(musicBus); o.start(t); o.stop(t + 0.42);
+};
+/** Приглушённый малый барабан / хлопок. */
+const snare = (t: number, vol: number) => burst(musicBus, t, 0.16, vol, 'bandpass', 1300, 900, 0.9);
+/** Тек дарбуки — сухой удар по краю. */
+const tek = (t: number, vol: number) => burst(musicBus, t, 0.07, vol, 'bandpass', 1100, 800, 3);
+/** Низкий удар гонга или храмового колокола. */
+const gong = (t: number, freq: number, vol: number) => {
+  const c = ctx!;
+  for (const [m, v] of [[1, 1], [2.76, 0.3], [5.4, 0.1]] as const) {
+    const o = c.createOscillator(); o.type = 'sine'; o.frequency.value = freq * m;
+    const g = c.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol * v, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + 4 / m);
+    o.connect(g); g.connect(musicBus); o.start(t); o.stop(t + 4.1 / m);
+  }
+};
+
+type Voice = 'fiddle' | 'flute' | 'ney' | 'oud' | 'koto' | 'lead' | 'epiano' | 'rest';
 type Style = {
   id: number; name: string;
+  chords: Record<string, number[]>; // звуки аккордов в малой октаве (MIDI)
+  progs: string[][]; // аккорды фразы, по два такта каждый
+  tonic: string;
+  scale: number[]; // звуки мелодии
   beat: number; beats: number; // длительность доли и долей в такте
   rhythms: number[][]; // ритмы мелодии в долях (сумма = beats)
   voices: Voice[]; // голос мелодии по фразам, по кругу
-  pad: number; // громкость струнной подушки (0 — нет)
   accomp: (t: number, chord: number[], bar: number, st: Style) => void;
 };
 
-/** Арфа: аккорд, раскатанный снизу вверх, — без басовой ноты. */
-const harpRoll = (t: number, notes: number[], vol: number, gap = 0.07) =>
-  notes.forEach((n, i) => pluck(t + i * gap, NOTE(n), vol * (1 - i * 0.08), 0.22, (i % 2 ? 0.25 : -0.2)));
-
 export const MUSIC_STYLES: Style[] = [
-  { // 1. Очаг: раскатанные аккорды арфы, флейта и скрипка, долгие подушки струнных
-    id: 1, name: 'Hearth', beat: 0.36, beats: 6, rhythms: [[3, 1, 2], [2, 1, 3], [3, 3], [4, 2], [6]],
-    voices: ['flute', 'fiddle', 'rest'], pad: 0.02,
+  { // 1. Северный фолк: ля минор, бойкий 6/8, скрипка и вистл, гитара боем и бойран
+    id: 1, name: 'Northern folk',
+    chords: { Am: [45, 48, 52], G: [43, 47, 50], C: [48, 52, 55], Em: [52, 55, 59], F: [41, 45, 48], Dm: [50, 53, 57] },
+    progs: [['Am', 'G', 'Am', 'Em'], ['Am', 'C', 'G', 'Am'], ['Am', 'F', 'C', 'G'], ['F', 'G', 'Am', 'Am'], ['Am', 'Dm', 'Em', 'Am']], tonic: 'Am',
+    scale: [57, 59, 60, 62, 64, 65, 67, 69, 71, 72, 74, 76],
+    beat: 0.24, beats: 6, rhythms: [[2, 1, 2, 1], [1, 1, 1, 3], [3, 1, 1, 1], [2, 1, 3], [1, 1, 1, 1, 1, 1]],
+    voices: ['fiddle', 'flute', 'fiddle', 'rest'],
     accomp: (t, [r, th, fi], bar, st) => {
-      harpRoll(t, [r + 12, fi + 12, th + 12, r + 24], 0.1);
-      if (bar % 2 === 1) pluck(t + 3 * st.beat, NOTE(th + 12), 0.06, 0.2, 0.2);
+      // гитара: бой на сильные доли, без низкого баса
+      for (const at of [0, 3]) for (const [i, n] of [fi, r + 12, th + 12, fi + 12].entries()) pluck(t + at * st.beat + i * 0.02, NOTE(n), at ? 0.045 : 0.06, 0.3, -0.3 + i * 0.18);
+      pluck(t + 5 * st.beat, NOTE(th + 12), 0.035, 0.3, 0.2);
+      // бойран: глухо на 1 и 4, легко на 3 и 6
+      drum(t, 0.1); drum(t + 3 * st.beat, 0.07); tek(t + 2 * st.beat, 0.05); tek(t + 5 * st.beat, 0.05);
+      if (bar % 2 === 0) bowed(t, NOTE(r + 12), st.beat * st.beats * 2, 0.012, false);
     },
   },
-  { // 2. Лютня: редкий неровный перебор в среднем регистре, напев виолончели и флейты
-    id: 2, name: 'Lute', beat: 0.3, beats: 6, rhythms: [[3, 1, 2], [2, 2, 2], [3, 3], [4, 2], [2, 4]],
-    voices: ['cello', 'flute', 'rest', 'cello'], pad: 0.012,
+  { // 2. Аравийский мотив: макам хиджаз от ре, уд, ней, дарбука, гудящий бурдон
+    id: 2, name: 'Arabian nights',
+    chords: { D: [50, 54, 57], Gm: [43, 46, 50], Cm: [48, 51, 55], Eb: [51, 55, 58] },
+    progs: [['D', 'D', 'Gm', 'D'], ['D', 'Eb', 'D', 'D'], ['Gm', 'Cm', 'D', 'D'], ['D', 'Gm', 'Eb', 'D']], tonic: 'D',
+    scale: [62, 63, 66, 67, 69, 70, 72, 74, 75, 78, 79],
+    beat: 0.21, beats: 8, rhythms: [[1, 1, 2, 4], [2, 1, 1, 4], [3, 1, 2, 2], [4, 4], [2, 2, 1, 1, 2], [1, 1, 1, 1, 4]],
+    voices: ['ney', 'oud', 'ney', 'rest'],
     accomp: (t, [r, th, fi], bar, st) => {
-      const pats = [[0, 2, 3, 5], [0, 3, 4], [0, 1, 3, 5], [0, 2, 4]];
-      const tones = [r + 12, fi + 12, th + 12, r + 24, fi + 12];
-      pats[bar % pats.length].forEach((at, i) => pluck(t + at * st.beat + (i ? 0.01 : 0), NOTE(tones[i % tones.length]), i ? 0.07 : 0.09, 0.25, i % 2 ? 0.3 : -0.15));
+      // максум: дум — тек — . — тек — дум — . — тек — .
+      drum(t, 0.12); tek(t + 1 * st.beat, 0.07); tek(t + 3 * st.beat, 0.06); drum(t + 4 * st.beat, 0.09); tek(t + 6 * st.beat, 0.07);
+      if (Math.random() < 0.5) tek(t + 7 * st.beat, 0.035);
+      // уд: короткие фигуры по звукам аккорда
+      const figs = [[0, 2, 3], [0, 3, 5, 6], [0, 2, 4, 6]];
+      figs[bar % figs.length].forEach((at, i) => pluck(t + at * st.beat, NOTE([r + 12, fi + 12, th + 12, r + 24][i % 4]), 0.08, 0.38, i % 2 ? 0.25 : -0.2));
+      // бурдон на тонике
+      if (bar % 4 === 0) bowed(t, NOTE(50), st.beat * st.beats * 4, 0.02, false, 0.8);
     },
   },
-  { // 3. Вальс у камина: на три четверти, мягкие аккорды-вздохи вместо «умпа», мелодия валторны и скрипки
-    id: 3, name: 'Fireside waltz', beat: 0.5, beats: 3, rhythms: [[2, 1], [1, 1, 1], [3], [1, 2]],
-    voices: ['horn', 'fiddle', 'rest'], pad: 0.018,
-    accomp: (t, [r, th, fi], _bar, st) => {
-      for (const at of [1, 2]) for (const [i, n] of [fi, r + 12, th + 12].entries()) pluck(t + at * st.beat + i * 0.015, NOTE(n), 0.045, 0.15, -0.2 + i * 0.2);
+  { // 3. Электроника: ре минор, широкие синтезаторные пэды, арпеджио, мягкая бочка, плавный саб-бас
+    id: 3, name: 'Electronic',
+    chords: { Dm: [50, 53, 57], Bb: [46, 50, 53], F: [53, 57, 60], C: [48, 52, 55], Gm: [43, 46, 50] },
+    progs: [['Dm', 'Bb', 'F', 'C'], ['Bb', 'F', 'C', 'Dm'], ['Dm', 'F', 'C', 'Bb'], ['Gm', 'Bb', 'Dm', 'C']], tonic: 'Dm',
+    scale: [62, 64, 65, 67, 69, 70, 72, 74, 76, 77, 79],
+    beat: 0.22, beats: 8, rhythms: [[2, 2, 4], [3, 3, 2], [4, 2, 2], [1, 1, 2, 4], [6, 2], [8]],
+    voices: ['lead', 'rest', 'lead', 'epiano'],
+    accomp: (t, [r, th, fi], bar, st) => {
+      const len = st.beat * st.beats;
+      if (bar % 2 === 0) { for (const n of [r + 12, th + 12, fi + 12]) synth(t, NOTE(n), len * 2, 0.018, 'pad'); synth(t, NOTE(r - 12), len * 2, 0.03, 'pad'); }
+      const arp = [r + 12, fi + 12, th + 24, fi + 12, r + 24, fi + 12, th + 24, fi + 12];
+      arp.forEach((n, i) => synth(t + i * st.beat, NOTE(n), 0.35, i % 2 ? 0.025 : 0.035, 'pluck'));
+      kick(t, 0.2); kick(t + 4 * st.beat, 0.16);
+      if (bar % 2 === 1) snare(t + 4 * st.beat, 0.05);
     },
   },
-  { // 4. Вечер: медленный родес и широкие струнные, мелодия редкими долгими нотами
-    id: 4, name: 'Evening', beat: 0.5, beats: 8, rhythms: [[4, 4], [6, 2], [3, 5], [8], [2, 2, 4]],
-    voices: ['epiano', 'rest', 'epiano', 'cello'], pad: 0.024,
-    accomp: (t, [r, th, fi], bar, st) => {
-      for (const [i, n] of [r + 12, th + 12, fi + 12].entries()) epiano(t + i * 0.03, NOTE(n), 0.05, 3.5);
-      if (bar % 2 === 1) epiano(t + 5 * st.beat, NOTE(th + 12), 0.035, 2.5);
+  { // 4. Восточный сад: пентатоника, кото, бамбуковая флейта, далёкий гонг
+    id: 4, name: 'Eastern garden',
+    chords: { D: [50, 57, 62], Bm: [47, 54, 59], E: [52, 59, 64], A: [45, 52, 57] },
+    progs: [['D', 'Bm', 'E', 'A'], ['Bm', 'E', 'D', 'D'], ['D', 'A', 'Bm', 'D'], ['E', 'Bm', 'A', 'D']], tonic: 'D',
+    scale: [62, 64, 66, 69, 71, 74, 76, 78, 81],
+    beat: 0.34, beats: 8, rhythms: [[2, 2, 4], [4, 2, 2], [3, 1, 4], [8], [2, 6], [1, 1, 2, 4]],
+    voices: ['ney', 'koto', 'rest', 'ney'],
+    accomp: (t, [r, fi, oc], bar, st) => {
+      const pats = [[0, 1, 2, 4], [0, 2, 3, 6], [0, 1, 4, 5], [0, 3, 4, 6]];
+      pats[bar % pats.length].forEach((at, i) => pluck(t + at * st.beat, NOTE([r + 12, fi + 12, oc + 12, fi + 24][i]), 0.08, 0.45, i % 2 ? 0.3 : -0.25));
+      if (bar % 4 === 0) gong(t, NOTE(r - 12), 0.06);
     },
   },
-  { // 5. Баллада: тихий гитарный бой на первую и пятую долю, валторна и скрипка, еле слышный барабан
-    id: 5, name: 'Ballad', beat: 0.3, beats: 8, rhythms: [[3, 3, 2], [4, 4], [2, 2, 4], [3, 1, 4], [6, 2]],
-    voices: ['horn', 'fiddle', 'rest'], pad: 0.016,
-    accomp: (t, [r, th, fi], bar, st) => {
-      for (const at of [0, 4]) for (const [i, n] of [fi, r + 12, th + 12, fi + 12].entries()) pluck(t + at * st.beat + i * 0.022, NOTE(n), 0.055, 0.25, -0.25 + i * 0.15);
-      if (bar % 2 === 0) drum(t, 0.07);
+  { // 5. Лоу-фай: джазовые септаккорды на родесе, ленивый бит с оттяжкой
+    id: 5, name: 'Lo-fi',
+    chords: { Dmaj7: [50, 54, 57, 61], Bm7: [47, 50, 54, 57], Em7: [52, 55, 59, 62], A7: [45, 49, 52, 55], Gmaj7: [43, 47, 50, 54], 'F#m7': [54, 57, 61, 64] },
+    progs: [['Gmaj7', 'F#m7', 'Em7', 'A7'], ['Dmaj7', 'Bm7', 'Em7', 'A7'], ['Gmaj7', 'A7', 'F#m7', 'Bm7'], ['Em7', 'A7', 'Dmaj7', 'Dmaj7']], tonic: 'Dmaj7',
+    scale: [62, 64, 66, 67, 69, 71, 73, 74, 76, 78],
+    beat: 0.3, beats: 8, rhythms: [[3, 1, 4], [2, 2, 4], [1, 2, 1, 4], [6, 2], [8]],
+    voices: ['epiano', 'flute', 'rest', 'epiano'],
+    accomp: (t, ch, bar, st) => {
+      const swing = st.beat * 0.16;
+      ch.forEach((n, i) => epiano(t + i * 0.025, NOTE(n + 12), 0.04, 3));
+      if (bar % 2 === 1) ch.slice(1).forEach((n, i) => epiano(t + 5 * st.beat + swing + i * 0.02, NOTE(n + 12), 0.025, 1.6));
+      synth(t, NOTE(ch[0] - 12), st.beat * st.beats, 0.035, 'pad');
+      kick(t, 0.17); kick(t + 3 * st.beat + swing, 0.11); snare(t + 2 * st.beat, 0.06); snare(t + 6 * st.beat, 0.06);
+      for (let i = 1; i < 8; i += 2) burst(musicBus, t + i * st.beat + swing, 0.04, 0.012, 'bandpass', 2000, 1800, 2);
     },
   },
 ];
@@ -269,36 +350,36 @@ const rnd = (a: number, b: number) => a + Math.floor(Math.random() * (b - a + 1)
 const pick = <T,>(xs: T[]) => xs[rnd(0, xs.length - 1)];
 
 /** Звук аккорда в мелодическом диапазоне, ближайший к предыдущей ноте. */
-const nearestChordTone = (chord: number[], prev: number) => {
+const nearestChordTone = (st: Style, chord: number[], prev: number) => {
   const pcs = chord.map((n) => n % 12);
-  const opts = SCALE.filter((n) => pcs.includes(n % 12));
-  return opts.sort((a, b) => Math.abs(a - prev) - Math.abs(b - prev))[0];
+  const opts = st.scale.filter((n) => pcs.includes(n % 12));
+  return (opts.length ? opts : st.scale).slice().sort((a, b) => Math.abs(a - prev) - Math.abs(b - prev))[0];
 };
 
 const makePhrase = (): Phrase => {
   const st = style();
-  const prog = pick(PROGS);
+  const prog = pick(st.progs);
   const rhythmA = pick(st.rhythms), rhythmB = pick(st.rhythms);
   const notes: Phrase['notes'] = [];
   for (let bar = 0; bar < 8; bar++) {
-    const chord = CH[prog[Math.floor(bar / 2)]];
-    const next = CH[prog[Math.min(3, Math.floor((bar + 1) / 2))]];
+    const chord = st.chords[prog[Math.floor(bar / 2)]];
+    const next = st.chords[prog[Math.min(3, Math.floor((bar + 1) / 2))]];
     if (bar === 7) { // каденция: долгая тоника
-      const tonic = nearestChordTone(CH.D, lastPitch);
+      const tonic = nearestChordTone(st, st.chords[st.tonic], lastPitch);
       notes.push([{ at: 0, len: st.beats, n: tonic }]); lastPitch = tonic; continue;
     }
     const rhythm = bar % 4 === 3 ? [st.beats] : bar % 2 === 0 ? rhythmA : rhythmB; // 4-й такт — вздох
-    let n = nearestChordTone(chord, lastPitch + rnd(-2, 2));
-    const goal = nearestChordTone(next, n);
+    let n = nearestChordTone(st, chord, lastPitch + rnd(-2, 2));
+    const goal = nearestChordTone(st, next, n);
     const out: { at: number; len: number; n: number }[] = [];
     let at = 0;
     for (const len of rhythm) {
       out.push({ at, len, n });
       at += len;
-      // шаг по гамме к следующему аккорду
-      const i = SCALE.indexOf(n);
+      // шаг по ладу к следующему аккорду
+      const i = st.scale.indexOf(n);
       const dir = goal > n ? 1 : goal < n ? -1 : pick([-1, 1]);
-      n = SCALE[Math.max(0, Math.min(SCALE.length - 1, i + dir))];
+      n = st.scale[Math.max(0, Math.min(st.scale.length - 1, i + dir))];
     }
     lastPitch = out[out.length - 1].n;
     notes.push(out);
@@ -312,20 +393,18 @@ const scheduleBar = (t: number) => {
   const st = style();
   if (!phrase || barNo % 8 === 0) phrase = makePhrase();
   const bar = barNo % 8;
-  const chord = CH[phrase.prog[Math.floor(bar / 2)]];
-  const [r, th] = chord;
-  st.accomp(t, chord, bar, st);
-  // струнная подушка на смену аккорда (без низкой октавы)
-  if (st.pad && bar % 2 === 0) { const len = st.beat * st.beats * 2; bowed(t, NOTE(r + 12), len, st.pad, false); bowed(t, NOTE(th + 12), len, st.pad * 0.7, false); }
+  st.accomp(t, st.chords[phrase.prog[Math.floor(bar / 2)]], bar, st);
   if (phrase.voice === 'rest') return;
   for (const x of phrase.notes[bar]) {
-    const at = t + x.at * st.beat, dur = x.len * st.beat * 0.98;
-    if (phrase.voice === 'fiddle') bowed(at, NOTE(x.n), dur, 0.04, true);
-    else if (phrase.voice === 'cello') bowed(at, NOTE(x.n - 12), dur, 0.05, true, 0.8);
-    else if (phrase.voice === 'flute') flute(at, NOTE(x.n), dur, 0.075);
-    else if (phrase.voice === 'horn') horn(at, NOTE(x.n - 12), dur, 0.05);
-    else if (phrase.voice === 'epiano') epiano(at, NOTE(x.n), 0.08, Math.max(1.5, dur + 0.8));
-    else pluck(at, NOTE(x.n), 0.12, 0.3);
+    const at = t + x.at * st.beat, dur = x.len * st.beat * 0.96;
+    const f = NOTE(x.n);
+    if (phrase.voice === 'fiddle') bowed(at, f, dur, 0.04, true);
+    else if (phrase.voice === 'flute') flute(at, f, dur, 0.07);
+    else if (phrase.voice === 'ney') ney(at, f, dur, 0.055);
+    else if (phrase.voice === 'oud') pluck(at, f, 0.13, 0.4);
+    else if (phrase.voice === 'koto') pluck(at, f, 0.12, 0.5);
+    else if (phrase.voice === 'lead') synth(at, f, dur, 0.05, 'lead');
+    else if (phrase.voice === 'epiano') epiano(at, f, 0.075, Math.max(1.5, dur + 0.8));
   }
 };
 

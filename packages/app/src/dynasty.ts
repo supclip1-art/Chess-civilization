@@ -70,8 +70,8 @@ export const UNLOCKS: Unlock[] = ([
   { level: 6, kind: 'bonus', id: 'militia', name: 'Militia tradition', text: 'start with the Militia technology' },
   { level: 7, kind: 'skin', id: 'obsidian', name: 'Obsidian', text: 'pearl and obsidian pieces' },
   { level: 7, kind: 'bonus', id: 'pawns', name: 'Levies', text: 'your first army starts with 2 more pawns' },
-  { level: 8, kind: 'board', id: 'royal', name: 'Royal', text: 'purple and gold board' },
-  { level: 9, kind: 'skin', id: 'crimson', name: 'Crimson', text: 'rose and crimson pieces' },
+  { level: 9, kind: 'board', id: 'royal', name: 'Royal', text: 'purple and gold board' },
+  { level: 10, kind: 'skin', id: 'crimson', name: 'Crimson', text: 'rose and crimson pieces' },
   ...(Object.entries(NATION_LEVEL) as [NationId, number][]).map(([id, level]): Unlock => ({ level, kind: 'nation', id, name: NATIONS[id].name, text: 'a new nation to play' })),
 ] as Unlock[]).sort((a, b) => a.level - b.level);
 export const unlocked = (u: Unlock): boolean => levelOf(dyn.xp) >= u.level;
@@ -138,32 +138,38 @@ const eliminatedBy = (s: GameState, me: string) => s.log.some((e) => e.player ==
 const rules = (s: GameState, me: string, name: string) => playerHalls(s, me).some((h) => h.name === name);
 export const ACHIEVEMENTS: Ach[] = [
   { id: 'first_blood', name: 'First blood', text: 'win a battle', xp: 100, check: (_s, _m, b) => !!b?.won },
-  { id: 'flawless', name: 'Flawless victory', text: 'win a battle without losing a single piece', xp: 150, check: (_s, _m, b) => !!b?.won && b.lost === 0 },
-  { id: 'giant_slayer', name: 'Giant slayer', text: 'win a battle against a stronger army', xp: 200, check: (_s, _m, b) => !!b?.won && b.foeBefore > b.myBefore },
-  { id: 'last_stand', name: 'Last stand', text: 'win a battle with 3 pieces or fewer', xp: 200, check: (_s, _m, b) => !!b?.won && b.myPieces <= 3 },
-  { id: 'bandit_bane', name: 'Bandit bane', text: 'defeat bandits 3 times', xp: 150, check: () => dyn.bandits >= 3 },
-  { id: 'treasure', name: 'Treasure hunter', text: 'open an epic trophy chest', xp: 150, check: (_s, _m, b) => !!b?.epic },
-  { id: 'conqueror', name: 'Conqueror', text: 'take a city by force', xp: 100, check: (s, me) => playerHalls(s, me).some((h) => h.takenAt !== undefined) },
-  { id: 'constantinople', name: 'Take Constantinople', text: 'capture Istanbul, the Turkish capital, by force', xp: 300, check: (s, me) => playerHalls(s, me).some((h) => h.name === 'Istanbul' && h.takenAt !== undefined) },
-  { id: 'genghis', name: 'Heir of Genghis Khan', text: 'conquer all of Asia: rule every city on the Asia map', xp: 500, check: (s, me) => s.settings.map === 'Asia' && Object.values(s.halls).every((h) => h.owner === me) },
-  { id: 'rome', name: 'All roads lead to Rome', text: 'rule Rome', xp: 150, check: (s, me) => rules(s, me, 'Rome') },
-  { id: 'silk_road', name: 'Silk Road', text: 'rule Samarkand, Bukhara and Kashgar', xp: 250, check: (s, me) => ['Samarkand', 'Bukhara', 'Kashgar'].every((n) => rules(s, me, n)) },
-  { id: 'kingslayer', name: 'Kingslayer', text: 'knock a nation out of the game', xp: 300, check: (s, me) => eliminatedBy(s, me) },
+  { id: 'flawless', name: 'Flawless victory', text: 'win a battle without losing a single piece', xp: 300, check: (_s, _m, b) => !!b?.won && b.lost === 0 },
+  { id: 'giant_slayer', name: 'Giant slayer', text: 'win a battle against a stronger army', xp: 300, check: (_s, _m, b) => !!b?.won && b.foeBefore > b.myBefore },
+  { id: 'last_stand', name: 'Last stand', text: 'win a battle with 3 pieces or fewer', xp: 300, check: (_s, _m, b) => !!b?.won && b.myPieces <= 3 },
+  { id: 'bandit_bane', name: 'Bandit bane', text: 'defeat bandits 3 times', xp: 200, check: () => dyn.bandits >= 3 },
+  { id: 'treasure', name: 'Treasure hunter', text: 'open an epic trophy chest', xp: 200, check: (_s, _m, b) => !!b?.epic },
+  { id: 'conqueror', name: 'Conqueror', text: 'take a city by force', xp: 150, check: (s, me) => playerHalls(s, me).some((h) => h.takenAt !== undefined) },
+  { id: 'constantinople', name: 'Take Constantinople', text: 'take the great neutral city of Constantinople by force', xp: 500, check: (s, me) => playerHalls(s, me).some((h) => h.name === 'Constantinople' && h.takenAt !== undefined) },
+  { id: 'genghis', name: 'Heir of Genghis Khan', text: 'conquer all of Asia: rule every city on the Asia map', xp: 1000, check: (s, me) => s.settings.map === 'Asia' && Object.values(s.halls).every((h) => h.owner === me) },
+  { id: 'charlemagne', name: 'Heir of Charlemagne', text: 'conquer all of Europe: rule every city on the Europe map', xp: 1000, check: (s, me) => s.settings.map === 'Europe' && Object.values(s.halls).every((h) => h.owner === me) },
+  { id: 'rome', name: 'All roads lead to Rome', text: 'rule Rome', xp: 200, check: (s, me) => rules(s, me, 'Rome') },
+  { id: 'silk_road', name: 'Silk Road', text: 'rule Samarkand, Bukhara and Kashgar', xp: 400, check: (s, me) => ['Samarkand', 'Bukhara', 'Kashgar'].every((n) => rules(s, me, n)) },
+  { id: 'kingslayer', name: 'Throne breaker', text: 'knock a nation out of the game', xp: 400, check: (s, me) => eliminatedBy(s, me) },
   { id: 'founder', name: 'Founder', text: 'rule 3 cities', xp: 100, check: (s, me) => playerHalls(s, me).length >= 3 },
-  { id: 'empire', name: 'Empire', text: 'rule 10 cities', xp: 300, check: (s, me) => playerHalls(s, me).length >= 10 },
-  { id: 'metropolis', name: 'Metropolis', text: 'grow a city to level 3', xp: 100, check: (s, me) => playerHalls(s, me).some((h) => h.level >= 3) },
-  { id: 'grandmaster', name: 'Grandmaster', text: 'research every level of Tactics', xp: 200, check: (s, me) => s.players[me].research.done >= 5 },
-  { id: 'scholar', name: 'Scholar', text: 'research every technology', xp: 300, check: (s, me) => (Object.keys(TECHS) as TechId[]).every((t) => s.players[me].research.techs?.[t]) },
-  { id: 'diplomat', name: 'Diplomat', text: 'make an alliance', xp: 100, check: (s, me) => s.order.some((x) => x !== me && relation(s, me, x).state === 'alliance' && !s.players[x].overlord) },
-  { id: 'peacemaker', name: 'Peacemaker', text: 'end a war by treaty', xp: 150, check: (s, me) => s.log.some((e) => e.player === me && /^peace with/.test(e.text)) },
-  { id: 'overlord', name: 'Overlord', text: 'have a vassal', xp: 150, check: (s, me) => vassalsOf(s, me).length >= 1 },
-  { id: 'king_of_kings', name: 'King of kings', text: 'have 3 vassals at once', xp: 300, check: (s, me) => vassalsOf(s, me).length >= 3 },
-  { id: 'legend', name: 'Living legend', text: 'raise a general to five stars', xp: 250, check: (s, me) => playerGenerals(s, me).some((g) => g.stars >= 5) },
-  { id: 'hero', name: 'Hero of the realm', text: 'a general with two traits', xp: 150, check: (s, me) => playerGenerals(s, me).some((g) => (g.traits?.length ?? 0) >= 2) },
-  { id: 'survivor', name: 'Long reign', text: 'reach turn 50', xp: 150, check: (s, me) => s.turn >= 50 && s.players[me].alive },
-  { id: 'army', name: 'Grand army', text: 'field an army worth 390 (a full set)', xp: 150, check: (s, me) => playerGenerals(s, me).some((g) => armyValue(g.army) >= 390) },
-  { id: 'victory', name: 'Unifier', text: 'win a campaign', xp: 500, check: () => dyn.wins >= 1 },
+  { id: 'empire', name: 'Empire', text: 'rule 10 cities', xp: 400, check: (s, me) => playerHalls(s, me).length >= 10 },
+  { id: 'metropolis', name: 'Metropolis', text: 'grow a city to level 3', xp: 150, check: (s, me) => playerHalls(s, me).some((h) => h.level >= 3) },
+  { id: 'grandmaster', name: 'Grandmaster', text: 'research every level of Tactics', xp: 300, check: (s, me) => s.players[me].research.done >= 5 },
+  { id: 'scholar', name: 'Scholar', text: 'research every technology', xp: 400, check: (s, me) => (Object.keys(TECHS) as TechId[]).every((t) => s.players[me].research.techs?.[t]) },
+  { id: 'diplomat', name: 'Diplomat', text: 'make an alliance', xp: 150, check: (s, me) => s.order.some((x) => x !== me && relation(s, me, x).state === 'alliance' && !s.players[x].overlord) },
+  { id: 'peacemaker', name: 'Peacemaker', text: 'end a war by treaty', xp: 200, check: (s, me) => s.log.some((e) => e.player === me && /^peace with/.test(e.text)) },
+  { id: 'overlord', name: 'Overlord', text: 'have a vassal', xp: 200, check: (s, me) => vassalsOf(s, me).length >= 1 },
+  { id: 'king_of_kings', name: 'King of kings', text: 'have 3 vassals at once', xp: 400, check: (s, me) => vassalsOf(s, me).length >= 3 },
+  { id: 'legend', name: 'Living legend', text: 'raise a general to five stars', xp: 300, check: (s, me) => playerGenerals(s, me).some((g) => g.stars >= 5) },
+  { id: 'hero', name: 'Hero of the realm', text: 'a general with two traits', xp: 200, check: (s, me) => playerGenerals(s, me).some((g) => (g.traits?.length ?? 0) >= 2) },
+  { id: 'survivor', name: 'Long reign', text: 'reach turn 50', xp: 200, check: (s, me) => s.turn >= 50 && s.players[me].alive },
+  { id: 'army', name: 'Grand army', text: 'field an army worth 390 (a full set)', xp: 200, check: (s, me) => playerGenerals(s, me).some((g) => armyValue(g.army) >= 390) },
+  { id: 'victory', name: 'Unifier', text: 'win a campaign', xp: 750, check: () => dyn.wins >= 1 },
 ];
+
+/** Сумма опыта всех достижений равна опыту последней награды (Легенда, 10-й уровень): собрав все достижения,
+ *  династия открывает всё, даже без опыта за кампании. */
+export const ACHIEVEMENTS_TOTAL = ACHIEVEMENTS.reduce((a, x) => a + x.xp, 0);
+if (ACHIEVEMENTS_TOTAL !== xpFor(Math.max(...UNLOCKS.map((u) => u.level)))) console.warn('achievements xp', ACHIEVEMENTS_TOTAL);
 
 /** Проверить достижения; вернуть только что полученные (опыт уже начислен). */
 export const checkAchievements = (s: GameState, me: string, b?: BattleNote): Ach[] => {

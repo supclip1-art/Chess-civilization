@@ -4,7 +4,7 @@ TITLE = 'Европа'
 NAME = 'Europe'
 FN = 'europeMap'
 OUT = 'packages/core/src/maps/europe.ts'
-LON_MIN, LON_MAX = -10.5, 24.5
+LON_MIN, LON_MAX = -10.5, 29.6
 LAT_MIN, LAT_MAX = 35.0, 56.5
 K_LAT = 46.0
 HEX_W = 0.55  # ~60 км
@@ -15,6 +15,13 @@ AFRICA_LINE = [(-11.0, 35.9), (-5.6, 35.95), (-4.5, 35.9), (-1.0, 36.2), (3.0, 3
 
 
 def MASK(lon, lat):
+    # восток расширен ради Константинополя: без Украины и Молдавии, без Малой Азии и азиатского берега Босфора
+    if lon > 24.6 and lat > 45.4:
+        return False
+    if lon > 26.3 and lat < 40.85:
+        return False
+    if lon > 29.15:
+        return False
     if lon > 15.5:
         return True
     for (x1, y1), (x2, y2) in zip(AFRICA_LINE, AFRICA_LINE[1:]):

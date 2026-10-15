@@ -253,10 +253,22 @@ const addHall = (s: GameState, owner: string, hex: Hex, level: number, name?: st
   return h;
 };
 
+/** Великий город: если появляется нейтралом — второй уровень, сильный гарнизон и богатая округа. */
+export const GREAT_CITY = 'Constantinople';
+
 const addNeutral = (s: GameState, hex: Hex, name?: string): void => {
   const id = newId(s, 'n');
-  const hall = addHall(s, id, hex, 1, name);
+  const great = name === GREAT_CITY;
+  const hall = addHall(s, id, hex, great ? 2 : 1, name);
   s.neutrals[id] = { id, hallId: hall.id };
+  if (great) {
+    // округа: в первом кольце — два месторождения, лес и поля; во втором — ещё месторождение и лес
+    const land = (d: number) => range(hex, d).filter((h) => distance(h, hex) === d).map((h) => s.cells[key(h)]).filter((c) => c && c.terrain !== 'water');
+    land(1).forEach((c, i) => { c.terrain = i < 2 ? 'deposit' : i === 2 ? 'forest' : 'field'; });
+    land(2).forEach((c, i) => { if (i === 0) c.terrain = 'deposit'; else if (i % 3 === 1 && c.terrain === 'mountain') c.terrain = 'forest'; });
+    makeGeneral(s, id, hex, s.settings.elo + 200, { ...emptyArmy(), p: 6, n: 2, b: 2, r: 1, q: 1 }, 'Garrison');
+    return;
+  }
   makeGeneral(s, id, hex, s.settings.elo, rollGarrison(s.rng), 'Garrison');
 };
 
