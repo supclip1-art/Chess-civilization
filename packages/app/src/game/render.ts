@@ -40,11 +40,13 @@ export class MapView {
   slide(gid: string, path: Hex[]): void { if (path.length > 1) this.slides.set(gid, { path, t0: performance.now(), dur: 180 * (path.length - 1) + 120 }); }
   /** Есть ли что анимировать прямо сейчас (чтобы не гонять кадры зря). */
   get busy(): boolean { return this.slides.size > 0; }
+  /** Сбросить все текущие перемещения (после сна приложения). */
+  stopAnimations(): void { this.slides.clear(); }
   private slidePos(gid: string, at: { x: number; y: number }): { x: number; y: number } {
     const a = this.slides.get(gid);
     if (!a) return at;
     const k = (performance.now() - a.t0) / a.dur;
-    if (k >= 1) { this.slides.delete(gid); return at; }
+    if (!(k >= 0 && k < 1)) { this.slides.delete(gid); return at; } // закончилось или часы сбились
     const e = k < 0.5 ? 2 * k * k : 1 - (-2 * k + 2) ** 2 / 2; // плавный разгон и торможение
     const f = e * (a.path.length - 1), i = Math.min(a.path.length - 2, Math.floor(f)), u = f - i;
     const p = this.toPixel(a.path[i]), q = this.toPixel(a.path[i + 1]);

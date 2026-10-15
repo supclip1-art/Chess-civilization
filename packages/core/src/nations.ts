@@ -43,6 +43,7 @@ export type Mods = {
   researchTurnsMinus?: number; // Индия
   researchCostMult?: number; // Корея
   startBonus?: Res; // Бангладеш
+  goldPerWin?: number; // Мексика: золото за каждую выигранную битву
   castles?: boolean; // Япония: захваченный ею город не теряет уровень и здания, осада японского города — 2 хода
   piecePrice?: Partial<Record<Piece, number>>; // Вьетнам
 };
@@ -144,10 +145,10 @@ export const NATIONS: Record<NationId, Nation> = {
     ['Queen Amina', 'Idris Alooma', 'Ewuare the Great'],
     'Abuja, Lagos, Kano, Benin City, Ibadan, Zaria, Ife, Oyo, Kaduna, Sokoto, Calabar, Maiduguri',
     { output: [{ kind: 'mine', from: 3, to: 5, res: 'gold', amount: 5 }] }),
-  mexico: N('mexico', 'Mexico', 'Chinampas', 'Farms can also be built on water next to the shore (up to level 3).',
+  mexico: N('mexico', 'Mexico', 'Flower Wars', 'Every battle you win brings 30 gold.',
     ['Ahuitzotl', 'Benito Juárez', 'Nezahualcoyotl'],
     'Mexico City, Puebla, Guadalajara, Monterrey, Oaxaca, Veracruz, Mérida, Querétaro, Zacatecas, Morelia, Acapulco, Tijuana',
-    { extraTerrain: [{ kind: 'farm', terrain: 'water', maxLevel: 3, coastal: true }] }),
+    { goldPerWin: 30 }),
   usa: N('usa', 'USA', 'Industrialization', 'Builders eat no food.',
     ['James K. Polk', 'George Washington', 'Thomas Jefferson'],
     'Washington, Philadelphia, New York, Boston, Chicago, San Francisco, New Orleans, Los Angeles, Seattle, Houston, Denver, Atlanta',

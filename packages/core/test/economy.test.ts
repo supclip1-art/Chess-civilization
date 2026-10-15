@@ -162,11 +162,27 @@ test('голод: сначала фигуры, потом строители, п
 
 test('исследование «Тактики» поднимает ELO только будущих генералов', () => {
   const s = game();
-  s.players.p1.res = { wood: 100, food: 0, gold: 100 };
+  s.players.p1.res = { wood: 100, food: 100, gold: 100 };
   assert.equal(startResearch(s, 'p1').ok, true);
   round(s);
   assert.equal(recruitElo(s, 'p1'), 1225);
-  assert.equal(Object.values(s.generals).find((g) => g.owner === 'p1')!.elo, 1200);
+  const g = Object.values(s.generals).find((x) => x.owner === 'p1')!;
+  assert.equal(g.elo, 1200);
+});
+
+test('«Военная академия»: старый генерал догоняет новые ступени «Тактики» за золото', async () => {
+  const { trainGeneral, trainingFor, TRAIN_GOLD_PER_STEP } = await import('../src/index.ts');
+  const s = game();
+  const g = Object.values(s.generals).find((x) => x.owner === 'p1')!;
+  s.players.p1.research.done = 2;
+  s.players.p1.res.gold = 500;
+  assert.equal(trainGeneral(s, 'p1', g.id).ok, false, 'без академии нельзя');
+  s.players.p1.research.techs = { academy: true };
+  assert.deepEqual(trainingFor(s, g.id), { steps: 2, gold: 2 * TRAIN_GOLD_PER_STEP });
+  assert.ok(trainGeneral(s, 'p1', g.id).ok);
+  assert.equal(g.elo, 1250);
+  assert.equal(s.players.p1.res.gold, 500 - 2 * TRAIN_GOLD_PER_STEP);
+  assert.equal(trainGeneral(s, 'p1', g.id).ok, false, 'второй раз — нечему учить');
 });
 
 test('рыбный промысел: только на своей морской клетке, даёт еду', () => {

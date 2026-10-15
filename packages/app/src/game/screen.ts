@@ -9,7 +9,7 @@ import {
   RESOURCE_OUTPUT, TAVERN, TOWN_HALL_FOUND, TOWN_HALL_UPGRADE, BUILDER_HIRE_FOOD, BUILDER_UPKEEP_FOOD, GENERAL_UPKEEP_FOOD, cityUpgradeCost, tavernCost, PIECES, barracksCost, buildOptions, buildingOutput, maxLevelAt, piecePrice, researchCost, researchTurns, resourceCost, aiEconomyTurn, aiMilitaryTurn, attack, endTurn, say,
   foundTownHall, freeBuilders, hireBuilder, hireGeneral, hirePiece, income, key, maxBuilders, move, playerGenerals,
   reachable, recruitElo, resolveBattle, startResearch, upgrade, upgradeBarracks, upgradeTavern, upgradeTownHall,
-  remember, upkeep, visible, winner, build, enqueue, cancelQueued, ELO_PER_RESEARCH, ARMY_MAX, startTech, type TechId, playerHalls, hasMet, jobHall, hallBuilders, banditsTurn, recordHistory, hireSettler, settlerCost, findPath, runOrders, armyMove, startMarch, MARCH_RESEARCH, ARMY_MOVE_MARCH, BUILDING_SLOTS, citySlots, generalLimit, nationStats, type QueueOrder, type Job, type GameState, type Hex, type Piece, type Res, type ResourceBuilding,
+  remember, upkeep, visible, winner, trainGeneral, trainingFor, hasTech, build, enqueue, cancelQueued, ELO_PER_RESEARCH, ARMY_MAX, startTech, type TechId, playerHalls, hasMet, jobHall, hallBuilders, banditsTurn, recordHistory, hireSettler, settlerCost, findPath, runOrders, armyMove, startMarch, MARCH_RESEARCH, ARMY_MOVE_MARCH, BUILDING_SLOTS, citySlots, generalLimit, nationStats, type QueueOrder, type Job, type GameState, type Hex, type Piece, type Res, type ResourceBuilding,
 } from '../../../core/src/index.ts';
 import { autobattle, type BattleRecord } from './battle.ts';
 import { playManual, showReplay } from './fight.ts';
@@ -73,11 +73,16 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
   const exit = () => { document.body.classList.remove('game'); app.className = 'stack'; setBack(null); onExit(); };
   setBack(exit);
 
+  /** Сообщение сверху. Пока оно на экране, кнопки карты (технологии, генералы, города) уезжают под него. */
   const toast = (text: string) => {
     const t = app.querySelector<HTMLElement>('#toast')!;
+    const wrap = app.querySelector<HTMLElement>('.mapwrap')!;
     t.textContent = text; t.hidden = false;
+    t.onclick = () => { t.hidden = true; wrap.style.setProperty('--toast', '0px'); };
+    const below = Math.max(0, t.getBoundingClientRect().bottom - wrap.getBoundingClientRect().top + 4);
+    wrap.style.setProperty('--toast', `${below}px`);
     clearTimeout((t as unknown as { _h?: number })._h);
-    (t as unknown as { _h?: number })._h = window.setTimeout(() => (t.hidden = true), Math.min(9000, 2600 + text.length * 35));
+    (t as unknown as { _h?: number })._h = window.setTimeout(() => { t.hidden = true; wrap.style.setProperty('--toast', '0px'); }, Math.min(9000, 2600 + text.length * 35));
   };
   /** Строка состояния на заставке хода соперников (null — ничего). */
   const banner = (text: string | null) => {
@@ -171,8 +176,9 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
     const x1 = view.ox, y1 = view.oy;
     view.ox = x0; view.oy = y0;
     const t0 = performance.now();
-    const step = (t: number) => {
-      const k = Math.min(1, (t - t0) / 320), e = 1 - (1 - k) ** 3;
+    const step = () => {
+      // одни часы на всё (performance.now): метка кадра rAF после сна телефона может «уехать»
+      const k = Math.min(1, Math.max(0, (performance.now() - t0) / 320)), e = 1 - (1 - k) ** 3;
       view.ox = x0 + (x1 - x0) * e; view.oy = y0 + (y1 - y0) * e;
       view.draw(s, ME, seenCache, hlCache);
       if (k < 1) glide = requestAnimationFrame(step);
@@ -267,6 +273,13 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
           <div class="acts">${o?.kind === 'goto' ? btn(`order:${g.id}:none`, 'Stop the march', 'the general waits for orders') : ''}
             ${btn(`order:${g.id}:${o?.kind === 'explore' ? 'none' : 'explore'}`, o?.kind === 'explore' ? 'Stop exploring' : 'Explore', o?.kind === 'explore' ? 'back to your orders' : 'walks into the unknown by himself every turn')}
             ${btn(`order:${g.id}:${o?.kind === 'hold' ? 'none' : 'hold'}`, o?.kind === 'hold' ? 'Stop holding' : 'Hold position', o?.kind === 'hold' ? 'remind me about him again' : 'stays put; no end-of-turn reminder')}</div>
+          ${(() => { // «Военная академия»: догнать новые ступени «Тактики»
+            const tr = trainingFor(s, g.id);
+            if (!tr.steps) return '';
+            return hasTech(s, ME, 'academy')
+              ? `<div class="acts">${btn(`train:${g.id}`, `Retrain: +${tr.steps * ELO_PER_RESEARCH} ELO`, `${amount('gold', tr.gold)} · catches up with your Tactics`).replace('class="act"', `class="act${p.res.gold >= tr.gold ? '' : ' off'}"`)}</div>`
+              : `<p class="muted">New generals are ${tr.steps * ELO_PER_RESEARCH} ELO stronger than him. The Military academy can retrain him.</p>`;
+          })()}
           <p class="muted">${o?.kind === 'goto' ? 'To change the route, stop the march and tap a new cell.' : 'Tip: tap any far cell to send this general marching there.'}</p>`;
         const home = cell.owner === ME && cell.hall ? s.halls[cell.hall] : undefined;
         if (home) {
@@ -380,6 +393,7 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
     }
     else if (a === 'order') { const g = s.generals[x]; g.order = y === 'none' ? undefined : y === 'explore' ? { kind: 'explore' } : { kind: 'hold' }; if (y === 'explore') followOrders(); sel = y === 'none' ? { hex: g.hex, gid: g.id } : {}; saveGame(s); refresh(); }
     else if (a === 'attack') doAttack();
+    else if (a === 'train') { const r = trainGeneral(s, ME, x); act(r); if (r.ok) toast(`${s.generals[x].name} is retrained: ELO ${s.generals[x].elo}.`); }
   };
 
   const construct = async (order: QueueOrder, label: string) => { // label — надпись кнопки
@@ -837,8 +851,9 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
     // инерция: карта ещё немного катится после быстрого свайпа
     if (wasSingle && dragged && performance.now() - lastT < 80 && Math.hypot(vx, vy) > 0.25) {
       let last = performance.now();
-      const roll = (t: number) => {
-        const dt = t - last; last = t;
+      const roll = () => {
+        const now = performance.now();
+        const dt = Math.min(48, Math.max(0, now - last)); last = now; // после паузы не «выстреливает»
         view.ox += vx * dt; view.oy += vy * dt;
         const k = Math.pow(0.94, dt / 16); vx *= k; vy *= k;
         view.draw(s, ME, seenCache, hlCache);
@@ -848,7 +863,19 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
     }
   };
   canvas.addEventListener('pointerup', up);
-  canvas.addEventListener('pointercancel', (e) => pointers.delete(e.pointerId));
+  canvas.addEventListener('pointercancel', (e) => { pointers.delete(e.pointerId); if (pointers.size < 2) pinch = 0; });
+  canvas.addEventListener('lostpointercapture', (e) => { pointers.delete(e.pointerId); if (pointers.size < 2) pinch = 0; });
+  // приложение ушло в фон или вернулось: забываем «зависшие» пальцы и останавливаем все движения камеры и армий —
+  // иначе после долгого простоя карта могла начать сама крутиться и прыгать
+  const calm = () => {
+    pointers.clear(); pinch = 0; dragged = false; vx = vy = 0;
+    cancelAnimationFrame(fling); cancelAnimationFrame(glide);
+    view.stopAnimations();
+    if (app.isConnected) view.draw(s, ME, seenCache, hlCache);
+  };
+  document.addEventListener('visibilitychange', calm);
+  window.addEventListener('pageshow', calm);
+  (window as unknown as { Telegram?: { WebApp?: { onEvent?: (e: string, f: () => void) => void } } }).Telegram?.WebApp?.onEvent?.('activated', calm);
   canvas.addEventListener('wheel', (e) => { e.preventDefault(); view.zoomAt(e.deltaY < 0 ? 1.12 : 1 / 1.12, e.offsetX, e.offsetY); drawView(); }, { passive: false });
 
   const tut = startTutorial(app, s, ME);

@@ -68,6 +68,7 @@ export const hireGeneral = (s: GameState, pid: string, hallId?: string): Result 
   if (p.res.gold < gold) return no('not enough gold');
   p.res.gold -= gold;
   const g = makeGeneral(s, pid, spot, recruitElo(s, pid), emptyArmy(), generalName(s, pid));
+  g.trained = p.research.done;
   say(s, `new general hired in ${h.name} (ELO ${g.elo}, ${g.white})`, pid);
   return ok;
 };
@@ -192,6 +193,8 @@ export const applyBattle = (s: GameState, attackerId: string, defenderId: string
   att.attacked = true;
   att.moveLeft = 0;
   const winner = out.winner === 'attacker' ? att : out.winner === 'defender' ? def : null;
+  const prize = winner && s.players[winner.owner] ? mods(s, winner.owner).goldPerWin ?? 0 : 0; // Мексика: «Цветочные войны»
+  if (winner && prize) { s.players[winner.owner].res.gold += prize; say(s, `flower war: +${prize} gold for the victory`, winner.owner); }
   if (winner && s.players[winner.owner] && winner.stars < MAX_STARS) {
     winner.stars++;
     winner.elo += hasTech(s, winner.owner, 'veterans') ? 25 : ELO_PER_WIN; // «Ветераны»

@@ -46,6 +46,8 @@ export type General = {
   name: string;
   elo: number;
   stars: number;
+  /** Сколько ступеней «Тактики» уже в его ELO (при найме или после «Военной академии»). */
+  trained?: number;
   army: Army;
   hex: Hex;
   moveLeft: number;

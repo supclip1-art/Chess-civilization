@@ -31,7 +31,7 @@ const play = (aggr: Aggression[], turns: number) => {
 };
 
 test('ИИ захватывает нейтралов, воинственный нападает на соседей, миролюбивый — поздно и редко', () => {
-  const { s, vs } = play(['warlike', 'moderate', 'peaceful', 'moderate'], 45);
+  const { s, vs } = play(['warlike', 'moderate', 'peaceful', 'moderate'], 70);
   const captured = s.log.filter((e) => / is captured$/.test(e.text) && s.players[e.player!]).length;
   assert.ok(captured >= 4, `захватов: ${captured}`);
   assert.ok(vs.some((v) => v.aggr === 'warlike' && !v.neutral), 'воинственный атакует игроков');

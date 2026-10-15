@@ -3,7 +3,7 @@
 
 import {
   ARMY_MOVE, ARMY_MOVE_MARCH, TECHS, type TechId, ARMY_UPKEEP_RATE, BARRACKS, BUILDING_SLOTS, CITY_WOOD, BUILDER_HIRE_FOOD, BUILDER_UPKEEP_FOOD, BUILD_TURNS, ELO_PER_RESEARCH,
-  GENERAL_UPKEEP_FOOD, MAX_RESOURCE_LEVEL, PAWNS_REQUIRED, PIECE_PRICE, RESEARCH, RESOURCE_COST, RESOURCE_OF,
+  GENERAL_UPKEEP_FOOD, MAX_RESOURCE_LEVEL, PAWNS_REQUIRED, PIECE_PRICE, RESEARCH, RESOURCE_COST, RESOURCE_OF, TRAIN_GOLD_PER_STEP,
   RESOURCE_OUTPUT, TAVERN, TOWN_HALL_FOUND, TOWN_HALL_MAX_LEVEL, TOWN_HALL_UPGRADE,
   type Piece, type Res, type ResourceBuilding,
 } from './config.ts';
@@ -284,9 +284,37 @@ export const startTech = (s: GameState, pid: string, id: TechId): Result => {
   if (p.research.techs?.[id]) return no(`${t.name} is already researched`);
   if (p.research.tech) return no('another technology is being researched');
   if (!techReady(s, pid, id)) return no('research the technologies before it first');
-  if (!canAfford(p.res, t.cost)) return no('not enough resources');
-  pay(p, t.cost);
+  const cost = techCost(s, pid, id);
+  if (!canAfford(p.res, cost)) return no('not enough resources');
+  pay(p, cost);
   p.research.tech = { id, finish: s.turn + t.turns };
+  return ok;
+};
+/** Цена технологии с бонусом нации (Корея). */
+export const techCost = (s: GameState, pid: string, id: TechId): Res => scale(TECHS[id].cost, mods(s, pid).researchCostMult ?? 1);
+
+/** Сколько ступеней «Тактики» генерал может догнать в «Военной академии» и почём. */
+export const trainingFor = (s: GameState, gid: string): { steps: number; gold: number } => {
+  const g = s.generals[gid];
+  const p = g && s.players[g.owner];
+  if (!p || g.settler) return { steps: 0, gold: 0 };
+  const steps = Math.max(0, p.research.done - (g.trained ?? 0));
+  return { steps, gold: steps * TRAIN_GOLD_PER_STEP };
+};
+
+/** «Военная академия»: генерал догоняет новые ступени «Тактики» (+25 ELO за каждую) за золото. */
+export const trainGeneral = (s: GameState, pid: string, gid: string): Result => {
+  const g = s.generals[gid];
+  if (!g || g.owner !== pid || g.settler) return no('not your general');
+  if (!hasTech(s, pid, 'academy')) return no('research the Military academy first');
+  const { steps, gold } = trainingFor(s, gid);
+  if (!steps) return no('this general already knows every Tactics level');
+  const p = s.players[pid];
+  if (p.res.gold < gold) return no('not enough gold');
+  p.res.gold -= gold;
+  g.elo += steps * ELO_PER_RESEARCH;
+  g.trained = p.research.done;
+  say(s, `${g.name} retrained: +${steps * ELO_PER_RESEARCH} ELO`, pid);
   return ok;
 };
 export const startMarch = (s: GameState, pid: string): Result => startTech(s, pid, 'march');

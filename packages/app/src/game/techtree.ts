@@ -1,7 +1,7 @@
 // Дерево технологий: узлы с рисованными медальонами, линии зависимостей, состояние каждого узла
 // (изучено, изучается, доступно, закрыто). Пока в дереве ветка «Тактика» (+ELO новым генералам) и «Марш-бросок».
 
-import { ELO_PER_RESEARCH, RESEARCH, TECHS, researchCost, researchTurns, techReady, type GameState, type Res, type TechId } from '../../../core/src/index.ts';
+import { ELO_PER_RESEARCH, RESEARCH, TECHS, researchCost, researchTurns, techCost, techReady, type GameState, type Res, type TechId } from '../../../core/src/index.ts';
 
 export type TechState = 'done' | 'active' | 'open' | 'locked';
 export type TechNode = {
@@ -39,6 +39,7 @@ const ICONS = {
   guilds: '<path d="M15 34V22l9-7 9 7v12z" fill="#e8d6b0" stroke="#4a3a1f" stroke-width="1.1" stroke-linejoin="round"/><path d="M14 22l10-8 10 8" fill="none" stroke="#9b5a2a" stroke-width="2.4" stroke-linejoin="round"/><path d="M28 13h3v6" stroke="#4a3a1f" stroke-width="1.6" fill="none"/><path d="M21 34v-6h6v6" fill="#5a4328"/><circle cx="24" cy="23" r="2" fill="#f2cf5b"/>',
   masons: '<path d="M15 28h8v6h-8zM25 28h8v6h-8zM20 22h8v6h-8z" fill="#c9bba0" stroke="#4a3a1f" stroke-width="1"/><path d="M30 12l5 5-3 3-5-5z" fill="#9ba5af" stroke="#454d55" stroke-width="1"/><path d="M29 19l-6 6" stroke="#7a4a22" stroke-width="2.4" stroke-linecap="round"/>',
   roads: '<path d="M19 36l3-24h4l3 24z" fill="#c9b48a" stroke="#6b5434" stroke-width="1.1" stroke-linejoin="round"/><path d="M24 14v4M24 21v4M24 28v5" stroke="#fff6d8" stroke-width="1.6" stroke-linecap="round"/><path d="M12 36h24" stroke="#4f8a3a" stroke-width="2"/>',
+  academy: '<path d="M10 20l14-7 14 7-14 7z" fill="#2f4a6b" stroke="#16263a" stroke-width="1" stroke-linejoin="round"/><path d="M16 23v6c0 2 4 4 8 4s8-2 8-4v-6l-8 4z" fill="#3e5f86" stroke="#16263a" stroke-width="1" stroke-linejoin="round"/><path d="M36 21v8" stroke="#f2cf5b" stroke-width="1.6"/><circle cx="36" cy="30" r="1.6" fill="#f2cf5b"/>',
   cartography: '<path d="M13 16l7-3 8 3 7-3v19l-7 3-8-3-7 3z" fill="#f4e6c3" stroke="#6b4f1d" stroke-width="1.1" stroke-linejoin="round"/><path d="M20 13v19M28 16v19" stroke="#c9b48a" stroke-width="1"/><circle cx="31" cy="30" r="4.5" fill="none" stroke="#2f4a6b" stroke-width="2"/><path d="M34 33l3 3" stroke="#2f4a6b" stroke-width="2.4" stroke-linecap="round"/>',
 };
 
@@ -53,7 +54,7 @@ const TECH_ICON: Record<TechId, string> = {
   fortify: medal(ICONS.fortify, ['#e0b06a', '#7a5520']), veterans: medal(ICONS.veterans, ['#f2cf5b', '#9a7412']),
   quartermaster: medal(ICONS.quartermaster, ['#a8d08d', '#3f6b2a']), guilds: medal(ICONS.guilds, ['#f0c27a', '#8a5a1a']),
   masons: medal(ICONS.masons, ['#cfc6b8', '#6b6255']), march: medal(boot, ['#9ad0ff', '#2d6aa0']),
-  roads: medal(ICONS.roads, ['#e4d2a4', '#7a6334']), cartography: medal(ICONS.cartography, ['#9fd3e0', '#2a6b7d']),
+  roads: medal(ICONS.roads, ['#e4d2a4', '#7a6334']), academy: medal(ICONS.academy, ['#b9c8e0', '#2f4a6b']), cartography: medal(ICONS.cartography, ['#9fd3e0', '#2a6b7d']),
 };
 
 export const techNodes = (s: GameState, pid: string): TechNode[] => {
@@ -68,7 +69,7 @@ export const techNodes = (s: GameState, pid: string): TechNode[] => {
   }));
   // остальные технологии: колонка «Армия» и колонка «Хозяйство и держава»
   const place: Record<TechId, [number, number]> = {
-    militia: [1, 0], cavalry: [1, 1], fortify: [1, 2], veterans: [1, 3], quartermaster: [1, 4],
+    militia: [1, 0], cavalry: [1, 1], fortify: [1, 2], veterans: [1, 3], quartermaster: [1, 4], academy: [1, 5],
     guilds: [2, 0], masons: [2, 1], march: [2, 2], roads: [2, 3], cartography: [2, 4],
   };
   for (const id of Object.keys(TECHS) as TechId[]) {
@@ -76,7 +77,7 @@ export const techNodes = (s: GameState, pid: string): TechNode[] => {
     nodes.push({
       id, name: t.name, text: t.text, icon: TECH_ICON[id], col: place[id][0], row: place[id][1], needs: [...t.needs],
       state: r.techs?.[id] ? 'done' : r.tech?.id === id ? 'active' : !r.tech && techReady(s, pid, id) ? 'open' : 'locked',
-      cost: t.cost, turns: t.turns, finish: r.tech?.id === id ? r.tech.finish : undefined,
+      cost: techCost(s, pid, id), turns: t.turns, finish: r.tech?.id === id ? r.tech.finish : undefined,
     });
   }
   return nodes;

@@ -92,11 +92,12 @@ export const MAX_STARS = 5;
 
 // ---- Ветка «Тактика»: +25 ELO генералам, нанятым после исследования ----
 export const RESEARCH: readonly { cost: Res; turns: number }[] = [
-  { cost: res(30, 0, 10), turns: 1 },
-  { cost: res(40, 0, 10), turns: 1 },
-  { cost: res(50, 0, 20), turns: 2 },
-  { cost: res(60, 0, 20), turns: 2 },
-  { cost: res(70, 0, 20), turns: 2 },
+  // дерево и еда к середине партии копятся — исследования забирают их всё больше, золото почти не трогают
+  { cost: res(50, 30, 10), turns: 1 },
+  { cost: res(100, 70, 10), turns: 1 },
+  { cost: res(160, 120, 20), turns: 2 },
+  { cost: res(240, 180, 20), turns: 2 },
+  { cost: res(330, 250, 20), turns: 2 },
 ];
 export const ELO_PER_RESEARCH = 25;
 
@@ -104,22 +105,25 @@ export const ELO_PER_RESEARCH = 25;
 export const ARMY_MOVE = 2;
 /** «Марш-бросок» — разовое исследование ветки «Тактика»: генералы ходят на 3 клетки. */
 export const ARMY_MOVE_MARCH = 3;
-export const MARCH_RESEARCH = { cost: res(80, 40, 40), turns: 3 };
+export const MARCH_RESEARCH = { cost: res(200, 140, 40), turns: 3 };
 
 /** Технологии дерева (кроме ступеней «Тактики»). needs — что нужно изучить раньше (t0..t4 — ступени «Тактики»).
  *  Изучаются по одной за раз, параллельно со ступенями «Тактики». */
 export const TECHS = {
-  militia: { name: 'Militia', text: 'Pawns cost 20% less.', cost: res(40, 0, 20), turns: 2, needs: ['t0'] },
-  cavalry: { name: 'Cavalry', text: 'Knights and bishops cost a quarter less.', cost: res(60, 0, 40), turns: 3, needs: ['militia'] },
-  fortify: { name: 'Fortifications', text: 'An army defending its own city gets an extra pawn in the battle (if it has fewer than 8), otherwise +50 ELO.', cost: res(80, 20, 30), turns: 3, needs: ['t1'] },
-  veterans: { name: 'Veterans', text: 'A general gains 25 ELO for each victory instead of 15.', cost: res(60, 0, 60), turns: 3, needs: ['t2'] },
-  quartermaster: { name: 'Quartermaster', text: 'Armies eat a quarter less food.', cost: res(50, 60, 20), turns: 3, needs: ['t3'] },
-  guilds: { name: 'Guilds', text: '+1 building slot in every city.', cost: res(100, 40, 0), turns: 3, needs: [] },
-  masons: { name: 'Masons', text: 'Every construction takes one turn less (at least 1).', cost: res(80, 0, 20), turns: 2, needs: ['guilds'] },
+  militia: { name: 'Militia', text: 'Pawns cost 20% less.', cost: res(100, 60, 20), turns: 2, needs: ['t0'] },
+  cavalry: { name: 'Cavalry', text: 'Knights and bishops cost a quarter less.', cost: res(180, 140, 40), turns: 3, needs: ['militia'] },
+  fortify: { name: 'Fortifications', text: 'An army defending its own city gets an extra pawn in the battle (if it has fewer than 8), otherwise +50 ELO.', cost: res(240, 160, 30), turns: 3, needs: ['t1'] },
+  veterans: { name: 'Veterans', text: 'A general gains 25 ELO for each victory instead of 15.', cost: res(200, 180, 60), turns: 3, needs: ['t2'] },
+  quartermaster: { name: 'Quartermaster', text: 'Armies eat a quarter less food.', cost: res(220, 240, 20), turns: 3, needs: ['t3'] },
+  academy: { name: 'Military academy', text: 'Retrain your generals: a general hired before new Tactics levels can catch up to them for gold.', cost: res(200, 160, 30), turns: 3, needs: ['quartermaster'] },
+  guilds: { name: 'Guilds', text: '+1 building slot in every city.', cost: res(220, 140, 0), turns: 3, needs: [] },
+  masons: { name: 'Masons', text: 'Every construction takes one turn less (at least 1).', cost: res(240, 120, 20), turns: 2, needs: ['guilds'] },
   march: { name: 'Forced march', text: 'Generals and settlers move 3 cells per turn instead of 2.', cost: MARCH_RESEARCH.cost, turns: MARCH_RESEARCH.turns, needs: ['t1'] },
-  roads: { name: 'Roads', text: 'On your own land armies go one cell further per turn.', cost: res(120, 0, 40), turns: 3, needs: ['march'] },
-  cartography: { name: 'Cartography', text: 'Generals see 3 cells around them instead of 2.', cost: res(60, 20, 30), turns: 2, needs: ['roads'] },
+  roads: { name: 'Roads', text: 'On your own land armies go one cell further per turn.', cost: res(320, 180, 40), turns: 3, needs: ['march'] },
+  cartography: { name: 'Cartography', text: 'Generals see 3 cells around them instead of 2.', cost: res(200, 160, 30), turns: 2, needs: ['roads'] },
 } as const;
+/** «Военная академия»: золото за каждую пропущенную ступень «Тактики» при переобучении генерала. */
+export const TRAIN_GOLD_PER_STEP = 40;
 export type TechId = keyof typeof TECHS;
 export const FOG_RADIUS = 2;
 export const SIEGE_TURNS = 1;

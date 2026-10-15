@@ -6,7 +6,7 @@ import { ARMY_UPKEEP_RATE, BARRACKS, GENERAL_UPKEEP_FOOD, PIECES, PIECE_PRICE, H
 import { hireGeneral, hirePiece } from './army.ts';
 import {
   build, buildOptions, freeBuilders, mods, resourceCost, hireBuilder, income, playerGenerals, playerHalls, startResearch, upgrade, upgradeBarracks,
-  upgradeTavern, upgradeTownHall, upkeep, citySlots, cityUpgradeCost, startTech,
+  upgradeTavern, upgradeTownHall, upkeep, citySlots, cityUpgradeCost, startTech, trainGeneral, trainingFor,
 } from './economy.ts';
 import { key } from './hex.ts';
 import { BUILDING_TERRAIN, type GameState } from './state.ts';
@@ -119,5 +119,7 @@ export const aiEconomyTurn = (s: GameState, pid: string): void => {
   }
   if (p.res.gold >= 50) startResearch(s, pid);
   // технологии: по порядку, когда хватает золота с запасом на армию
-  if (p.res.gold >= 90) for (const id of ['militia', 'march', 'quartermaster', 'fortify', 'guilds', 'veterans'] as const) if (startTech(s, pid, id).ok || p.research.tech) break;
+  if (p.res.gold >= 90) for (const id of ['militia', 'march', 'quartermaster', 'fortify', 'guilds', 'veterans', 'academy'] as const) if (startTech(s, pid, id).ok || p.research.tech) break;
+  // «Военная академия»: переобучаем генералов, когда золота с запасом
+  for (const g of playerGenerals(s, pid)) { const tr = trainingFor(s, g.id); if (tr.steps && p.res.gold >= tr.gold + 120) trainGeneral(s, pid, g.id); }
 };
