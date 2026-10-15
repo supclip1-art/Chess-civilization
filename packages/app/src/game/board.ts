@@ -1,7 +1,7 @@
 // Шахматная доска для боя и реплея: рисует позицию из FEN, подсвечивает последний ход, шах,
 // выбранную фигуру и поля, куда она может пойти. Белые всегда снизу (атакующий — игрок).
 
-import { PIECE_SVG, pieceKey } from './pieces.ts';
+import { pieceKey, pieceUri } from './pieces.ts';
 
 const FILES = 'abcdefgh';
 // сплошные знаки для обеих сторон, цвет задаёт CSS; ︎ — текстовое, а не эмодзи-начертание (iOS)
@@ -84,7 +84,7 @@ export class BoardView {
       const pc = d.querySelector<HTMLElement>('.pc')!;
       if (pc.dataset.p !== (p ?? '')) {
         pc.dataset.p = p ?? '';
-        pc.style.backgroundImage = p ? `url("${PIECE_SVG[pieceKey(p)]}")` : '';
+        pc.style.backgroundImage = p ? `url("${pieceUri(pieceKey(p))}")` : '';
       }
       d.classList.toggle('last', last.includes(sq));
       d.classList.toggle('sel', marks.selected === sq);

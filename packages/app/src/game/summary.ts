@@ -1,6 +1,8 @@
 // Итоги кампании: место каждой державы по общей силе и графики экономики и армии по ходам.
 // Показываются при победе, поражении и когда игрок сам заканчивает кампанию.
 
+import { TITLES, UNLOCKS, levelOf, type CampaignXp } from '../dynasty.ts';
+import { xpBar } from '../dynastyScreen.ts';
 import { NATIONS, finalScore, nationStats, rulerOf, type GameState } from '../../../core/src/index.ts';
 import { flagSvg } from './flags.ts';
 import { portraitSvg } from './portraits.ts';
@@ -69,7 +71,20 @@ const wireCharts = (root: HTMLElement) => {
 };
 
 /** Экран итогов. Возвращается, когда игрок нажал «В меню». */
-export const showSummary = (app: HTMLElement, s: GameState, me: string, how: 'victory' | 'defeat' | 'end'): Promise<void> =>
+/** Блок «Династия» в итогах: опыт по пунктам, полоса уровня, новые награды. */
+const dynastyBlock = (x: CampaignXp): string => {
+  const lb = levelOf(x.before), la = levelOf(x.after);
+  const items = UNLOCKS.filter((u) => u.level > lb && u.level <= la);
+  const total = x.after - x.before;
+  return `<div class="card sumdyn"><h2>Dynasty</h2>
+    <table>${x.lines.map(([n, v]) => `<tr><td>${esc(n)}</td><td class="n">+${v}</td></tr>`).join('')}
+    ${x.got.map((a) => `<tr><td>★ ${esc(a.name)}</td><td class="n">+${a.xp}</td></tr>`).join('')}
+    <tr class="tot"><td>Experience</td><td class="n">+${total}</td></tr></table>
+    <p style="margin:8px 0 2px"><b>${la > lb ? `New level ${la}: ${TITLES[la - 1]}!` : `Level ${la} · ${TITLES[la - 1]}`}</b></p>${xpBar(x.after)}
+    ${items.length ? `<p style="margin-top:6px">Unlocked: ${items.map((u) => esc(u.name)).join(', ')}</p>` : ''}</div>`;
+};
+
+export const showSummary = (app: HTMLElement, s: GameState, me: string, how: 'victory' | 'defeat' | 'end', xp?: CampaignXp): Promise<void> =>
   new Promise((resolve) => {
     const hist = s.history ?? [];
     const last = (id: string) => [...hist].reverse().find((h) => h.p[id])?.p[id];
@@ -92,6 +107,7 @@ export const showSummary = (app: HTMLElement, s: GameState, me: string, how: 'vi
     el.className = 'summary';
     el.innerHTML = `<div class="sumbox">
       <h1>${head}</h1><p class="muted">${esc(sub)}</p>
+      ${xp ? dynastyBlock(xp) : ''}
       <h2>Final standings</h2>
       <ol class="standings">${rows.map((r, i) => `<li class="${r.id === me ? 'me' : ''} ${r.p.alive ? '' : 'dead'}" style="--c:${ownerColor(s, r.id)}">
         <span class="place">${i + 1}</span><span class="npc">${portraitSvg(r.p.nation, rulerOf(s, r.id), 40)}</span>

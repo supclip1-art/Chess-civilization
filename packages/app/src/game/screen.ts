@@ -6,7 +6,7 @@ import { flagSvg } from './flags.ts';
 import { portraitSvg } from './portraits.ts';
 import { startTutorial } from './tutorial.ts';
 import {
-  BARRACKS, BUILD_TURNS, BUILDING_TERRAIN, GENERAL_HIRE_GOLD, HIRE_LEVEL, NATIONS, PIECE_PRICE, RESEARCH, RESOURCE_COST,
+  armyValue,   BARRACKS, BUILD_TURNS, BUILDING_TERRAIN, GENERAL_HIRE_GOLD, HIRE_LEVEL, NATIONS, PIECE_PRICE, RESEARCH, RESOURCE_COST,
   RESOURCE_OUTPUT, TAVERN, TOWN_HALL_FOUND, TOWN_HALL_UPGRADE, BUILDER_HIRE_FOOD, BUILDER_UPKEEP_FOOD, GENERAL_UPKEEP_FOOD, cityUpgradeCost, tavernCost, PIECES, barracksCost, buildOptions, buildingOutput, maxLevelAt, piecePrice, researchCost, researchTurns, resourceCost, aiEconomyTurn, aiMilitaryTurn, attack, endTurn, say,
   foundTownHall, freeBuilders, hireBuilder, hireGeneral, hirePiece, income, key, maxBuilders, move, playerGenerals,
   reachable, recruitElo, resolveBattle, startResearch, upgrade, upgradeBarracks, upgradeTavern, upgradeTownHall,
@@ -19,6 +19,8 @@ import { clearSave, saveGame } from './save.ts';
 import { showSummary } from './summary.ts';
 import { techNodes, techTreeHtml } from './techtree.ts';
 import { setBack, tap } from '../tg.ts';
+import { checkAchievements, finishCampaign, level, type BattleNote } from '../dynasty.ts';
+import { announce } from '../dynastyScreen.ts';
 
 const ME = 'p1';
 const PIECE_NAME: Record<Piece, string> = { p: 'Pawn', n: 'Knight', b: 'Bishop', r: 'Rook', q: 'Queen' };
@@ -806,6 +808,7 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
     }
     const mineId = mineG.id;
     const before = { ...mineG.army };
+    const myBefore = armyValue(mineG.army), foeBefore = armyValue(foeG.army);
     const vsBandits = [attackerId, defenderId].some((id) => s.generals[id]?.owner === 'bandits');
     const out = resolveBattle(s, attackerId, defenderId, rec.report);
     saveGame(s);
@@ -825,6 +828,16 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
     }
     modal(null);
     if (iWon && out.chest) await chestScreen(out.chest);
+    const left2 = mine ? PIECES.reduce((n, x) => n + mine.army[x], 0) + 1 : 0; // +1 — король
+    achieve({ won: iWon, myBefore, foeBefore, myPieces: left2, lost: lost ?? 99, vsBandits, epic: out.chest?.rarity === 'epic' });
+  };
+
+  /** Достижения династии: проверить и показать золотую плашку. */
+  const achieve = (b?: BattleNote) => {
+    if (!s.players[ME]?.alive) return;
+    const lv = level();
+    const got = checkAchievements(s, ME, b);
+    if (got.length || level() > lv) announce(app, got, lv);
   };
 
   /** Сундук трофеев: сундук трясётся, крышка открывается, из света появляется награда. */
@@ -907,7 +920,8 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
     modal(null);
     clearSave();
     if (s.history?.at(-1)?.turn !== s.turn) recordHistory(s); // последняя точка графиков — сейчас
-    await showSummary(app, s, ME, how);
+    const xp = finishCampaign(s, ME, how);
+    await showSummary(app, s, ME, how, xp);
     exit();
   };
 
@@ -1123,7 +1137,7 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
   canvas.addEventListener('wheel', (e) => { e.preventDefault(); view.zoomAt(e.deltaY < 0 ? 1.12 : 1 / 1.12, e.offsetX, e.offsetY); drawView(); }, { passive: false });
 
   const tut = startTutorial(app, s, ME);
-  const refresh = () => { bar(); sheet(); draw(); tut.update(); };
+  const refresh = () => { bar(); sheet(); draw(); tut.update(); achieve(); };
   window.addEventListener('resize', () => draw());
 
   const capital = Object.values(s.halls).filter((h) => h.owner === ME).sort((a, b) => a.order - b.order)[0];

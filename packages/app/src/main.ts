@@ -11,6 +11,8 @@ import { clearSave, loadGame, saveGame } from './game/save.ts';
 import { audioPrefs, initAudio, page, setMusic, setSfx } from './audio.ts';
 import { LANGS, initI18n, lang, setLang } from './i18n.ts';
 import { initTelegram, platformLabel, setBack, tap, userName } from './tg.ts';
+import { applyLook, applyStartBonus, choose, dynasty, level, mapLevel, nationLevel, syncDynasty } from './dynasty.ts';
+import { bonusOptions, dynastyButton, openDynasty } from './dynastyScreen.ts';
 
 declare const __BUILD__: string; // подставляет сборка: короткий хеш коммита
 
@@ -21,7 +23,9 @@ const on = (id: string, fn: () => void) => document.getElementById(id)?.addEvent
 
 // ---------- Главный экран ----------
 
+let onHome = false;
 const home = () => {
+  onHome = true;
   setBack(null);
   const name = userName();
   const saved = loadGame();
@@ -31,18 +35,20 @@ const home = () => {
     ${name ? `<p>Welcome, ${esc(name)}.</p>` : ''}
     ${alive ? `<button id="continue">Continue · ${esc(NATIONS[saved!.players.p1.nation].name)}</button>` : ''}
     <button id="new" ${alive ? 'class="ghost"' : ''}>New game</button>
+    ${dynastyButton()}
     <button id="howto" class="ghost">How to play</button>
     <div class="row"><span>Language</span><div class="seg notr" id="langs">${LANGS.map(([l, n]) => `<button data-l="${l}" class="${l === lang ? 'on' : ''}">${n}</button>`).join('')}</div></div>
     <div class="row soundrow"><button id="music" class="ghost">Music: ${audioPrefs().music ? 'on' : 'off'}</button><button id="sfx" class="ghost">Sounds: ${audioPrefs().sfx ? 'on' : 'off'}</button></div>
     <button id="bench" class="ghost">Engine speed test</button>
     <p class="muted">Version ${esc(__BUILD__)} · ${esc(platformLabel())}</p>
     <p class="muted">Chess engine: <a href="https://github.com/official-stockfish/Stockfish" target="_blank" rel="noopener">Stockfish</a> (GPL-3.0). Pieces: cburnett by Colin M.L. Burnett (GPLv2+).</p>`);
-  on('continue', () => { if (saved) openGame(app, saved, home); });
+  on('continue', () => { if (saved) { onHome = false; openGame(app, saved, home); } });
   on('new', () => { page(); setup(); });
+  on('dynasty', () => { page(); openDynasty(app, home); });
   for (const b of document.querySelectorAll<HTMLButtonElement>('#langs button')) b.addEventListener('click', () => { if (b.dataset.l !== lang) setLang(b.dataset.l as typeof lang); });
   on('music', () => { setMusic(!audioPrefs().music); home(); });
   on('sfx', () => { setSfx(!audioPrefs().sfx); home(); });
-  on('bench', bench);
+  on('bench', () => { onHome = false; bench(); });
   on('howto', () => {
     resetTutorial();
     if (alive && saved) openGame(app, saved, home); else setup();
@@ -57,6 +63,7 @@ type MapId = keyof typeof MAPS;
 const AGGR: Aggression[] = ['warlike', 'moderate', 'peaceful'];
 
 const setup = () => {
+  onHome = false;
   setBack(home);
   let nation: NationId = 'russia';
   const ABC = [...NATION_ORDER].sort((a, b) => NATIONS[a].name.localeCompare(NATIONS[b].name, 'en'));
@@ -71,6 +78,10 @@ const setup = () => {
     const last = localStorage.getItem('chessciv.nation') as NationId | null;
     if (last && NATIONS[last]) nation = last;
   } catch { /* ничего */ }
+  const lv = level();
+  if (mapLevel(mapId) > lv) mapId = 'europe';
+  if (nationLevel(nation) > lv) nation = 'russia';
+  const bonuses = bonusOptions();
   const spawnsOf = (id: MapId) => MAPS[id]().spawns.length;
   const playerOptions = () => {
     const n = spawnsOf(mapId);
@@ -81,20 +92,26 @@ const setup = () => {
     <h1>New game</h1>
     <div class="card">
       <div class="row"><span>Map</span><div class="seg" id="maps">${(Object.keys(MAPS) as MapId[]).map((id) =>
-        `<button class="${id === mapId ? 'on' : ''}" data-m="${id}">${esc(MAPS[id]().name)}</button>`).join('')}</div></div>
+        `<button class="${id === mapId ? 'on' : ''}" data-m="${id}" ${mapLevel(id) > lv ? 'disabled' : ''}>${mapLevel(id) > lv ? '🔒 ' : ''}${esc(MAPS[id]().name)}</button>`).join('')}</div></div>
       <p class="muted" id="mapnote" style="margin-top:6px"></p>
       <div class="row" style="margin-top:10px"><span>Players</span><select id="players">${playerOptions()}</select></div>
       <div class="row" style="margin-top:10px"><span>Generals' ELO</span><select id="elo">${[800, 1000, 1200, 1400, 1600, 1800, 2000].map((e) => `<option ${e === elo ? 'selected' : ''}>${e}</option>`).join('')}</select></div>
       <p class="muted" style="margin-top:10px">One ELO for every general in the game, yours and the AI's.</p>
+      <div class="row" style="margin-top:10px"><span>Start bonus</span><select id="bonus">${bonuses.filter((b) => b.open).map((b) => `<option value="${b.id}" ${b.id === dynasty().bonus ? 'selected' : ''}>${esc(b.name)}</option>`).join('')}</select></div>
+      <p class="muted" id="bonusnote" style="margin-top:6px"></p>
     </div>
     <h2 class="pick">Your nation <span class="muted" id="picked"></span></h2>
     <div class="nations" id="nations">
-      ${ABC.map((id) => `<button class="nation ${id === nation ? 'on' : ''}" data-n="${id}">
-        ${flagSvg(id, 72)}<b>${esc(NATIONS[id].name)}</b><span>${esc(NATIONS[id].bonus)}</span><small>${esc(NATIONS[id].effect)}</small></button>`).join('')}
+      ${ABC.map((id) => `<button class="nation ${id === nation ? 'on' : ''} ${nationLevel(id) > lv ? 'locked' : ''}" data-n="${id}">
+        ${flagSvg(id, 72)}<b>${esc(NATIONS[id].name)}</b><span>${esc(NATIONS[id].bonus)}</span><small>${esc(NATIONS[id].effect)}</small>${nationLevel(id) > lv ? `<em class="lock">🔒 Dynasty level ${nationLevel(id)}</em>` : ''}</button>`).join('')}
     </div>
     <div class="nav"><button class="ghost" id="prevN" aria-label="Previous nation">‹</button><span id="countN"></span><button class="ghost" id="nextN" aria-label="Next nation">›</button></div>
     <button id="start">Start</button>`);
   const playersSel = document.getElementById('players') as HTMLSelectElement;
+  const bonusSel = document.getElementById('bonus') as HTMLSelectElement;
+  const showBonus = () => { document.getElementById('bonusnote')!.textContent = bonuses.find((b) => b.id === bonusSel.value)?.text ?? ''; };
+  showBonus();
+  bonusSel.addEventListener('change', () => { choose('bonus', bonusSel.value); showBonus(); });
   const showMap = () => {
     document.getElementById('mapnote')!.textContent = `${MAPS[mapId]().name}: up to ${spawnsOf(mapId)} nations · starting places are random`;
     for (const b of document.querySelectorAll<HTMLButtonElement>('#maps button')) b.classList.toggle('on', b.dataset.m === mapId);
@@ -113,6 +130,8 @@ const setup = () => {
     cards.forEach((x, j) => x.classList.toggle('on', j === i));
     document.getElementById('picked')!.textContent = `· ${NATIONS[nation].name}`;
     document.getElementById('countN')!.textContent = `${i + 1} / ${ABC.length}`;
+    const startBtn = document.getElementById('start') as HTMLButtonElement | null;
+    if (startBtn) startBtn.disabled = nationLevel(nation) > lv;
   };
   const goTo = (i: number, smooth = true) => {
     i = (i + ABC.length) % ABC.length;
@@ -132,6 +151,7 @@ const setup = () => {
   on('prevN', () => { goTo(ABC.indexOf(nation) - 1); });
   on('nextN', () => { goTo(ABC.indexOf(nation) + 1); });
   on('start', async () => {
+    if (nationLevel(nation) > lv) return;
     players = Number(playersSel.value);
     elo = Number((document.getElementById('elo') as HTMLSelectElement).value);
     const seed = Math.floor(Math.random() * 1e9);
@@ -143,6 +163,8 @@ const setup = () => {
         return { nation: n, ai: { aggression, ruler: NATIONS[n].rulers[aggression] } };
       }),
     ], { elo, seed, bandits: BANDIT_COUNT });
+    choose('bonus', bonusSel.value);
+    applyStartBonus(s, 'p1');
     clearSave();
     saveGame(s);
     try {
@@ -248,6 +270,8 @@ const run = async (log: (t: string) => void) => {
 initTelegram();
 initI18n();
 initAudio();
+applyLook();
+syncDynasty(() => { applyLook(); if (onHome && document.getElementById('dynasty')) home(); });
 // iOS не слушается user-scalable=no: щипок и двойной тап вне карты гасим сами (быстрые тапы по меню найма не зумят экран)
 document.addEventListener('gesturestart', (e) => e.preventDefault());
 document.addEventListener('touchmove', (e) => {

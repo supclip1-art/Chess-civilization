@@ -1,5 +1,7 @@
 // Фигуры cburnett (Colin M.L. Burnett, GPLv2+) — тот же набор, что на lichess. SVG как data-URI.
 
+import { dynasty, pieceSkin } from '../dynasty.ts';
+
 export const PIECE_SVG: Record<string, string> = {
   bB: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='45' height='45' viewBox='0 0 45 45'%3E%3Cg fill='none' fill-rule='evenodd' stroke='%23000' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5'%3E%3Cg fill='%23000' stroke-linecap='butt'%3E%3Cpath d='M9 36c3.4-1 10.1.4 13.5-2 3.4 2.4 10.1 1 13.5 2 0 0 1.6.5 3 2-.7 1-1.6 1-3 .5-3.4-1-10.1.5-13.5-1-3.4 1.5-10.1 0-13.5 1-1.4.5-2.3.5-3-.5 1.4-2 3-2 3-2z'/%3E%3Cpath d='M15 32c2.5 2.5 12.5 2.5 15 0 .5-1.5 0-2 0-2 0-2.5-2.5-4-2.5-4 5.5-1.5 6-11.5-5-15.5-11 4-10.5 14-5 15.5 0 0-2.5 1.5-2.5 4 0 0-.5.5 0 2z'/%3E%3Cpath d='M25 8a2.5 2.5 0 1 1-5 0 2.5 2.5 0 1 1 5 0z'/%3E%3C/g%3E%3Cpath stroke='%23ececec' stroke-linejoin='miter' d='M17.5 26h10M15 30h15m-7.5-14.5v5M20 18h5'/%3E%3C/g%3E%3C/svg%3E",
   bK: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 45 45'%3E%3Cg fill='none' fill-rule='evenodd' stroke='%23000' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5'%3E%3Cpath stroke-linejoin='miter' d='M22.5 11.6V6'/%3E%3Cpath fill='%23000' stroke-linecap='butt' stroke-linejoin='miter' d='M22.5 25s4.5-7.5 3-10.5c0 0-1-2.5-3-2.5s-3 2.5-3 2.5c-1.5 3 3 10.5 3 10.5'/%3E%3Cpath fill='%23000' d='M11.5 37a22.3 22.3 0 0 0 21 0v-7s9-4.5 6-10.5c-4-6.5-13.5-3.5-16 4V27v-3.5c-3.5-7.5-13-10.5-16-4-3 6 5 10 5 10z'/%3E%3Cpath stroke-linejoin='miter' d='M20 8h5'/%3E%3Cpath stroke='%23ececec' d='M32 29.5s8.5-4 6-9.7C34.1 14 25 18 22.5 24.6v2.1-2.1C20 18 9.9 14 7 19.9c-2.5 5.6 4.8 9 4.8 9'/%3E%3Cpath stroke='%23ececec' d='M11.5 30c5.5-3 15.5-3 21 0m-21 3.5c5.5-3 15.5-3 21 0m-21 3.5c5.5-3 15.5-3 21 0'/%3E%3C/g%3E%3C/svg%3E",
@@ -18,6 +20,15 @@ export const PIECE_SVG: Record<string, string> = {
 /** Ключ фигуры по букве FEN: «N» → wN, «q» → bQ. */
 export const pieceKey = (fenChar: string): string => (fenChar === fenChar.toUpperCase() ? 'w' : 'b') + fenChar.toUpperCase();
 
+/** Фигура в облике, выбранном в династии (перекраска кешируется). */
+const cache = new Map<string, string>();
+export const pieceUri = (key: string, skin = dynasty().skin): string => {
+  const k = `${skin}:${key}`;
+  let v = cache.get(k);
+  if (!v) { v = pieceSkin(key, PIECE_SVG[key], skin); cache.set(k, v); }
+  return v;
+};
+
 /** Фигура для HTML (кнопки превращения и т. п.). */
-export const pieceHtml = (white: boolean, kind: string): string =>
-  `<span class="pc" style="background-image:url(&quot;${PIECE_SVG[(white ? 'w' : 'b') + kind.toUpperCase()]}&quot;)"></span>`;
+export const pieceHtml = (white: boolean, kind: string, skin?: string): string =>
+  `<span class="pc" style="background-image:url(&quot;${pieceUri((white ? 'w' : 'b') + kind.toUpperCase(), skin)}&quot;)"></span>`;
