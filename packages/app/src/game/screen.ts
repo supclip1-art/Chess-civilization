@@ -170,7 +170,7 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
           <div class="acts">${o?.kind === 'goto' ? btn(`order:${g.id}:none`, 'Stop the march', 'the general waits for orders') : ''}
             ${btn(`order:${g.id}:${o?.kind === 'explore' ? 'none' : 'explore'}`, o?.kind === 'explore' ? 'Stop exploring' : 'Explore', o?.kind === 'explore' ? 'back to your orders' : 'walks into the unknown by himself every turn')}
             ${btn(`order:${g.id}:${o?.kind === 'hold' ? 'none' : 'hold'}`, o?.kind === 'hold' ? 'Stop holding' : 'Hold position', o?.kind === 'hold' ? 'remind me about him again' : 'stays put; no end-of-turn reminder')}</div>
-          <p class="muted">Tip: tap any far cell to send this general marching there.</p>`;
+          <p class="muted">${o?.kind === 'goto' ? 'To change the route, stop the march and tap a new cell.' : 'Tip: tap any far cell to send this general marching there.'}</p>`;
         const home = cell.owner === ME && cell.hall ? s.halls[cell.hall] : undefined;
         if (home) {
           // найм — по казарме города, на чьей земле стоит генерал; кнопки не отключаем: нажатие объясняет, чего не хватает
@@ -265,7 +265,14 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
     else if (a === 'general') act(hireGeneral(s, ME, x));
     else if (a === 'unqueue') act(cancelQueued(s, ME, Number(x)));
     else if (a === 'move') doMove();
-    else if (a === 'goto') { const g = s.generals[sel.gid!]; g.order = { kind: 'goto', to: { ...sel.hex! } }; followOrders(); sel = { hex: g.hex, gid: g.id }; refresh(); }
+    else if (a === 'goto') {
+      const g = s.generals[sel.gid!];
+      g.order = { kind: 'goto', to: { ...sel.hex! } };
+      followOrders();
+      sel = {}; // приказ отдан — генерал больше не выбран, касания карты маршрут не трогают
+      if (s.generals[g.id]?.order) toast('The general is marching. Tap him to see the route or stop the march.');
+      refresh();
+    }
     else if (a === 'order') { const g = s.generals[x]; g.order = y === 'none' ? undefined : y === 'explore' ? { kind: 'explore' } : { kind: 'hold' }; if (y === 'explore') followOrders(); sel = { hex: g.hex, gid: g.id }; saveGame(s); refresh(); }
     else if (a === 'attack') doAttack();
   });
@@ -500,7 +507,8 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
       if (attackTargets(s, sel.gid).has(k)) { sel = { hex: h, gid: sel.gid, target: 'attack' }; refresh(); return; }
       // дальняя клетка: открываем её и предлагаем отправить туда генерала походом
       const own = Object.values(s.generals).some((g) => g.owner === ME && key(g.hex) === k);
-      if (!own && s.generals[sel.gid].owner === ME) { sel = { hex: h, gid: sel.gid, target: 'goto' }; refresh(); return; }
+      // если генерал уже идёт походом, касание другой клетки просто открывает её (маршрут не меняется)
+      if (!own && s.generals[sel.gid].owner === ME && s.generals[sel.gid].order?.kind !== 'goto') { sel = { hex: h, gid: sel.gid, target: 'goto' }; refresh(); return; }
     }
     const mine = Object.values(s.generals).find((g) => g.owner === ME && key(g.hex) === k);
     sel = { hex: h, gid: mine?.id };

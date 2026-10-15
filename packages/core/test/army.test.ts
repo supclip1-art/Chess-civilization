@@ -170,6 +170,21 @@ test('осада: ратуша сдаётся после полного хода
   assert.equal(winner(s), 'p1');
 });
 
+test('армия, защищавшая город, разбита — город сразу переходит к победителю', () => {
+  const s = game();
+  const a = gen(s, 'p1');
+  const d = gen(s, 'p2');
+  d.hex = { ...SPAWN_B }; d.army = army({ p: 4 });
+  a.hex = { q: SPAWN_B.q - 1, r: SPAWN_B.r }; a.army = army({ p: 6, n: 1 });
+  const r = attack(s, a.id, SPAWN_B);
+  assert.equal(r.kind, 'battle');
+  resolveBattle(s, a.id, d.id, { end: 'mate', mateWinner: 'white', white: army({ p: 5 }), black: army({}) });
+  const hallB = Object.values(s.halls).find((h) => key(h.hex) === key(SPAWN_B))!;
+  assert.equal(hallB.owner, 'p1');
+  assert.deepEqual(a.hex, SPAWN_B, 'победитель входит в город');
+  assert.equal(s.players.p2.alive, false, 'это был единственный город p2');
+});
+
 test('разбитый генерал погибает, а последний генерал игрока отступает в столицу', () => {
   const s = game();
   const a = gen(s, 'p1');

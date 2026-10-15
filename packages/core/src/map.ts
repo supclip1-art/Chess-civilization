@@ -218,8 +218,17 @@ export const resolveBattle = (s: GameState, attackerId: string, defenderId: stri
   if (out.winner !== 'attacker') return out;
   const h = hallAt(s, defHex);
   if (!h || h.owner === att.owner) return out;
-  if (s.neutrals[def.owner]) { capture(s, h.id, att.owner); att.hex = { ...defHex }; }
-  else h.siege = { by: att.id, since: s.turn };
+  // защитники города разбиты: если других армий в городе нет — город сразу переходит к победителю
+  if (defenderAt(s, defHex, att.owner)) { h.siege = { by: att.id, since: s.turn }; return out; }
+  const old = h.owner;
+  capture(s, h.id, att.owner);
+  att.hex = { ...defHex };
+  // уцелевшие генералы прежнего хозяина (например, отступивший последний) уходят в свою столицу
+  const home = playerHalls(s, old).sort((a, b) => a.order - b.order)[0];
+  for (const g of Object.values(s.generals)) {
+    if (g.owner !== old || key(g.hex) !== key(defHex)) continue;
+    if (home) { g.hex = { ...home.hex }; g.moveLeft = 0; } else delete s.generals[g.id];
+  }
   return out;
 };
 
