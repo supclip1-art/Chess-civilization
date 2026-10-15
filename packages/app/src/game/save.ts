@@ -20,6 +20,13 @@ export const loadGame = (): GameState | null => {
     }
     // сохранения до появления названий городов
     for (const h of Object.values(s.halls).sort((a, b) => a.order - b.order)) h.name ??= cityName(s, h.owner);
+    // казарма и таверна раньше были общими на страну — переносим в столицу
+    for (const p of Object.values(s.players) as (typeof s.players[string] & { barracks?: number; tavern?: number })[]) {
+      const cap = Object.values(s.halls).filter((h) => h.owner === p.id).sort((a, b) => a.order - b.order)[0];
+      if (cap && p.barracks !== undefined) { cap.barracks = Math.max(cap.barracks ?? 0, p.barracks); cap.tavern = Math.max(cap.tavern ?? 0, p.tavern ?? 0); }
+      delete p.barracks; delete p.tavern;
+      for (const j of [...p.jobs, ...(p.queue ?? []).map((q) => q.job)]) if ((j.kind === 'barracks' || j.kind === 'tavern') && !j.hallId && cap) j.hallId = cap.id;
+    }
     // армии больше обычного шахматного набора (до лимита) урезаем
     for (const g of Object.values(s.generals)) for (const x of PIECES) g.army[x] = Math.min(g.army[x], ARMY_MAX[x]);
     return s;

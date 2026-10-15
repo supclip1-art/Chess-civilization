@@ -194,31 +194,40 @@ export const foundTownHall = (s: GameState, pid: string, generalId: string): Res
 
 // ---------- Казарма и таверна ----------
 
-export const upgradeBarracks = (s: GameState, pid: string): Result => {
+/** Город игрока по id; без id — столица. */
+const ownHall = (s: GameState, pid: string, hallId?: string) =>
+  hallId ? (s.halls[hallId]?.owner === pid ? s.halls[hallId] : undefined) : playerHalls(s, pid).sort((a, b) => a.order - b.order)[0];
+
+/** Казарма и таверна у каждого города свои. Без hallId — в столице. */
+export const upgradeBarracks = (s: GameState, pid: string, hallId?: string): Result => {
   const p = s.players[pid];
-  if (p.barracks >= 5) return no('already at the top level');
-  if (p.jobs.some((j) => j.kind === 'barracks')) return no('already under construction');
+  const h = ownHall(s, pid, hallId);
+  if (!h) return no('not your city');
+  if ((h.barracks ?? 0) >= 5) return no('already at the top level');
+  if (p.jobs.some((j) => j.kind === 'barracks' && j.hallId === h.id)) return no('already under construction');
   if (freeBuilders(p) < 1) return no('no free builder');
-  const level = p.barracks + 1;
+  const level = (h.barracks ?? 0) + 1;
   const b = BARRACKS[level as 1 | 2 | 3 | 4 | 5];
   const cost = barracksCost(s, pid, level as 1 | 2 | 3 | 4 | 5);
   if (!canAfford(p.res, cost)) return no('not enough resources');
   pay(p, cost);
-  p.jobs.push({ kind: 'barracks', level, finish: s.turn + b.turns });
+  p.jobs.push({ kind: 'barracks', hallId: h.id, level, finish: s.turn + b.turns });
   return ok;
 };
 
-export const upgradeTavern = (s: GameState, pid: string): Result => {
+export const upgradeTavern = (s: GameState, pid: string, hallId?: string): Result => {
   const p = s.players[pid];
-  if (p.tavern >= 4) return no('already at the top level');
-  if (p.jobs.some((j) => j.kind === 'tavern')) return no('already under construction');
+  const h = ownHall(s, pid, hallId);
+  if (!h) return no('not your city');
+  if ((h.tavern ?? 0) >= 4) return no('already at the top level');
+  if (p.jobs.some((j) => j.kind === 'tavern' && j.hallId === h.id)) return no('already under construction');
   if (freeBuilders(p) < 1) return no('no free builder');
-  const level = p.tavern + 1;
+  const level = (h.tavern ?? 0) + 1;
   const t = TAVERN[level as 1 | 2 | 3 | 4];
   const cost = tavernCost(s, pid, level as 1 | 2 | 3 | 4);
   if (!canAfford(p.res, cost)) return no('not enough resources');
   pay(p, cost);
-  p.jobs.push({ kind: 'tavern', level, finish: s.turn + t.turns });
+  p.jobs.push({ kind: 'tavern', hallId: h.id, level, finish: s.turn + t.turns });
   return ok;
 };
 
@@ -247,18 +256,18 @@ export type QueueOrder =
   | { kind: 'build'; hex: Hex; building: ResourceBuilding }
   | { kind: 'upgrade'; hex: Hex }
   | { kind: 'townhall'; hallId: string }
-  | { kind: 'barracks' }
-  | { kind: 'tavern' };
+  | { kind: 'barracks'; hallId: string }
+  | { kind: 'tavern'; hallId: string };
 
 const sameTarget = (a: Job, b: Job): boolean =>
   a.kind === b.kind && (a.kind === 'resource' ? key(a.hex) === key((b as typeof a).hex)
-    : a.kind === 'townhall' ? a.hallId === (b as typeof a).hallId : true);
+    : a.kind === 'found' ? false : a.hallId === (b as typeof a).hallId);
 
 const runOrder = (s: GameState, pid: string, o: QueueOrder): Result =>
   o.kind === 'build' ? build(s, pid, o.hex, o.building)
     : o.kind === 'upgrade' ? upgrade(s, pid, o.hex)
       : o.kind === 'townhall' ? upgradeTownHall(s, pid, o.hallId)
-        : o.kind === 'barracks' ? upgradeBarracks(s, pid) : upgradeTavern(s, pid);
+        : o.kind === 'barracks' ? upgradeBarracks(s, pid, o.hallId) : upgradeTavern(s, pid, o.hallId);
 
 /** Поставить стройку в очередь: все проверки и оплата — как у обычной стройки, но начнётся она,
  *  когда освободится строитель. Повторно ту же стройку в очередь не ставим. */
@@ -303,7 +312,8 @@ export const startQueued = (s: GameState, pid: string): void => {
     const j = q.job;
     const valid = j.kind === 'resource' ? s.cells[key(j.hex)]?.owner === pid && (j.level === 1 || s.cells[key(j.hex)].building?.level === j.level - 1)
       : j.kind === 'townhall' ? s.halls[j.hallId]?.owner === pid && s.halls[j.hallId].level === j.level - 1
-        : j.kind === 'barracks' ? p.barracks === j.level - 1 : j.kind === 'tavern' ? p.tavern === j.level - 1 : false;
+        : j.kind === 'barracks' ? s.halls[j.hallId]?.owner === pid && (s.halls[j.hallId].barracks ?? 0) === j.level - 1
+          : j.kind === 'tavern' ? s.halls[j.hallId]?.owner === pid && (s.halls[j.hallId].tavern ?? 0) === j.level - 1 : false;
     if (!valid) { cancelQueued(s, pid, 0); say(s, 'a queued construction was cancelled, resources returned', pid); continue; }
     p.queue.shift();
     p.jobs.push({ ...j, finish: s.turn + q.turns });
@@ -392,8 +402,8 @@ export const completeJobs = (s: GameState, pid: string): void => {
         recomputeTerritory(s);
         say(s, `${name} is founded`, pid);
       }
-    } else if (j.kind === 'barracks') p.barracks = j.level;
-    else if (j.kind === 'tavern') p.tavern = j.level;
+    } else if (j.kind === 'barracks') { const h = s.halls[j.hallId]; if (h?.owner === pid) h.barracks = j.level; }
+    else if (j.kind === 'tavern') { const h = s.halls[j.hallId]; if (h?.owner === pid) h.tavern = j.level; }
   }
   const r = p.research.active;
   if (r && r.finish <= s.turn) { p.research.done = r.step + 1; p.research.active = undefined; }

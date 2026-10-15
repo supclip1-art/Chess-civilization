@@ -33,6 +33,8 @@ export type TownHall = {
   owner: string;
   level: number;
   order: number; // порядок основания: при спорной клетке её держит более ранний город
+  barracks?: number; // казарма города: какие фигуры можно нанять на его земле (0 / нет — не построена)
+  tavern?: number; // таверна города: в ней нанимают генералов
   siege?: { by: string; since: number }; // id осаждающего генерала и ход начала осады
 };
 
@@ -55,8 +57,8 @@ export type Job =
   | { kind: 'resource'; hex: Hex; building: ResourceBuilding; level: number; finish: number }
   | { kind: 'townhall'; hallId: string; level: number; finish: number }
   | { kind: 'found'; hex: Hex; general: string; finish: number }
-  | { kind: 'barracks'; level: number; finish: number }
-  | { kind: 'tavern'; level: number; finish: number };
+  | { kind: 'barracks'; hallId: string; level: number; finish: number }
+  | { kind: 'tavern'; hallId: string; level: number; finish: number };
 
 export type Player = {
   id: string;
@@ -64,8 +66,8 @@ export type Player = {
   ai?: { aggression: Aggression; ruler: string; lastWar?: number }; // lastWar — ход последнего нападения на игрока
   res: Res;
   builders: number;
-  barracks: number; // 0 — не построена
-  tavern: number;
+  /** Правитель игрока (у ИИ — ai.ruler). */
+  ruler?: string;
   research: { done: number; active?: { step: number; finish: number } };
   jobs: Job[];
   /** Очередь строек: оплачены, начнутся, когда освободится строитель. turns — сколько ходов займёт стройка. */
@@ -118,7 +120,7 @@ export type MapDef = {
   names?: Record<string, string>;
 };
 
-export type PlayerSetup = { nation: NationId; ai?: { aggression: Aggression; ruler: string } };
+export type PlayerSetup = { nation: NationId; ruler?: string; ai?: { aggression: Aggression; ruler: string } };
 
 export const OPENINGS_WHITE = ['Italian Game', 'Ruy Lopez', 'Scotch Game', 'Vienna Game', "Queen's Gambit", 'Catalan', 'London System', 'English Opening'];
 export const DEFENSES_E4 = ['Sicilian Defense', 'French Defense', 'Caro-Kann Defense', 'Scandinavian Defense', 'Open Game', 'Pirc Defense'];
@@ -239,7 +241,7 @@ export const createGame = (map: MapDef, setup: PlayerSetup[], opts: { elo: numbe
     const hex = map.spawns[spawnOf[i]];
     s.order.push(id);
     s.players[id] = {
-      id, nation: p.nation, ai: p.ai, builders: 1, barracks: 0, tavern: 0,
+      id, nation: p.nation, ai: p.ai, builders: 1, ruler: p.ruler ?? p.ai?.ruler,
       res: { wood: START_RESOURCES.wood + (NATIONS[p.nation].mods.startBonus?.wood ?? 0), food: START_RESOURCES.food + (NATIONS[p.nation].mods.startBonus?.food ?? 0), gold: START_RESOURCES.gold + (NATIONS[p.nation].mods.startBonus?.gold ?? 0) },
       research: { done: 0 }, jobs: [], starterKnight: true, alive: true,
     };

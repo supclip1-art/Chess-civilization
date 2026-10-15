@@ -34,8 +34,9 @@ export const aiEconomyTurn = (s: GameState, pid: string): void => {
   let reserve = { wood: 0, food: 0 };
   if (g) {
     const need = Math.max(0, ...PIECES.filter((x) => g.army[x] < FULL_ARMY[x]).map((x) => HIRE_LEVEL[x]));
-    if (count(s, pid, 'mine') >= 1 && p.barracks < need && !p.jobs.some((j) => j.kind === 'barracks')) {
-      if (!upgradeBarracks(s, pid).ok) reserve = BARRACKS[(p.barracks + 1) as 1 | 2 | 3 | 4 | 5].cost;
+    const bar = capital.barracks ?? 0; // ИИ держит казарму и таверну в столице
+    if (count(s, pid, 'mine') >= 1 && bar < need && !p.jobs.some((j) => j.kind === 'barracks')) {
+      if (!upgradeBarracks(s, pid, capital.id).ok) reserve = BARRACKS[(bar + 1) as 1 | 2 | 3 | 4 | 5].cost;
     }
   }
   // города, где кончились места под здания, растут, если на это хватает ресурсов сверх резерва на казарму
@@ -101,10 +102,10 @@ export const aiEconomyTurn = (s: GameState, pid: string): void => {
   }
   // вторая армия — гарнизон столицы: таверна после казармы 3, потом найм генерала и немного фигур ему
   // миролюбивый строит гарнизон раньше — ему важнее оборона
-  if (p.barracks >= (p.ai?.aggression === 'peaceful' ? 2 : 3) && p.tavern < 1) upgradeTavern(s, pid);
+  if ((capital.barracks ?? 0) >= (p.ai?.aggression === 'peaceful' ? 2 : 3) && !capital.tavern) upgradeTavern(s, pid, capital.id);
   const gens = playerGenerals(s, pid).sort((a, b) => Number(a.id.slice(1)) - Number(b.id.slice(1)));
   // новый генерал ест еду — нанимаем, только если доход еды это выдержит
-  if (p.tavern >= 1 && gens.length < 2 && p.res.gold >= 60 && income(s, pid).food - upkeep(s, pid) >= GENERAL_UPKEEP_FOOD + 5) hireGeneral(s, pid);
+  if (capital.tavern && gens.length < 2 && p.res.gold >= 60 && income(s, pid).food - upkeep(s, pid) >= GENERAL_UPKEEP_FOOD + 5) hireGeneral(s, pid, capital.id);
   for (const guard of playerGenerals(s, pid).sort((a, b) => Number(a.id.slice(1)) - Number(b.id.slice(1))).slice(1)) {
     for (const piece of PIECES) {
       while (guard.army[piece] < GUARD_ARMY[piece] && income(s, pid).food >= upkeep(s, pid) + PIECE_PRICE[piece] * ARMY_UPKEEP_RATE) {

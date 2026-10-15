@@ -20,7 +20,7 @@ const STEPS: Step[] = [
     done: (s, me) => s.players[me].jobs.some((j) => j.kind === 'resource') || Object.values(s.cells).some((c) => c.owner === me && c.building),
   },
   {
-    text: (s, me) => `Tap <b>${playerHalls(s, me)[0]?.name}</b> to grow the city, hire builders, build <b>barracks</b> (to hire chess pieces) and a <b>tavern</b> (more generals).`,
+    text: (s, me) => `Tap <b>${playerHalls(s, me)[0]?.name}</b> to grow the city, hire builders, build <b>barracks</b> (armies on this city's land hire chess pieces there) and a <b>tavern</b> (more generals).`,
   },
   {
     text: () => 'Your <b>general</b> is the king with your army. He moves 2 cells per turn. Next to an enemy army or city, tap it and attack — <b>every battle is a real chess game</b> you can play yourself.',

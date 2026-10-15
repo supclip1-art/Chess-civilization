@@ -111,7 +111,7 @@ export class MapView {
     if (me) {
       const capital = Object.values(s.halls).filter((h) => h.owner === viewer).sort((a, b) => a.order - b.order)[0];
       const at = (j: Job): string | null => j.kind === 'resource' || j.kind === 'found' ? key(j.hex)
-        : j.kind === 'townhall' ? (s.halls[j.hallId] ? key(s.halls[j.hallId].hex) : null) : capital ? key(capital.hex) : null;
+        : s.halls[j.hallId] ? key(s.halls[j.hallId].hex) : capital ? key(capital.hex) : null;
       for (const q of me.queue ?? []) { const k = at(q.job); if (k) clocks.set(k, true); }
       for (const j of me.jobs) { const k = at(j); if (k) clocks.set(k, false); }
     }

@@ -189,12 +189,13 @@ test('очередь строек: оплата сразу, старт, когд
   assert.ok(p.res.wood < wood, 'оплачено сразу');
   assert.equal(p.queue!.length, 1);
   assert.equal(enqueue(s, 'p1', { kind: 'build', hex: farmCell.hex, building: 'farm' }).ok, false); // клетка уже занята
-  assert.ok(enqueue(s, 'p1', { kind: 'tavern' }).ok);
-  assert.equal(enqueue(s, 'p1', { kind: 'tavern' }).ok, false); // повтор
+  const capId = playerHalls(s, 'p1')[0].id;
+  assert.ok(enqueue(s, 'p1', { kind: 'tavern', hallId: capId }).ok);
+  assert.equal(enqueue(s, 'p1', { kind: 'tavern', hallId: capId }).ok, false); // повтор
   // казарма строится 1 ход — потом стартует первая стройка из очереди
   s.turn = p.jobs[0].finish;
   completeJobs(s, 'p1');
-  assert.equal(p.barracks, 1);
+  assert.equal(playerHalls(s, 'p1')[0].barracks, 1);
   assert.equal(p.queue!.length, 1);
   assert.equal(p.jobs[0].kind, 'resource');
   const w2 = p.res.wood;
@@ -218,7 +219,7 @@ test('места под здания зависят от уровня город
   assert.equal(built, Math.min(free.length, BUILDING_SLOTS[0]));
   assert.equal(citySlots(s, hall.id).used, built);
   const g = Object.values(s.generals).find((x) => x.owner === 'p1')!;
-  p.barracks = 5;
+  hall.barracks = 5;
   g.army = { p: 8, n: 2, b: 0, r: 0, q: 0 };
   assert.equal(hirePiece(s, 'p1', g.id, 'p').ok, false);
   assert.equal(hirePiece(s, 'p1', g.id, 'n').ok, false);

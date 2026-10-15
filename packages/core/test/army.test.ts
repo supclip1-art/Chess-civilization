@@ -29,7 +29,7 @@ test('найм фигур: нужна казарма нужного уровня
   round(s);
   assert.equal(hirePiece(s, 'p1', g.id, 'p').ok, true);
   assert.equal(hirePiece(s, 'p1', g.id, 'n').ok, false, 'кони с казармы 2');
-  s.players.p1.barracks = 3;
+  playerHalls(s, 'p1')[0].barracks = 3;
   assert.equal(hirePiece(s, 'p1', g.id, 'b').ok, false, 'слону нужно 6 пешек');
   assert.equal(hirePiece(s, 'p1', g.id, 'p').ok, true);
   assert.equal(hirePiece(s, 'p1', g.id, 'b').ok, true);
@@ -39,9 +39,29 @@ test('генералы: таверна задаёт число, Турция н�
   const s = game();
   s.players.p2.res = { wood: 0, food: 0, gold: 1000 };
   assert.equal(hireGeneral(s, 'p2').ok, false, 'без таверны только стартовый');
-  s.players.p2.tavern = 1;
+  playerHalls(s, 'p2')[0].tavern = 1;
   assert.equal(hireGeneral(s, 'p2').ok, true);
   assert.equal(s.players.p2.res.gold, 1000 - (40 - 20));
+});
+
+test('казарма и таверна у каждого города свои: найм — по казарме города, на чьей земле стоит генерал', () => {
+  const s = game();
+  const g = gen(s, 'p1');
+  s.players.p1.res = { wood: 0, food: 0, gold: 1000 };
+  const cap = playerHalls(s, 'p1')[0];
+  cap.barracks = 1;
+  assert.ok(hirePiece(s, 'p1', g.id, 'p').ok);
+  // на чужой/ничейной земле нанять нельзя
+  const away = Object.values(s.cells).find((c) => !c.owner && c.terrain === 'field')!;
+  const home = { ...g.hex };
+  g.hex = { ...away.hex };
+  assert.equal(hirePiece(s, 'p1', g.id, 'p').ok, false);
+  g.hex = home;
+  // генерала нанимают в таверне выбранного города и он появляется там
+  assert.equal(hireGeneral(s, 'p1', cap.id).ok, false, 'в городе нет таверны');
+  cap.tavern = 1;
+  assert.ok(hireGeneral(s, 'p1', cap.id).ok);
+  assert.equal(hireGeneral(s, 'p1', cap.id).ok, false, 'таверна 1 — не больше двух генералов');
 });
 
 test('исход боя: мат, материал на лимите, ничья отбивает атаку', () => {
@@ -156,7 +176,7 @@ test('разбитый генерал погибает, а последний г
   const d = gen(s, 'p2');
   d.hex = { q: 0, r: 2 };
   a.hex = { q: -1, r: 2 };
-  s.players.p2.tavern = 1;
+  playerHalls(s, 'p2')[0].tavern = 1;
   s.players.p2.res.gold = 500;
   hireGeneral(s, 'p2');
   const lose = { end: 'mate' as const, mateWinner: 'white' as const, white: army({ p: 4 }), black: army({}) };

@@ -13,3 +13,4 @@ export * from './battle.ts';
 export * from './openings.ts';
 export * from './ai.ts';
 export * from './aiwar.ts';
+export * from './stats.ts';

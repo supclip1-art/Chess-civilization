@@ -1,13 +1,15 @@
 // Экран партии: карта, верхняя панель (казна, ход), нижняя панель действий, бои, ход ИИ.
 
 import { iconSvg, iconsReady } from './icons.ts';
+import { flagSvg } from './flags.ts';
+import { portraitSvg } from './portraits.ts';
 import { startTutorial } from './tutorial.ts';
 import {
   BARRACKS, BUILD_TURNS, BUILDING_TERRAIN, GENERAL_HIRE_GOLD, HIRE_LEVEL, NATIONS, PIECE_PRICE, RESEARCH, RESOURCE_COST,
   RESOURCE_OUTPUT, TAVERN, TOWN_HALL_FOUND, TOWN_HALL_UPGRADE, BUILDER_HIRE_FOOD, BUILDER_UPKEEP_FOOD, GENERAL_UPKEEP_FOOD, cityUpgradeCost, tavernCost, PIECES, barracksCost, buildOptions, buildingOutput, maxLevelAt, piecePrice, researchCost, researchTurns, resourceCost, aiEconomyTurn, aiMilitaryTurn, attack, endTurn, say,
   foundTownHall, freeBuilders, hireBuilder, hireGeneral, hirePiece, income, key, maxBuilders, move, playerGenerals,
   reachable, recruitElo, resolveBattle, startResearch, upgrade, upgradeBarracks, upgradeTavern, upgradeTownHall,
-  remember, upkeep, visible, winner, build, enqueue, cancelQueued, ELO_PER_RESEARCH, ARMY_MAX, BUILDING_SLOTS, citySlots, type QueueOrder, type Job, type GameState, type Hex, type Piece, type Res, type ResourceBuilding,
+  remember, upkeep, visible, winner, build, enqueue, cancelQueued, ELO_PER_RESEARCH, ARMY_MAX, BUILDING_SLOTS, citySlots, generalLimit, nationStats, type QueueOrder, type Job, type GameState, type Hex, type Piece, type Res, type ResourceBuilding,
 } from '../../../core/src/index.ts';
 import { autobattle, type BattleRecord } from './battle.ts';
 import { playManual, showReplay } from './fight.ts';
@@ -39,6 +41,7 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
   app.className = 'game-root';
   app.innerHTML = `
     <header class="bar">
+      <button id="me" class="mebtn" aria-label="Your nation">${flagSvg(s.players[ME].nation, 30)}</button>
       <div class="res" id="res"></div>
       <button id="end" class="end">End turn</button>
     </header>
@@ -78,7 +81,7 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
   const ago = (turn: number) => { const n = s.turn - turn; return n <= 0 ? 'this turn' : `${n} turn${n > 1 ? 's' : ''} ago`; };
   const jobName = (j: Job) => j.kind === 'resource' ? `${BUILDING_NAME[j.building]}${j.level > 1 ? ` → ${j.level}` : ''}`
     : j.kind === 'found' ? 'New city' : j.kind === 'townhall' ? `${s.halls[j.hallId]?.name ?? 'City'} → ${j.level}`
-      : `${j.kind[0].toUpperCase() + j.kind.slice(1)} → ${j.level}`;
+      : `${s.halls[j.hallId]?.name ?? 'City'}: ${j.kind} → ${j.level}`;
 
   // ---------- верхняя панель ----------
   const bar = () => {
@@ -146,16 +149,20 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
     for (const g of gens) {
       const mine = g.owner === ME;
       const army = PIECES.filter((x) => g.army[x]).map((x) => `${g.army[x]} ${PIECE_NAME[x].toLowerCase()}${g.army[x] > 1 ? 's' : ''}`).join(', ') || 'no pieces';
-      let html = `<div class="card"><div class="row"><b style="color:${ownerColor(s, g.owner)}">${mine ? 'Your general' : esc(ownerName(s, g.owner))}</b><span>ELO ${g.elo} ${'★'.repeat(g.stars)}</span></div>
+      let html = `<div class="card"><div class="row"><b style="color:${ownerColor(s, g.owner)}">${mine ? 'Your general' : esc(ownerName(s, g.owner))}</b><span>ELO ${g.elo} ${'★'.repeat(g.stars)}${!mine && s.players[g.owner] ? nationBtn(g.owner) : ''}</span></div>
         <p>King + ${army}</p>`;
       if (mine) {
         html += `<p class="muted">White: ${esc(g.white)} · vs 1.e4: ${esc(g.vsE4)} · vs 1.d4: ${esc(g.vsD4)}</p>
           <p class="muted">${g.attacked ? 'Has acted this turn' : `Moves left: ${g.moveLeft}`}</p>`;
-        if (cell.owner === ME) {
-          // кнопки найма не отключаем: нажатие объясняет, чего не хватает (казарма, золото, пешки)
-          html += `<p class="muted hirehead">Hire pieces into this army${p.barracks ? '' : ' — first build <b>barracks</b> in your city'}:</p>
-            <div class="acts">${PIECES.map((x) => btn(`hire:${g.id}:${x}`, PIECE_NAME[x], `${amount('gold', piecePrice(s, ME, x))}${g.army[x] >= ARMY_MAX[x] ? ` · max ${ARMY_MAX[x]}` : p.barracks < HIRE_LEVEL[x] ? ` · barracks ${HIRE_LEVEL[x]}` : ''}`)
-              .replace('class="act"', `class="act${p.barracks >= HIRE_LEVEL[x] && p.res.gold >= piecePrice(s, ME, x) && g.army[x] < ARMY_MAX[x] ? '' : ' off'}"`)).join('')}</div>`;
+        const home = cell.owner === ME && cell.hall ? s.halls[cell.hall] : undefined;
+        if (home) {
+          // найм — по казарме города, на чьей земле стоит генерал; кнопки не отключаем: нажатие объясняет, чего не хватает
+          const bar = home.barracks ?? 0;
+          html += `<p class="muted hirehead">Hire pieces · barracks of <b>${esc(home.name)}</b>: ${bar ? `level ${bar}` : 'none yet — build them in this city'}</p>
+            <div class="acts">${PIECES.map((x) => btn(`hire:${g.id}:${x}`, PIECE_NAME[x], `${amount('gold', piecePrice(s, ME, x))}${g.army[x] >= ARMY_MAX[x] ? ` · max ${ARMY_MAX[x]}` : bar < HIRE_LEVEL[x] ? ` · barracks ${HIRE_LEVEL[x]}` : ''}`)
+              .replace('class="act"', `class="act${bar >= HIRE_LEVEL[x] && p.res.gold >= piecePrice(s, ME, x) && g.army[x] < ARMY_MAX[x] ? '' : ' off'}"`)).join('')}</div>`;
+        } else if (cell.owner === ME) {
+          html += '<p class="muted hirehead">Pieces are hired on the land of a city with barracks.</p>';
         }
         if (!cell.owner && cell.terrain !== 'water' && cell.terrain !== 'mountain') {
           const m = NATIONS[p.nation].mods;
@@ -173,23 +180,24 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
       const queue = p.queue ?? [];
       const thUp = hall.level < 3 ? TOWN_HALL_UPGRADE[(hall.level + 1) as 2 | 3] : null;
       const nb = p.builders + 1;
-      const barNext = p.barracks < 5 ? BARRACKS[(p.barracks + 1) as 1 | 2 | 3 | 4 | 5] : null;
-      const tavNext = p.tavern < 4 ? TAVERN[(p.tavern + 1) as 1 | 2 | 3 | 4] : null;
+      const hb = hall.barracks ?? 0, ht = hall.tavern ?? 0;
+      const barNext = hb < 5 ? BARRACKS[(hb + 1) as 1 | 2 | 3 | 4 | 5] : null;
+      const tavNext = ht < 4 ? TAVERN[(ht + 1) as 1 | 2 | 3 | 4] : null;
       const gCount = playerGenerals(s, ME).length;
       const gCost = gCount < 5 ? Math.max(0, GENERAL_HIRE_GOLD[(gCount + 1) as 2 | 3 | 4 | 5] - (NATIONS[p.nation].mods.generalHireDiscount ?? 0)) : 0;
       parts.push(`<div class="card"><div class="row"><b>${esc(hall.name)} · level ${hall.level}</b><span class="muted">builders ${freeBuilders(p)}/${p.builders} free</span></div>
         <div class="acts">
           ${thUp ? btn(`th:${hall.id}`, `City → ${hall.level + 1}`, `${cost(cityUpgradeCost(s, ME, (hall.level + 1) as 2 | 3))} · ${thUp.turns} turn · ${BUILDING_SLOTS[hall.level]} building slots, +1 builder, wider land`) : ''}
           ${nb <= maxBuilders(s, ME) ? btn('builder', `Hire builder ${nb}`, `${NATIONS[p.nation].mods.freeBuilderHire ? 'free' : `${amount('food', BUILDER_HIRE_FOOD[nb as 2 | 3])}`} · ${NATIONS[p.nation].mods.freeBuilderUpkeep ? 'eats nothing' : `eats ${amount('food', BUILDER_UPKEEP_FOOD)}/turn`}`) : ''}
-          ${barNext ? btn('barracks', p.barracks ? `Barracks → ${p.barracks + 1}` : 'Build barracks', `${cost(barracksCost(s, ME, (p.barracks + 1) as 1 | 2 | 3 | 4 | 5))} · ${barNext.turns} turn${barNext.turns > 1 ? 's' : ''} · unlocks ${PIECE_NAME[PIECES[p.barracks]].toLowerCase()}s`) : ''}
-          ${tavNext ? btn('tavern', p.tavern ? `Tavern → ${p.tavern + 1}` : 'Build tavern', `${cost(tavernCost(s, ME, (p.tavern + 1) as 1 | 2 | 3 | 4))} · ${tavNext.turns} turn${tavNext.turns > 1 ? 's' : ''} · ${p.tavern + 2} generals`) : ''}
-          ${gCount < Math.min(5, p.tavern + 1) ? btn('general', 'Hire a general', `${amount('gold', gCost)} · ELO ${recruitElo(s, ME)} · eats ${amount('food', GENERAL_UPKEEP_FOOD)}/turn`) : ''}
+          ${barNext ? btn(`barracks:${hall.id}`, hb ? `Barracks → ${hb + 1}` : 'Build barracks', `${cost(barracksCost(s, ME, (hb + 1) as 1 | 2 | 3 | 4 | 5))} · ${barNext.turns} turn${barNext.turns > 1 ? 's' : ''} · ${PIECE_NAME[PIECES[hb]].toLowerCase()}s here`) : ''}
+          ${tavNext ? btn(`tavern:${hall.id}`, ht ? `Tavern → ${ht + 1}` : 'Build tavern', `${cost(tavernCost(s, ME, (ht + 1) as 1 | 2 | 3 | 4))} · ${tavNext.turns} turn${tavNext.turns > 1 ? 's' : ''} · up to ${Math.min(5, ht + 2)} generals`) : ''}
+          ${ht && gCount < generalLimit(s, ME) ? btn(`general:${hall.id}`, 'Hire a general here', `${amount('gold', gCost)} · ELO ${recruitElo(s, ME)} · eats ${amount('food', GENERAL_UPKEEP_FOOD)}/turn`) : ''}
         </div>
-        <p class="muted">Buildings on its land ${citySlots(s, hall.id).used}/${citySlots(s, hall.id).max}${hall.level < 3 ? ` · level ${hall.level + 1}: ${BUILDING_SLOTS[hall.level]}` : ''} · Barracks ${p.barracks} · Tavern ${p.tavern}</p>
+        <p class="muted">Buildings on its land ${citySlots(s, hall.id).used}/${citySlots(s, hall.id).max}${hall.level < 3 ? ` · level ${hall.level + 1}: ${BUILDING_SLOTS[hall.level]}` : ''} · Barracks ${hb || '—'} · Tavern ${ht || '—'}</p>
         ${jobs.length ? `<p class="muted withico">${iconSvg('clock', 15)}In progress: ${jobs.map(esc).join('; ')}</p>` : ''}
         ${queue.length ? `<p class="muted">Queued — start when a builder is free:</p><div class="queue">${queue.map((q, i) => `<span>${esc(jobName(q.job))}<button class="ghost" data-a="unqueue:${i}">Cancel</button></span>`).join('')}</div>` : ''}</div>`);
     } else if (hall) {
-      parts.push(`<div class="card"><b>${esc(hall.name)} · city level ${hall.level}</b><p class="muted">${esc(ownerName(s, hall.owner))}${hall.siege ? ' · under siege' : ''}</p></div>`);
+      parts.push(`<div class="card"><div class="row"><b>${esc(hall.name)} · city level ${hall.level}</b>${s.players[hall.owner] ? nationBtn(hall.owner) : ''}</div><p class="muted">${esc(ownerName(s, hall.owner))}${hall.siege ? ' · under siege' : ''}${hall.barracks ? ` · barracks ${hall.barracks}` : ''}${hall.tavern ? ` · tavern ${hall.tavern}` : ''}</p></div>`);
     }
 
     // ресурсное здание
@@ -229,14 +237,15 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
     const [a, x, y] = b.dataset.a!.split(':');
     const hex = (k: string) => { const [q, r] = k.split(',').map(Number); return { q, r }; };
     // стройки: если все строители заняты — предлагаем поставить в очередь
-    const order: QueueOrder | null = a === 'th' ? { kind: 'townhall', hallId: x } : a === 'barracks' ? { kind: 'barracks' }
-      : a === 'tavern' ? { kind: 'tavern' } : a === 'up' ? { kind: 'upgrade', hex: hex(x) }
+    if (a === 'nation') { tap(); void nationInfo(x); return; }
+    const order: QueueOrder | null = a === 'th' ? { kind: 'townhall', hallId: x } : a === 'barracks' ? { kind: 'barracks', hallId: x }
+      : a === 'tavern' ? { kind: 'tavern', hallId: x } : a === 'up' ? { kind: 'upgrade', hex: hex(x) }
         : a === 'build' ? { kind: 'build', hex: hex(x), building: y as ResourceBuilding } : null;
     if (order) { construct(order, b.querySelector('b')?.textContent ?? 'this'); return; }
     if (a === 'hire') act(hirePiece(s, ME, x, y as Piece));
     else if (a === 'found') act(foundTownHall(s, ME, x));
     else if (a === 'builder') act(hireBuilder(s, ME));
-    else if (a === 'general') act(hireGeneral(s, ME));
+    else if (a === 'general') act(hireGeneral(s, ME, x));
     else if (a === 'unqueue') act(cancelQueued(s, ME, Number(x)));
     else if (a === 'move') doMove();
     else if (a === 'attack') doAttack();
@@ -256,6 +265,30 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
     modal(null);
     if (c === 'queue') { const r = enqueue(s, ME, order); act(r); if (r.ok) toast(`${label}: queued`); }
   };
+
+  // ---------- Держава: правитель и сила государства ----------
+  const nationBtn = (pid: string) => `<button class="natbtn" data-a="nation:${pid}" aria-label="About this nation">${flagSvg(s.players[pid].nation, 22)}</button>`;
+  const nationInfo = async (pid: string) => {
+    const pl = s.players[pid];
+    const n = NATIONS[pl.nation];
+    const st = nationStats(s, pid);
+    const mineN = pid === ME;
+    const rank = (r: number) => `<small>${r === 1 ? '1st' : r === 2 ? '2nd' : r === 3 ? '3rd' : `${r}th`} of ${st.rank.of}</small>`;
+    modal(`<div class="nation-head">${flagSvg(pl.nation, 44)}<div><h2>${esc(n.name)}</h2><p class="muted">${esc(n.bonus)}: ${esc(n.effect)}</p></div></div>
+      <div class="ruler">${portraitSvg(pl.nation, st.ruler, 76)}<div><b>${esc(st.ruler)}</b><p class="muted">${mineN ? 'Your ruler' : `Ruler${st.character ? ` · ${st.character}` : ''}`}</p></div></div>
+      <div class="stats">
+        <div><span>Cities</span><b>${st.cities}</b></div>
+        <div><span>Area</span><b>${st.area}</b>${rank(st.rank.area)}</div>
+        <div><span>Military</span><b>${st.military}</b>${rank(st.rank.military)}</div>
+        <div><span>Economy</span><b>${st.economy}</b>${rank(st.rank.economy)}</div>
+      </div>
+      <p class="muted">Area — cells of land. Military — the value of all pieces, stronger with the generals' ELO (${st.generals} general${st.generals > 1 ? 's' : ''}, ${st.pieces} pieces). Economy — income per turn after feeding the army, gold counted ×4.</p>
+      ${mineN ? `<p class="withico">Income: ${amount('wood', st.income.wood)} ${amount('food', st.income.food - st.upkeep)} ${amount('gold', st.income.gold)} per turn</p>` : ''}
+      <div class="acts">${btn('close', 'Close', '')}</div>`);
+    await ask();
+    modal(null);
+  };
+  app.querySelector('#me')!.addEventListener('click', () => { if (!busy) { tap(); void nationInfo(ME); } });
 
   // ---------- Тактика: исследования для новых генералов ----------
   const tactics = async () => {

@@ -25,7 +25,7 @@ export const botTurn = (s: GameState, pid: string) => {
   while (hireBuilder(s, pid).ok);
   const g = playerGenerals(s, pid)[0];
   const need = Math.max(0, ...PIECES.filter((x) => g.army[x] < TARGET[x]).map((x) => HIRE_LEVEL[x]));
-  if (mines >= 1 && p.barracks < need) upgradeBarracks(s, pid);
+  if (mines >= 1 && (hall.barracks ?? 0) < need) upgradeBarracks(s, pid, hall.id);
   // жадная стройка: лучшая выработка на единицу цены
   for (let guard = 0; guard < 4 && freeBuilders(p) > 0; guard++) {
     const fn = income(s, pid).food - upkeep(s, pid);
@@ -69,7 +69,7 @@ test('темп развития дома на настоящих правила�
     const v = armyValue(g.army);
     if (v >= FULL / 2 && !marks.half) marks.half = t;
     if (v >= FULL && !marks.full) marks.full = t;
-    if (s.players.p1.barracks >= 5 && !marks.barracks5) marks.barracks5 = t;
+    if ((playerHalls(s, 'p1')[0].barracks ?? 0) >= 5 && !marks.barracks5) marks.barracks5 = t;
     endTurn(s); endTurn(s);
   }
   const famine = s.log.some((e) => e.player === 'p1' && e.text.startsWith('famine'));

@@ -16,16 +16,25 @@ const no = (reason: string): Result => ({ ok: false, reason });
 export const formationOk = (a: Army): boolean =>
   PIECES.every((p) => a[p] === 0 || a.p >= PAWNS_REQUIRED[p]);
 
-const inOwnTerritory = (s: GameState, pid: string, gid: string): boolean =>
-  s.cells[key(s.generals[gid].hex)]?.owner === pid;
 
-/** Купить фигуру в армию генерала. Генерал должен стоять на своей территории. */
+/** Город, к земле которого относится клетка генерала (если это земля игрока). */
+export const hallUnder = (s: GameState, pid: string, gid: string) => {
+  const c = s.cells[key(s.generals[gid].hex)];
+  return c?.owner === pid && c.hall ? s.halls[c.hall] : undefined;
+};
+
+/** Купить фигуру в армию генерала. Генерал стоит на земле своего города; нанять можно только то,
+ *  что умеет казарма именно этого города. */
 export const hirePiece = (s: GameState, pid: string, gid: string, piece: Piece): Result => {
   const p = s.players[pid];
   const g = s.generals[gid];
   if (!g || g.owner !== pid) return no('not your general');
-  if (!inOwnTerritory(s, pid, gid)) return no('the general must stand on your land');
-  if (p.barracks < HIRE_LEVEL[piece]) return no(p.barracks ? `needs barracks level ${HIRE_LEVEL[piece]} — upgrade it in your city` : 'build barracks in your city first: tap the city, then Build barracks');
+  const h = hallUnder(s, pid, gid);
+  if (!h) return no('the general must stand on the land of one of your cities');
+  const bar = h.barracks ?? 0;
+  if (bar < HIRE_LEVEL[piece]) {
+    return no(bar ? `${h.name} needs barracks level ${HIRE_LEVEL[piece]} for this piece` : `${h.name} has no barracks: tap the city, then Build barracks`);
+  }
   if (g.army[piece] >= ARMY_MAX[piece]) return no(`an army holds at most ${ARMY_MAX[piece]} ${PIECE_NAMES[piece]}${ARMY_MAX[piece] > 1 ? 's' : ''}`);
   const price = piecePrice(s, pid, piece);
   if (p.res.gold < price) return no('not enough gold');
@@ -36,18 +45,25 @@ export const hirePiece = (s: GameState, pid: string, gid: string, piece: Piece):
   return ok;
 };
 
-/** Нанять генерала в таверне. Он появляется у столицы с пустой армией и ELO с учётом «Тактики». */
-export const hireGeneral = (s: GameState, pid: string): Result => {
+/** Сколько генералов может быть у игрока: 1 + уровень лучшей таверны, не больше MAX_GENERALS. */
+export const generalLimit = (s: GameState, pid: string): number =>
+  Math.min(MAX_GENERALS, 1 + Math.max(0, ...playerHalls(s, pid).map((h) => h.tavern ?? 0)));
+
+/** Нанять генерала в таверне города (без hallId — в городе с лучшей таверной). Он появляется в этом городе
+ *  с пустой армией и ELO с учётом «Тактики». */
+export const hireGeneral = (s: GameState, pid: string, hallId?: string): Result => {
   const p = s.players[pid];
   const count = playerGenerals(s, pid).length;
-  if (count >= Math.min(MAX_GENERALS, p.tavern + 1)) return no('upgrade your tavern first');
+  const halls = playerHalls(s, pid).sort((a, b) => (b.tavern ?? 0) - (a.tavern ?? 0) || a.order - b.order);
+  const h = hallId ? halls.find((x) => x.id === hallId) : halls[0];
+  if (!h) return no('not your city');
+  if (!h.tavern) return no(`${h.name} has no tavern: build one in this city first`);
+  if (count >= generalLimit(s, pid)) return no('upgrade a tavern first');
   const gold = Math.max(0, GENERAL_HIRE_GOLD[(count + 1) as 2 | 3 | 4 | 5] - (mods(s, pid).generalHireDiscount ?? 0));
   if (p.res.gold < gold) return no('not enough gold');
-  const capital = playerHalls(s, pid).sort((a, b) => a.order - b.order)[0];
-  if (!capital) return no('no city');
   p.res.gold -= gold;
-  const g = makeGeneral(s, pid, { ...capital.hex }, recruitElo(s, pid), emptyArmy(), 'General');
-  say(s, `new general hired (ELO ${g.elo}, ${g.white})`, pid);
+  const g = makeGeneral(s, pid, { ...h.hex }, recruitElo(s, pid), emptyArmy(), 'General');
+  say(s, `new general hired in ${h.name} (ELO ${g.elo}, ${g.white})`, pid);
   return ok;
 };
 

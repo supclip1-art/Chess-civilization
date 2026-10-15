@@ -154,9 +154,14 @@ export const capture = (s: GameState, hallId: string, newOwner: string): void =>
   const oldPlayer = s.players[old];
   if (oldPlayer) {
     oldPlayer.jobs = oldPlayer.jobs.filter((j) =>
-      !(j.kind === 'resource' && s.cells[key(j.hex)]?.hall === hallId) && !(j.kind === 'townhall' && j.hallId === hallId));
+      !(j.kind === 'resource' && s.cells[key(j.hex)]?.hall === hallId) && !((j.kind === 'townhall' || j.kind === 'barracks' || j.kind === 'tavern') && j.hallId === hallId));
+    oldPlayer.queue = oldPlayer.queue?.filter((q) => !('hallId' in q.job && q.job.hallId === hallId));
   }
-  if (!(oldPlayer && NATIONS[oldPlayer.nation].mods.castles)) h.level = Math.max(1, h.level - 1); // японский замок уровень не теряет
+  if (!(oldPlayer && NATIONS[oldPlayer.nation].mods.castles)) { // японский замок ничего не теряет
+    h.level = Math.max(1, h.level - 1);
+    if (h.barracks) h.barracks--;
+    if (h.tavern) h.tavern--;
+  }
   h.owner = newOwner;
   h.siege = undefined;
   if (s.neutrals[old]) {
