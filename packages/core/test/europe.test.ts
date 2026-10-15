@@ -142,7 +142,7 @@ test('разбойники не появляются у Афин и не зах�
   void banditsTurn;
 });
 
-test('разбойники, разбившие армию в городе, забирают его, но не столицу', async () => {
+test('разбойники, разбившие армию в городе, забирают его — и столицу тоже', async () => {
   const { bandits, attack, resolveBattle, capture, makeGeneral } = await import('../src/index.ts');
   const m = europeMap();
   m.randomSpawns = false;
@@ -162,14 +162,7 @@ test('разбойники, разбившие армию в городе, за�
   const g1 = Object.values(s.generals).find((x) => x.owner === 'p1')!;
   g1.hex = { ...cap.hex };
   win(cap.hex, g1.id);
-  assert.equal(s.halls[cap.id].owner, 'p1', 'столицу разбойники не берут');
-  // второй город берут
-  const second = Object.values(s.halls).filter((h) => s.neutrals[h.owner]).sort((x, y) => distance(x.hex, cap.hex) - distance(y.hex, cap.hex))[0];
-  capture(s, second.id, 'p1');
-  makeGeneral(s, 'p1', { ...second.hex }, 1200, { p: 1, n: 0, b: 0, r: 0, q: 0 }, 'Guard');
-  win(second.hex, 'guard');
-  assert.ok(s.neutrals[s.halls[second.id].owner], 'город стал вольным');
-  assert.equal(s.generals[b.id].owner, s.halls[second.id].owner);
+  assert.ok(s.neutrals[s.halls[cap.id].owner], 'столица тоже может пасть');
 });
 
 test('Япония: взятый японцами город ничего не теряет, а японский город при захвате теряет уровень', async () => {

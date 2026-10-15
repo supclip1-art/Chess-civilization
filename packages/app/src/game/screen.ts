@@ -1,5 +1,6 @@
 // Экран партии: карта, верхняя панель (казна, ход), нижняя панель действий, бои, ход ИИ.
 
+import { audioPrefs, page, setMusic, setSfx } from '../audio.ts';
 import { iconSvg, iconsReady } from './icons.ts';
 import { flagSvg } from './flags.ts';
 import { portraitSvg } from './portraits.ts';
@@ -427,8 +428,10 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
       </div>
       <p class="muted">Area — cells of land. Military — the value of all pieces, stronger with the generals' ELO (${st.generals} general${st.generals > 1 ? 's' : ''}, ${st.pieces} pieces). Economy — income per turn after feeding the army, gold counted ×4.</p>
       ${mineN ? `<p class="withico">Income: ${amount('wood', st.income.wood)} ${amount('food', st.income.food - st.upkeep)} ${amount('gold', st.income.gold)} per turn</p>` : ''}
+      ${mineN ? `<div class="acts">${btn('music', `Music: ${audioPrefs().music ? 'on' : 'off'}`, 'tavern tunes')}${btn('sfx', `Sounds: ${audioPrefs().sfx ? 'on' : 'off'}`, 'clicks and pages')}</div>` : ''}
       <div class="acts">${btn('close', 'Close', '')}${mineN ? btn('endgame', 'End campaign', 'final standings and charts') : ''}</div>`);
     const c = await ask();
+    if (c === 'music' || c === 'sfx') { if (c === 'music') setMusic(!audioPrefs().music); else setSfx(!audioPrefs().sfx); return nationInfo(pid); }
     modal(null);
     if (c !== 'endgame') return;
     modal(`<h2>End this campaign?</h2><p>The game stops here: you will see how every nation grew and who was strongest. The save is deleted.</p>
@@ -553,6 +556,7 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
 
   const modal = (html: string | null) => {
     const m = app.querySelector<HTMLElement>('#modal')!;
+    if (html !== null && m.hidden) page(); // меню открывается — шелест страницы
     m.hidden = html === null;
     if (html !== null) app.querySelector('#dialog')!.innerHTML = html;
   };

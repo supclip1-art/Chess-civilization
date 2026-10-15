@@ -4,7 +4,7 @@
 import { ARMY_MAX, PIECE_PRICE, STARTING_ARMY, type Piece } from './config.ts';
 import { armyValue } from './economy.ts';
 import { type Hex, distance, key } from './hex.ts';
-import { findPath, isCapital, move, reachable, seizeByBandits } from './map.ts';
+import { findPath, move, reachable, seizeByBandits } from './map.ts';
 import { power } from './aiwar.ts';
 import { int } from './rng.ts';
 import { type Army, type GameState, type General, PASSABLE, makeGeneral, say } from './state.ts';
@@ -97,12 +97,12 @@ export const banditsTurn = (s: GameState): BanditAttack[] => {
     if (s.turn >= CALM_UNTIL) for (const x of Object.values(s.generals)) {
       if (!s.players[x.owner] || distance(x.hex, b.hex) > HUNT_RANGE || distance(x.hex, camp) > LEASH) continue;
       // поселенцы и армии равной силы или слабее
-      if (x.settler || (armyValue(x.army) > 0 && power(b) >= power(x))) prey.push({ hex: x.hex, d: distance(x.hex, b.hex) });
+      if (x.settler || (armyValue(x.army) > 0 && power(b) > power(x))) prey.push({ hex: x.hex, d: distance(x.hex, b.hex) });
     }
     for (const h of Object.values(s.halls)) {
-      if (s.turn < RAIDS_FROM || !s.players[h.owner] || isCapital(s, h) || distance(h.hex, b.hex) > HUNT_RANGE || distance(h.hex, camp) > LEASH) continue;
+      if (s.turn < RAIDS_FROM || !s.players[h.owner] || distance(h.hex, b.hex) > HUNT_RANGE || distance(h.hex, camp) > LEASH) continue;
       const guard = Object.values(s.generals).find((x) => x.owner === h.owner && key(x.hex) === key(h.hex) && armyValue(x.army) > 0);
-      if (guard && power(b) < power(guard)) continue; // крепкий гарнизон не трогают
+      if (guard && power(b) <= power(guard)) continue; // крепкий гарнизон не трогают
       prey.push({ hex: h.hex, d: distance(h.hex, b.hex) + (h.level - 1) * 3, hallId: guard ? undefined : h.id });
     }
     prey.sort((a, z) => a.d - z.d);

@@ -32,9 +32,9 @@ type Character = {
 };
 
 export const CHARACTER: Record<Aggression, Character> = {
-  warlike: { vsNeutral: 1.05, vsPlayer: 1.0, playersFrom: 6, peace: 0, minArmy: 70, wantCities: 4 },
-  moderate: { vsNeutral: 1.2, vsPlayer: 1.2, playersFrom: 10, peace: 2, minArmy: 90, wantCities: 5 },
-  peaceful: { vsNeutral: 1.4, vsPlayer: 1.5, playersFrom: 18, peace: 5, minArmy: 110, wantCities: 6 },
+  warlike: { vsNeutral: 1.05, vsPlayer: 0.9, playersFrom: 6, peace: 0, minArmy: 70, wantCities: 4 },
+  moderate: { vsNeutral: 1.15, vsPlayer: 1.05, playersFrom: 8, peace: 1, minArmy: 90, wantCities: 5 },
+  peaceful: { vsNeutral: 1.3, vsPlayer: 1.3, playersFrom: 14, peace: 4, minArmy: 100, wantCities: 6 },
 };
 
 /** Сила армии с поправкой на ELO генерала: +400 ELO — вдвое сильнее. */
@@ -119,9 +119,10 @@ const targetsFor = (s: GameState, g: General, field: Map<string, number>): Targe
     if (x.owner === g.owner || armyValue(x.army) === 0) continue;
     const steps = stepsTo(field, x.hex);
     if (steps === Infinity) continue;
-    const neutral = !!s.neutrals[x.owner] || x.owner === 'bandits'; // разбойников бьём так же, как нейтралов
-    if (neutral) { if (mine >= ch.vsNeutral * power(x)) out.push({ hex: x.hex, steps, kind: 'neutral' }); continue; }
-    if (myLand.has(key(x.hex)) && mine >= 1.1 * power(x)) { out.push({ hex: x.hex, steps, kind: 'intruder' }); continue; }
+    // разбойников бьём только с явным перевесом: проигрыш оставляет столицу без армии
+    if (x.owner === 'bandits') { if (mine >= 1.5 * power(x)) out.push({ hex: x.hex, steps, kind: 'neutral' }); continue; }
+    if (s.neutrals[x.owner]) { if (mine >= ch.vsNeutral * power(x)) out.push({ hex: x.hex, steps, kind: 'neutral' }); continue; }
+    if (myLand.has(key(x.hex)) && mine >= 1.25 * power(x)) { out.push({ hex: x.hex, steps, kind: 'intruder' }); continue; }
     if (warReady && mine >= ch.vsPlayer * power(x)) out.push({ hex: x.hex, steps, kind: 'army' });
   }
   // пустые города других игроков — осада
@@ -132,6 +133,11 @@ const targetsFor = (s: GameState, g: General, field: Map<string, number>): Targe
       const steps = stepsTo(field, h.hex);
       if (steps !== Infinity) out.push({ hex: h.hex, steps, kind: 'city' });
     }
+  }
+  // живой игрок — любимая цель: ИИ держит его в напряжении (цели у него кажутся на 3 хода ближе)
+  for (const t of out) {
+    const owner = Object.values(s.generals).find((x) => key(x.hex) === key(t.hex))?.owner ?? Object.values(s.halls).find((h) => key(h.hex) === key(t.hex))?.owner;
+    if (owner && s.players[owner] && !s.players[owner].ai && t.kind !== 'neutral') t.steps -= 3;
   }
   // чужая армия на своей земле — в первую очередь, дальше — ближайшее
   return out.sort((a, b) => (a.kind === 'intruder' ? -1 : 0) - (b.kind === 'intruder' ? -1 : 0) || a.steps - b.steps);
@@ -183,7 +189,8 @@ export const aiMilitaryTurn = (s: GameState, pid: string): AiAttack[] => {
     const g = free.filter((x) => !post.has(x.id)).sort((a, b) => distance(a.hex, h.hex) - distance(b.hex, h.hex))[0];
     if (g) post.set(g.id, h.hex);
   }
-  const guardedHex = new Set([...post.values()].map(key));
+  // город защищён, если в нём уже стоит своя армия (не просто назначена)
+  const guardedHex = new Set(gens.filter((x) => armyValue(x.army) >= 40).map((x) => key(x.hex)));
   for (const g of gens) {
     if (g.attacked) continue;
     // гарнизон: бьёт тех, кто подошёл к стенам его города, иначе стоит в городе
@@ -200,12 +207,25 @@ export const aiMilitaryTurn = (s: GameState, pid: string): AiAttack[] => {
     // полевая армия: враг у своего города без гарнизона — сначала защитить
     const threat = armyValue(g.army) > 0 ? Object.values(s.generals)
       .filter((x) => x.owner !== pid && !s.neutrals[x.owner] && !x.settler && armyValue(x.army) > 0
-        && halls.some((h) => !guardedHex.has(key(h.hex)) && distance(h.hex, x.hex) <= 3) && power(g) >= 0.7 * power(x))
+        && halls.some((h) => !guardedHex.has(key(h.hex)) && distance(h.hex, x.hex) <= 3) && power(g) >= 1.25 * power(x))
       .sort((a, b) => distance(a.hex, g.hex) - distance(b.hex, g.hex))[0] : undefined;
     if (threat && distance(g.hex, threat.hex) <= 10) {
       if (distance(g.hex, threat.hex) > 1) stepToward(s, g, threat.hex, true);
       if (distance(g.hex, threat.hex) === 1) attacks.push({ gid: g.id, target: threat.hex, defense: true });
       continue;
+    }
+    // враг сильнее, а столица пуста — полевая армия возвращается и садится в неё: обороняющийся в своём городе
+    // сильнее («Укрепления»), а пустой город берут без боя
+    // пока столицу некому охранять, а рядом бродят чужие армии, полевая армия далеко не уходит
+    let leash = Infinity;
+    if (capital && armyValue(g.army) > 0 && !guardedHex.has(key(capital.hex))) {
+      const near = Object.values(s.generals).filter((x) => x.owner !== pid && !s.neutrals[x.owner] && !x.settler
+        && armyValue(x.army) > 0 && distance(x.hex, capital.hex) <= 8);
+      if (near.some((x) => distance(x.hex, capital.hex) <= 4 || power(x) > power(g))) {
+        if (key(g.hex) !== key(capital.hex)) stepToward(s, g, capital.hex, false);
+        continue;
+      }
+      if (near.length) leash = 3;
     }
     // свой город в осаде — главная армия идёт снимать осаду
     const siegeBy = besieged.map((h) => s.generals[h.siege!.by]).find((x) => x && armyValue(x.army) > 0);
@@ -224,7 +244,13 @@ export const aiMilitaryTurn = (s: GameState, pid: string): AiAttack[] => {
     const field = pathField(s, g);
     const targets = armyValue(g.army) >= ch.minArmy || armyValue(g.army) > 0 ? targetsFor(s, g, field) : [];
     const strongEnough = armyValue(g.army) >= ch.minArmy;
-    const goal = targets.find((t) => t.kind === 'intruder') ?? (strongEnough ? targets[0] : undefined);
+    // из столицы полевая армия уходит, только когда рядом гарнизон, готовый сразу её занять (он ходит после неё)
+    const relief = capital && gens.slice(1).some((x) => armyValue(x.army) >= 40 && distance(x.hex, capital.hex) <= 2);
+    const prowl = capital && Object.values(s.generals).some((x) => x.owner !== pid && !s.neutrals[x.owner] && !x.settler
+      && armyValue(x.army) > 0 && distance(x.hex, capital.hex) <= 10);
+    if (capital && key(g.hex) === key(capital.hex) && !relief && prowl && s.turn >= 6) leash = Math.min(leash, 1);
+    const near = capital ? targets.filter((t) => distance(t.hex, capital.hex) <= leash) : targets;
+    const goal = near.find((t) => t.kind === 'intruder') ?? (strongEnough ? near[0] : undefined);
     if (goal) {
       if (distance(g.hex, goal.hex) > 1) stepToward(s, g, goal.hex, true);
       if (distance(g.hex, goal.hex) === 1) {

@@ -35,7 +35,9 @@ export const aiEconomyTurn = (s: GameState, pid: string): void => {
   if (g) {
     const need = Math.max(0, ...PIECES.filter((x) => g.army[x] < FULL_ARMY[x]).map((x) => HIRE_LEVEL[x]));
     const bar = capital.barracks ?? 0; // ИИ держит казарму и таверну в столице
-    if (count(s, pid, 'mine') >= 1 && bar < need && !p.jobs.some((j) => j.kind === 'barracks')) {
+    // разбойники выходят на охоту с 8-го хода: к этому времени нужна казарма и хоть пара лишних пешек
+    const early = bar === 0 && s.turn >= 4;
+    if ((early || count(s, pid, 'mine') >= 1) && bar < need && !p.jobs.some((j) => j.kind === 'barracks')) {
       if (!upgradeBarracks(s, pid, capital.id).ok) reserve = BARRACKS[(bar + 1) as 1 | 2 | 3 | 4 | 5].cost;
     }
   }
@@ -116,7 +118,7 @@ export const aiEconomyTurn = (s: GameState, pid: string): void => {
   for (const guard of byAge().slice(1)) feed(guard.id, GUARD_ARMY);
   // таверна — рано: генералов нужно по одному на город плюс полевая армия (не больше 4)
   const cities = playerHalls(s, pid).length;
-  const want = Math.min(5, cities + 1);
+  const want = Math.min(5, cities + (p.ai?.aggression === 'warlike' ? 2 : 1)); // у воинственного — две полевые армии
   if ((capital.barracks ?? 0) >= 1 && s.turn >= 4 && generalLimit(s, pid) < want && !p.jobs.some((j) => j.kind === 'tavern')) upgradeTavern(s, pid, capital.id);
   // новый генерал ест еду — нанимаем, только если доход еды это выдержит
   if (byAge().length < Math.min(want, generalLimit(s, pid)) && p.res.gold >= 50 && income(s, pid).food - upkeep(s, pid) >= GENERAL_UPKEEP_FOOD + 3) {

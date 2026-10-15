@@ -8,6 +8,7 @@ import { openGame } from './game/screen.ts';
 import { flagSvg } from './game/flags.ts';
 import { resetTutorial } from './game/tutorial.ts';
 import { clearSave, loadGame, saveGame } from './game/save.ts';
+import { audioPrefs, initAudio, page, setMusic, setSfx } from './audio.ts';
 import { initTelegram, platformLabel, setBack, tap, userName } from './tg.ts';
 
 declare const __BUILD__: string; // подставляет сборка: короткий хеш коммита
@@ -30,11 +31,14 @@ const home = () => {
     ${alive ? `<button id="continue">Continue · ${esc(NATIONS[saved!.players.p1.nation].name)}</button>` : ''}
     <button id="new" ${alive ? 'class="ghost"' : ''}>New game</button>
     <button id="howto" class="ghost">How to play</button>
+    <div class="row soundrow"><button id="music" class="ghost">Music: ${audioPrefs().music ? 'on' : 'off'}</button><button id="sfx" class="ghost">Sounds: ${audioPrefs().sfx ? 'on' : 'off'}</button></div>
     <button id="bench" class="ghost">Engine speed test</button>
     <p class="muted">Build ${esc(__BUILD__)} · ${esc(platformLabel())}</p>
     <p class="muted">Chess engine: <a href="https://github.com/official-stockfish/Stockfish" target="_blank" rel="noopener">Stockfish</a> (GPL-3.0). Pieces: cburnett by Colin M.L. Burnett (GPLv2+).</p>`);
   on('continue', () => { if (saved) openGame(app, saved, home); });
-  on('new', setup);
+  on('new', () => { page(); setup(); });
+  on('music', () => { setMusic(!audioPrefs().music); home(); });
+  on('sfx', () => { setSfx(!audioPrefs().sfx); home(); });
   on('bench', bench);
   on('howto', () => {
     resetTutorial();
@@ -239,6 +243,7 @@ const run = async (log: (t: string) => void) => {
 };
 
 initTelegram();
+initAudio();
 // iOS не слушается user-scalable=no: щипок и двойной тап вне карты гасим сами (быстрые тапы по меню найма не зумят экран)
 document.addEventListener('gesturestart', (e) => e.preventDefault());
 document.addEventListener('touchmove', (e) => {
