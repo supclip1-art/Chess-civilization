@@ -56,7 +56,9 @@ export const aiEconomyTurn = (s: GameState, pid: string): void => {
       const sl = citySlots(s, hallId);
       const land = Object.values(s.cells).filter((x) => x.hall === hallId && !x.building && !x.reserved);
       const missing = (['sawmill', 'mine'] as const).filter((k) => !have(k) && land.some((x) => x.terrain === BUILDING_TERRAIN[k]));
-      const out = sl.max - sl.used <= missing.length ? [...missing] : [];
+      // золото — узкое место армии: в выросшем городе последнее место держим и под второй рудник
+      if (s.halls[hallId].level >= 2 && have('mine') === 1 && land.some((x) => x.terrain === BUILDING_TERRAIN.mine)) missing.push('mine');
+      const out = sl.max - sl.used <= missing.length ? [...new Set(missing)] : [];
       reserveCache.set(hallId, out);
       return out;
     };
@@ -77,7 +79,8 @@ export const aiEconomyTurn = (s: GameState, pid: string): void => {
         if (p.res.wood < cost.wood || p.res.food < cost.food) continue;
         const food = kind === 'farm' || kind === 'fishery';
         const hungry = food && foodNet < 10;
-        if (!hungry && (p.res.wood - cost.wood < reserve.wood || p.res.food - cost.food < reserve.food)) continue;
+        // ферма окупает резерв еды на казарму быстрее, чем его копить: для неё важен только резерв дерева
+        if (!hungry && (p.res.wood - cost.wood < reserve.wood || (!food && p.res.food - cost.food < reserve.food))) continue;
         if (kind !== 'sawmill' && p.res.wood - cost.wood < keepForSaw) continue;
         const gain = RESOURCE_OUTPUT[kind][level - 1] - (RESOURCE_OUTPUT[kind][level - 2] ?? 0);
         // золото в масштабе ×10 дороже еды; при большом избытке еды фермы не нужны

@@ -2,7 +2,7 @@
 
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { PASSABLE, distance, europeMap, key, neighbors, newGame, playerHalls, type Hex } from '../src/index.ts';
+import { PASSABLE, asiaMap, distance, europeMap, key, neighbors, newGame, playerHalls, type Hex } from '../src/index.ts';
 
 test('Европа: любая нация на любой точке, места случайные, свободные столицы — нейтралы со своим именем', () => {
   const s = newGame(europeMap(), [{ nation: 'japan' }, { nation: 'usa' }], { elo: 1200, seed: 1 });
@@ -20,8 +20,10 @@ test('Европа: любая нация на любой точке, места
   assert.ok(starts.size >= 3, 'стартовая точка игрока меняется от партии к партии');
 });
 
-test('Европа: все столицы и нейтралы связаны сушей, дома есть 3 поля, 3 леса, 2 месторождения', () => {
-  const m = europeMap();
+for (const [title, map] of [['Европа', europeMap], ['Азия', asiaMap]] as const) test(`${title}: 8 столиц, все столицы и нейтралы связаны сушей, дома есть 3 поля, 3 леса, 2 месторождения`, () => {
+  const m = map();
+  assert.equal(m.spawns.length, 8);
+  for (let i = 0; i < m.spawns.length; i++) for (let j = 0; j < i; j++) assert.ok(distance(m.spawns[i], m.spawns[j]) >= 6, 'столицы не вплотную');
   const terrain = new Map(m.cells.map((c) => [key(c), c.terrain]));
   const seen = new Set([key(m.spawns[0])]);
   const stack: Hex[] = [m.spawns[0]];
@@ -47,7 +49,7 @@ test('нейтралы: в каждой партии разный набор и�
   });
   assert.notEqual(sets[0].names, sets[1].names);
   for (const { s, hs } of sets) {
-    assert.equal(hs.length, (europeMap().neutralCount ?? 0) + 2); // + 2 свободные столицы
+    assert.equal(hs.length, (europeMap().neutralCount ?? 0) + europeMap().spawns.length - 2); // + свободные столицы
     // ни один нейтрал не стоит вплотную к другому городу
     for (const a of hs) for (const b of Object.values(s.halls)) if (a !== b) assert.ok(distance(a.hex, b.hex) >= 3, `${a.name}–${b.name}`);
   }
@@ -93,4 +95,22 @@ test('разбойники: по шайке на игрока недалеко �
   void before;
   for (let i = 0; i < 4; i++) endTurn(s);
   assert.ok((s.history?.length ?? 0) >= 2, 'сводка пишется каждый круг');
+});
+
+test('два генерала не встают на одну клетку: сквозь своих пройти можно, нанятый появляется рядом с городом', async () => {
+  const { reachable, move, hireGeneral, findPath } = await import('../src/index.ts');
+  const s = newGame(europeMap(), [{ nation: 'spain' }, { nation: 'italy' }], { elo: 1200, seed: 3 });
+  const cap = playerHalls(s, 'p1')[0];
+  const g = Object.values(s.generals).find((x) => x.owner === 'p1')!;
+  cap.tavern = 1;
+  s.players.p1.res.gold = 10000;
+  assert.ok(hireGeneral(s, 'p1', cap.id).ok);
+  const fresh = Object.values(s.generals).find((x) => x.owner === 'p1' && x.id !== g.id)!;
+  assert.notEqual(key(fresh.hex), key(g.hex), 'новый генерал встал на соседнюю клетку');
+  assert.equal(distance(fresh.hex, cap.hex), 1);
+  fresh.moveLeft = 2;
+  assert.ok(!reachable(s, fresh.id).has(key(g.hex)), 'на клетку другого генерала встать нельзя');
+  assert.ok(!move(s, fresh.id, g.hex).ok);
+  const path = findPath(s, fresh.id, g.hex)!;
+  assert.equal(distance(path[path.length - 1], g.hex) <= 1, true, 'приказ ведёт к соседней клетке');
 });

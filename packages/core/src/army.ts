@@ -6,6 +6,7 @@ import {
 } from './config.ts';
 import { type Result, hasTech, mods, piecePrice, playerGenerals, playerHalls, recruitElo } from './economy.ts';
 import { distance, key } from './hex.ts';
+import { freeCellNear } from './map.ts';
 import { type Army, type GameState, emptyArmy, generalName, makeGeneral, say } from './state.ts';
 
 const ok: Result = { ok: true };
@@ -61,10 +62,12 @@ export const hireGeneral = (s: GameState, pid: string, hallId?: string): Result 
   if (!h) return no('not your city');
   if (!h.tavern) return no(`${h.name} has no tavern: build one in this city first`);
   if (count >= generalLimit(s, pid)) return no('upgrade a tavern first');
+  const spot = freeCellNear(s, h.hex, pid);
+  if (!spot) return no(`no free cell next to ${h.name} for a new army`);
   const gold = Math.max(0, GENERAL_HIRE_GOLD[(count + 1) as 2 | 3 | 4 | 5] - (mods(s, pid).generalHireDiscount ?? 0));
   if (p.res.gold < gold) return no('not enough gold');
   p.res.gold -= gold;
-  const g = makeGeneral(s, pid, { ...h.hex }, recruitElo(s, pid), emptyArmy(), generalName(s, pid));
+  const g = makeGeneral(s, pid, spot, recruitElo(s, pid), emptyArmy(), generalName(s, pid));
   say(s, `new general hired in ${h.name} (ELO ${g.elo}, ${g.white})`, pid);
   return ok;
 };
@@ -212,7 +215,8 @@ export const defeat = (s: GameState, gid: string): void => {
     return;
   }
   const capital = playerHalls(s, g.owner).sort((a, b) => a.order - b.order)[0];
-  if (capital) g.hex = { ...capital.hex };
+  const spot = capital && freeCellNear(s, capital.hex, g.owner, g.id);
+  if (spot) g.hex = spot;
   g.moveLeft = 0;
   say(s, `the defeated general retreated to the capital`, g.owner);
 };

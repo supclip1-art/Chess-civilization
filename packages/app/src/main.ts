@@ -1,11 +1,10 @@
 // Mini App: главное меню, новая партия, партия на карте (этап 3) и замер Stockfish.
 
 import {
-  BANDIT_COUNT, NATIONS, NATION_ORDER, armiesFromFen, europeMap, insufficientMaterial, newGame, type Aggression, type NationId,
+  BANDIT_COUNT, NATIONS, NATION_ORDER, armiesFromFen, asiaMap, europeMap, insufficientMaterial, newGame, type Aggression, type NationId,
 } from '../../core/src/index.ts';
 import { Engine, profile } from './engine.ts';
 import { openGame } from './game/screen.ts';
-import { showPuzzle } from './game/puzzle.ts';
 import { flagSvg } from './game/flags.ts';
 import { resetTutorial } from './game/tutorial.ts';
 import { clearSave, loadGame, saveGame } from './game/save.ts';
@@ -30,7 +29,6 @@ const home = () => {
     ${name ? `<p>Welcome, ${esc(name)}.</p>` : ''}
     ${alive ? `<button id="continue">Continue · ${esc(NATIONS[saved!.players.p1.nation].name)}</button>` : ''}
     <button id="new" ${alive ? 'class="ghost"' : ''}>New game</button>
-    <button id="puzzle" class="ghost">Warm-up puzzle</button>
     <button id="howto" class="ghost">How to play</button>
     <button id="bench" class="ghost">Engine speed test</button>
     <p class="muted">Build ${esc(__BUILD__)} · ${esc(platformLabel())}</p>
@@ -42,42 +40,65 @@ const home = () => {
     resetTutorial();
     if (alive && saved) openGame(app, saved, home); else setup();
   });
-  on('puzzle', async () => { setBack(null); await showPuzzle(app, 'Back to menu'); home(); });
 };
 
 // ---------- Новая партия ----------
 
-// Карта «Европа»: любая из 26 наций, места на карте игроки получают случайно.
-const MAP = europeMap;
+// Карты: любая из 26 наций, места на карте игроки получают случайно.
+const MAPS = { europe: europeMap, asia: asiaMap } as const;
+type MapId = keyof typeof MAPS;
 const AGGR: Aggression[] = ['warlike', 'moderate', 'peaceful'];
 
 const setup = () => {
   setBack(home);
   let nation: NationId = 'russia';
   const ABC = [...NATION_ORDER].sort((a, b) => NATIONS[a].name.localeCompare(NATIONS[b].name, 'en'));
-  let warmup = true;
+  let mapId: MapId = 'europe';
+  let players = 0;
+  let elo = 1200;
   try {
-    warmup = localStorage.getItem('chessciv.warmup') !== '0';
+    const m = localStorage.getItem('chessciv.map') as MapId | null;
+    if (m && MAPS[m]) mapId = m;
+    players = Number(localStorage.getItem('chessciv.players')) || 0;
+    elo = Number(localStorage.getItem('chessciv.elo')) || 1200;
     const last = localStorage.getItem('chessciv.nation') as NationId | null;
     if (last && NATIONS[last]) nation = last;
   } catch { /* ничего */ }
-  const spawns = MAP().spawns.length;
+  const spawnsOf = (id: MapId) => MAPS[id]().spawns.length;
+  const playerOptions = () => {
+    const n = spawnsOf(mapId);
+    const want = players >= 2 && players <= n ? players : n;
+    return Array.from({ length: n - 1 }, (_, i) => i + 2).map((k) => `<option ${k === want ? 'selected' : ''}>${k}</option>`).join('');
+  };
   render(`
     <h1>New game</h1>
-    <p class="muted">Map: Europe · up to ${spawns} nations · starting places are random</p>
+    <div class="card">
+      <div class="row"><span>Map</span><div class="seg" id="maps">${(Object.keys(MAPS) as MapId[]).map((id) =>
+        `<button class="${id === mapId ? 'on' : ''}" data-m="${id}">${esc(MAPS[id]().name)}</button>`).join('')}</div></div>
+      <p class="muted" id="mapnote" style="margin-top:6px"></p>
+      <div class="row" style="margin-top:10px"><span>Players</span><select id="players">${playerOptions()}</select></div>
+      <div class="row" style="margin-top:10px"><span>Generals' ELO</span><select id="elo">${[800, 1000, 1200, 1400, 1600, 1800, 2000].map((e) => `<option ${e === elo ? 'selected' : ''}>${e}</option>`).join('')}</select></div>
+      <p class="muted" style="margin-top:10px">One ELO for every general in the game, yours and the AI's.</p>
+    </div>
     <h2 class="pick">Your nation <span class="muted" id="picked"></span></h2>
     <div class="nations" id="nations">
       ${ABC.map((id) => `<button class="nation ${id === nation ? 'on' : ''}" data-n="${id}">
         ${flagSvg(id, 72)}<b>${esc(NATIONS[id].name)}</b><span>${esc(NATIONS[id].bonus)}</span><small>${esc(NATIONS[id].effect)}</small></button>`).join('')}
     </div>
     <div class="nav"><button class="ghost" id="prevN" aria-label="Previous nation">‹</button><span id="countN"></span><button class="ghost" id="nextN" aria-label="Next nation">›</button></div>
-    <div class="card">
-      <div class="row"><span>Players</span><select id="players">${Array.from({ length: spawns - 1 }, (_, i) => i + 2).map((n) => `<option ${n === spawns ? 'selected' : ''}>${n}</option>`).join('')}</select></div>
-      <div class="row" style="margin-top:10px"><span>Generals' ELO</span><select id="elo">${[800, 1000, 1200, 1400, 1600, 1800, 2000].map((e) => `<option ${e === 1200 ? 'selected' : ''}>${e}</option>`).join('')}</select></div>
-      <p class="muted" style="margin-top:10px">One ELO for every general in the game, yours and the AI's.</p>
-      <label class="row" style="margin-top:10px"><span>Warm-up puzzle before the game</span><input type="checkbox" id="warmup" ${warmup ? 'checked' : ''}></label>
-    </div>
     <button id="start">Start</button>`);
+  const playersSel = document.getElementById('players') as HTMLSelectElement;
+  const showMap = () => {
+    document.getElementById('mapnote')!.textContent = `${MAPS[mapId]().name}: up to ${spawnsOf(mapId)} nations · starting places are random`;
+    for (const b of document.querySelectorAll<HTMLButtonElement>('#maps button')) b.classList.toggle('on', b.dataset.m === mapId);
+  };
+  showMap();
+  for (const b of document.querySelectorAll<HTMLButtonElement>('#maps button')) {
+    b.addEventListener('click', () => {
+      tap(); mapId = b.dataset.m as MapId; players = Number(playersSel.value);
+      playersSel.innerHTML = playerOptions(); showMap();
+    });
+  }
   const strip = document.getElementById('nations')!;
   const cards = [...strip.querySelectorAll<HTMLButtonElement>('.nation')];
   const select = (i: number) => {
@@ -104,11 +125,11 @@ const setup = () => {
   on('prevN', () => { goTo(ABC.indexOf(nation) - 1); });
   on('nextN', () => { goTo(ABC.indexOf(nation) + 1); });
   on('start', async () => {
-    const players = Number((document.getElementById('players') as HTMLSelectElement).value);
-    const elo = Number((document.getElementById('elo') as HTMLSelectElement).value);
+    players = Number(playersSel.value);
+    elo = Number((document.getElementById('elo') as HTMLSelectElement).value);
     const seed = Math.floor(Math.random() * 1e9);
     const others = NATION_ORDER.filter((n) => n !== nation).sort(() => Math.random() - 0.5).slice(0, players - 1);
-    const s = newGame(MAP(), [
+    const s = newGame(MAPS[mapId](), [
       { nation },
       ...others.map((n) => {
         const aggression = AGGR[Math.floor(Math.random() * 3)];
@@ -117,9 +138,10 @@ const setup = () => {
     ], { elo, seed, bandits: BANDIT_COUNT });
     clearSave();
     saveGame(s);
-    const wantPuzzle = (document.getElementById('warmup') as HTMLInputElement).checked;
-    try { localStorage.setItem('chessciv.warmup', wantPuzzle ? '1' : '0'); localStorage.setItem('chessciv.nation', nation); } catch { /* ничего */ }
-    if (wantPuzzle) { setBack(null); await showPuzzle(app); }
+    try {
+      localStorage.setItem('chessciv.nation', nation); localStorage.setItem('chessciv.map', mapId);
+      localStorage.setItem('chessciv.players', String(players)); localStorage.setItem('chessciv.elo', String(elo));
+    } catch { /* ничего */ }
     openGame(app, s, home);
   });
 };

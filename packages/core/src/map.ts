@@ -48,7 +48,35 @@ export const reachable = (s: GameState, gid: string): Map<string, number> => {
       queue.push(n);
     }
   }
+  // сквозь свои армии пройти можно, но встать на одну клетку с другим генералом — нет
+  for (const x of Object.values(s.generals)) if (x.id !== gid) dist.delete(key(x.hex));
   return dist;
+};
+
+/** Свободная клетка для генерала у точки: сама точка, если на ней никто не стоит, иначе ближайшая проходимая
+ *  без чужих армий и чужих городов (сначала своя земля). null — рядом некуда встать. */
+export const freeCellNear = (s: GameState, hex: Hex, owner: string, exceptGid?: string): Hex | null => {
+  const busy = new Set(Object.values(s.generals).filter((x) => x.id !== exceptGid).map((x) => key(x.hex)));
+  const seen = new Set([key(hex)]);
+  let ring: Hex[] = [hex];
+  for (let d = 0; d <= 6 && ring.length; d++) {
+    const ok = ring.filter((h) => {
+      const c = s.cells[key(h)];
+      if (!c || !PASSABLE[c.terrain] || busy.has(key(h))) return false;
+      const hall = hallAt(s, h);
+      return !hall || hall.owner === owner;
+    });
+    if (ok.length) return ok.find((h) => s.cells[key(h)].owner === owner) ?? ok[0];
+    const next: Hex[] = [];
+    for (const h of ring) for (const n of neighbors(h)) {
+      const k = key(n);
+      const c = s.cells[k];
+      if (seen.has(k) || !c || !PASSABLE[c.terrain]) continue;
+      seen.add(k); next.push(n);
+    }
+    ring = next;
+  }
+  return null;
 };
 
 export const move = (s: GameState, gid: string, to: Hex): Result => {
@@ -79,7 +107,8 @@ const passableFor = (s: GameState, g: General, n: Hex): boolean => {
 export const findPath = (s: GameState, gid: string, to: Hex): Hex[] | null => {
   const g = s.generals[gid];
   const goal = key(to);
-  const enterable = passableFor(s, g, to);
+  // в клетку, где уже стоит другой генерал, не войти — путь ведёт к соседней
+  const enterable = passableFor(s, g, to) && !Object.values(s.generals).some((x) => x.id !== gid && key(x.hex) === goal);
   const prev = new Map<string, string | null>([[key(g.hex), null]]);
   const queue: Hex[] = [g.hex];
   let end: string | null = null;
@@ -270,7 +299,8 @@ export const resolveBattle = (s: GameState, attackerId: string, defenderId: stri
   const home = playerHalls(s, old).sort((a, b) => a.order - b.order)[0];
   for (const g of Object.values(s.generals)) {
     if (g.owner !== old || key(g.hex) !== key(defHex)) continue;
-    if (home) { g.hex = { ...home.hex }; g.moveLeft = 0; } else delete s.generals[g.id];
+    const spot = home && freeCellNear(s, home.hex, old, g.id);
+    if (spot) { g.hex = spot; g.moveLeft = 0; } else delete s.generals[g.id];
   }
   return out;
 };

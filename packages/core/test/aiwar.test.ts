@@ -7,7 +7,11 @@ import {
 } from '../src/index.ts';
 
 const play = (aggr: Aggression[], turns: number) => {
-  const s = newGame(europeMap(), (['italy', 'germany', 'france', 'spain'] as const).map((n, i) => ({ nation: n, ai: { aggression: aggr[i], ruler: 'x' } })), { elo: 1200, seed: 7 });
+  // четыре соседние столицы (Рим, Берлин, Париж, Мадрид) — как на прежней карте на четверых
+  const m = europeMap();
+  m.randomSpawns = false;
+  m.spawnNations = ['italy', 'germany', 'france', 'spain', 'britain', 'poland', 'turkey', 'russia'];
+  const s = newGame(m, (['italy', 'germany', 'france', 'spain'] as const).map((n, i) => ({ nation: n, ai: { aggression: aggr[i], ruler: 'x' } })), { elo: 1200, seed: 7 });
   const vs: { turn: number; who: string; aggr: Aggression; neutral: boolean; defense?: boolean }[] = [];
   for (let t = 0; t < turns * 4; t++) {
     const pid = s.order[s.current];

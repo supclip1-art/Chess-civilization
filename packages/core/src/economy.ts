@@ -8,6 +8,7 @@ import {
   type Piece, type Res, type ResourceBuilding,
 } from './config.ts';
 import { type Hex, key, neighbors } from './hex.ts';
+import { freeCellNear } from './map.ts';
 import { NATIONS, type Mods } from './nations.ts';
 import {
   BUILDING_TERRAIN, PASSABLE, makeGeneral, type Army, type Cell, type GameState, type General, type Job, type Player, cityName, newId, recomputeTerritory, say,
@@ -398,8 +399,10 @@ export const hireSettler = (s: GameState, pid: string, hallId: string): Result =
   if (!h || h.owner !== pid) return no('not your city');
   const cost = settlerCost(s, pid);
   if (!canAfford(p.res, cost)) return no('not enough resources');
+  const spot = freeCellNear(s, h.hex, pid);
+  if (!spot) return no(`no free cell next to ${h.name} for a settler`);
   pay(p, cost);
-  const g = makeGeneral(s, pid, { ...h.hex }, 0, { p: 0, n: 0, b: 0, r: 0, q: 0 }, 'Settler');
+  const g = makeGeneral(s, pid, spot, 0, { p: 0, n: 0, b: 0, r: 0, q: 0 }, 'Settler');
   g.settler = true;
   say(s, `a settler leaves ${h.name}`, pid);
   return ok;
