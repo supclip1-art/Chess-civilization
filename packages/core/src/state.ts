@@ -197,6 +197,12 @@ export const generalName = (s: GameState, owner: string): string => {
   return free.length ? free[int(s.rng, 0, free.length - 1)] : `${pool[0]} ${used.size + 1}`;
 };
 
+/** Потолок ELO генерала: не выше стартового ELO партии + 200, как ни копи бонусы (Тактика, победы, академия, события). */
+export const ELO_CAP_BONUS = 200;
+export const eloCap = (s: GameState): number => s.settings.elo + ELO_CAP_BONUS;
+/** Прибавить генералу ELO с учётом потолка. */
+export const addElo = (s: GameState, g: General, d: number): void => { g.elo = Math.max(g.elo, Math.min(eloCap(s), g.elo + d)); };
+
 export const makeGeneral = (s: GameState, owner: string, hex: Hex, elo: number, army: Army, name: string): General => {
   const g: General = {
     id: newId(s, 'g'), owner, name, elo, stars: 0, army, hex, moveLeft: 0, attacked: false,

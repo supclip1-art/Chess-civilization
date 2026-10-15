@@ -10,7 +10,7 @@ import {
   RESOURCE_OUTPUT, TAVERN, TOWN_HALL_FOUND, TOWN_HALL_UPGRADE, BUILDER_HIRE_FOOD, BUILDER_UPKEEP_FOOD, GENERAL_UPKEEP_FOOD, cityUpgradeCost, tavernCost, PIECES, barracksCost, buildOptions, buildingOutput, maxLevelAt, piecePrice, researchCost, researchTurns, resourceCost, aiEconomyTurn, aiMilitaryTurn, attack, endTurn, say,
   foundTownHall, freeBuilders, hireBuilder, hireGeneral, hirePiece, income, key, maxBuilders, move, playerGenerals,
   reachable, recruitElo, resolveBattle, startResearch, upgrade, upgradeBarracks, upgradeTavern, upgradeTownHall,
-  remember, upkeep, visible, winner, trainGeneral, trainingFor, hasTech, build, enqueue, cancelQueued, ELO_PER_RESEARCH, ARMY_MAX, startTech, type TechId, playerHalls, hasMet, jobHall, hallBuilders, banditsTurn, recordHistory, hireSettler, settlerCost, findPath, runOrders, armyMove, startMarch, MARCH_RESEARCH, ARMY_MOVE_MARCH, BUILDING_SLOTS, citySlots, generalLimit, nationStats, type QueueOrder, type Job, type GameState, type Hex, type Piece, type Res, type ResourceBuilding,
+  remember, upkeep, visible, winner, TECHS, trainGeneral, trainingFor, hasTech, build, enqueue, cancelQueued, ELO_PER_RESEARCH, ARMY_MAX, startTech, type TechId, playerHalls, hasMet, jobHall, hallBuilders, banditsTurn, recordHistory, hireSettler, settlerCost, findPath, runOrders, armyMove, startMarch, MARCH_RESEARCH, ARMY_MOVE_MARCH, BUILDING_SLOTS, citySlots, generalLimit, nationStats, type QueueOrder, type Job, type GameState, type Hex, type Piece, type Res, type ResourceBuilding,
 } from '../../../core/src/index.ts';
 import { autobattle, type BattleRecord } from './battle.ts';
 import { playManual, showReplay } from './fight.ts';
@@ -59,7 +59,7 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
       <button id="end" class="end">End turn</button>
     </header>
     <div class="mapwrap"><canvas id="map"></canvas><button id="tactics" class="tacbtn"></button>
-      <div class="rmenu"><button id="gensbtn" class="tacbtn"></button><button id="citiesbtn" class="tacbtn"></button></div></div>
+      <div class="soon" id="soon" hidden></div><div class="rmenu"><button id="gensbtn" class="tacbtn"></button><button id="citiesbtn" class="tacbtn"></button></div></div>
     <section class="sheet" id="sheet"></section>
     <div class="toast" id="toast" hidden></div><div class="aibanner" id="aibanner" hidden></div>
     <div class="veil" id="veil" hidden><div class="veilcard"><p class="veilturn" id="veilturn"></p><div class="veilflags" id="veilflags"></div><p id="veilmsg"></p><div class="veilbar"><i></i></div></div></div>
@@ -130,6 +130,28 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
     app.querySelector('#citiesbtn')!.innerHTML = `${CASTLE}<b>Cities ${playerHalls(s, ME).length}</b>`;
     const r = p.research;
     app.querySelector('#tactics')!.innerHTML = `${iconSvg(r.active || r.tech ? 'clock' : 'tactics', 18)}<b>Technology tree</b>${r.active ? `<small>${left(r.active.finish)}</small>` : r.tech ? `<small>${left(r.tech.finish)}</small>` : ''}`;
+    soon();
+  };
+
+  /** «Ещё один ход»: лента над картой — что закончится в ближайшие 1–2 хода. Незавершённое тянет сделать ещё ход. */
+  const soon = () => {
+    const el = app.querySelector<HTMLElement>('#soon');
+    if (!el) return;
+    const p = s.players[ME];
+    const items: { n: number; text: string }[] = [];
+    for (const j of p.jobs) items.push({ n: j.finish - s.turn, text: jobName(j) });
+    if (p.research.active) items.push({ n: p.research.active.finish - s.turn, text: `Tactics ${['I', 'II', 'III', 'IV', 'V'][p.research.active.step]}` });
+    if (p.research.tech) items.push({ n: p.research.tech.finish - s.turn, text: TECHS[p.research.tech.id as TechId].name });
+    for (const h of Object.values(s.halls)) if (h.siege && s.generals[h.siege.by]?.owner === ME) items.push({ n: 1, text: `${h.name} falls` });
+    for (const g of playerGenerals(s, ME)) {
+      if (g.order?.kind !== 'goto') continue;
+      const path = findPath(s, g.id, g.order.to);
+      if (path) items.push({ n: Math.max(1, Math.ceil((path.length - 1) / armyMove(s, ME))), text: `${g.name} arrives` });
+    }
+    const by = (n: number) => items.filter((x) => Math.max(1, x.n) === n).map((x) => esc(x.text));
+    const one = by(1), two = by(2);
+    el.hidden = !one.length && !two.length;
+    el.innerHTML = `${iconSvg('clock', 14)}${one.length ? `<b>Next turn:</b> ${one.join(', ')}` : ''}${one.length && two.length ? ' · ' : ''}${two.length ? `<b>In 2 turns:</b> ${two.join(', ')}` : ''}`;
   };
 
   // ---------- карта ----------

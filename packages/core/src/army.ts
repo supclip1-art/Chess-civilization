@@ -7,7 +7,7 @@ import {
 import { type Result, hasTech, mods, piecePrice, playerGenerals, playerHalls, recruitElo } from './economy.ts';
 import { distance, key } from './hex.ts';
 import { freeCellNear } from './map.ts';
-import { type Army, type GameState, emptyArmy, generalName, makeGeneral, say } from './state.ts';
+import { type Army, type GameState, addElo, emptyArmy, generalName, makeGeneral, say } from './state.ts';
 
 const ok: Result = { ok: true };
 const PIECE_NAMES: Record<Piece, string> = { p: 'pawn', n: 'knight', b: 'bishop', r: 'rook', q: 'queen' };
@@ -197,7 +197,7 @@ export const applyBattle = (s: GameState, attackerId: string, defenderId: string
   if (winner && prize) { s.players[winner.owner].res.gold += prize; say(s, `flower war: +${prize} gold for the victory`, winner.owner); }
   if (winner && s.players[winner.owner] && winner.stars < MAX_STARS) {
     winner.stars++;
-    winner.elo += hasTech(s, winner.owner, 'veterans') ? 25 : ELO_PER_WIN; // «Ветераны»
+    addElo(s, winner, hasTech(s, winner.owner, 'veterans') ? 25 : ELO_PER_WIN); // «Ветераны»
   }
   say(s, `battle: ${out.note}`, att.owner);
   const loser = out.winner === 'attacker' ? def : out.winner === 'defender' ? att : null;

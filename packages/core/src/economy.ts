@@ -11,7 +11,7 @@ import { type Hex, key, neighbors } from './hex.ts';
 import { freeCellNear } from './map.ts';
 import { NATIONS, type Mods } from './nations.ts';
 import {
-  BUILDING_TERRAIN, PASSABLE, makeGeneral, type Army, type Cell, type GameState, type General, type Job, type Player, cityName, newId, recomputeTerritory, say,
+  BUILDING_TERRAIN, PASSABLE, makeGeneral, type Army, type Cell, type GameState, type General, type Job, type Player, cityName, newId, recomputeTerritory, say, addElo, eloCap,
 } from './state.ts';
 
 export type Result = { ok: true } | { ok: false; reason: string };
@@ -298,7 +298,9 @@ export const trainingFor = (s: GameState, gid: string): { steps: number; gold: n
   const g = s.generals[gid];
   const p = g && s.players[g.owner];
   if (!p || g.settler) return { steps: 0, gold: 0 };
-  const steps = Math.max(0, p.research.done - (g.trained ?? 0));
+  // у потолка ELO учить уже нечему
+  const room = Math.max(0, Math.floor((eloCap(s) - g.elo) / ELO_PER_RESEARCH));
+  const steps = Math.min(room, Math.max(0, p.research.done - (g.trained ?? 0)));
   return { steps, gold: steps * TRAIN_GOLD_PER_STEP };
 };
 
@@ -312,7 +314,7 @@ export const trainGeneral = (s: GameState, pid: string, gid: string): Result => 
   const p = s.players[pid];
   if (p.res.gold < gold) return no('not enough gold');
   p.res.gold -= gold;
-  g.elo += steps * ELO_PER_RESEARCH;
+  addElo(s, g, steps * ELO_PER_RESEARCH);
   g.trained = p.research.done;
   say(s, `${g.name} retrained: +${steps * ELO_PER_RESEARCH} ELO`, pid);
   return ok;
@@ -327,7 +329,7 @@ export const armyMove = (s: GameState, pid: string): number => (hasTech(s, pid, 
 
 /** ELO, с которым придёт следующий нанятый генерал. */
 export const recruitElo = (s: GameState, pid: string): number =>
-  s.settings.elo + s.players[pid].research.done * ELO_PER_RESEARCH;
+  Math.min(eloCap(s), s.settings.elo + s.players[pid].research.done * ELO_PER_RESEARCH);
 
 // ---------- Очередь строек ----------
 
