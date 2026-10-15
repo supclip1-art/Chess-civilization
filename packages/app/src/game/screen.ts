@@ -134,7 +134,7 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
     const g = sel.gid ? s.generals[sel.gid] : undefined;
     const to = sel.target === 'goto' ? sel.hex : g?.order?.kind === 'goto' ? g.order.to : undefined;
     const path = g && to ? findPath(s, g.id, to) ?? undefined : undefined;
-    return { selected: sel.hex, reach, attack: atk, path };
+    return { selected: sel.hex, unit: sel.gid && s.generals[sel.gid]?.owner === ME ? sel.gid : undefined, reach, attack: atk, path };
   };
   let seenCache = new Set<string>();
   let hlCache: Highlight = {};
@@ -247,7 +247,8 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
 
     // генералы на клетке
     const gens = Object.values(s.generals).filter((g) => key(g.hex) === k);
-    const hallOnCell = Object.values(s.halls).some((x) => key(x.hex) === k);
+    // «место» на клетке: город или своё здание — без выбранного юнита показываем его, а не генерала
+    const hallOnCell = Object.values(s.halls).some((x) => key(x.hex) === k) || (cell.owner === ME && (!!cell.building || !!cell.reserved));
     const ownHere = gens.filter((g) => g.owner === ME);
     if (hallOnCell && ownHere.length && !sel.gid) parts.push(`<p class="muted">${ownHere.length > 1 ? 'Your units are' : `Your ${ownHere[0].settler ? 'settler is' : 'general is'}`} here — tap the cell again to select.</p>`);
     for (const g of gens) {
@@ -313,8 +314,10 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
       parts.push(`<div class="card"><div class="row"><b>${esc(hall.name)} · city level ${hall.level}</b>${s.players[hall.owner] ? nationBtn(hall.owner) : ''}</div><p class="muted">${esc(ownerName(s, hall.owner))}${hall.siege ? ' · under siege' : ''}${hall.barracks ? ` · barracks ${hall.barracks}` : ''}${hall.tavern ? ` · tavern ${hall.tavern}` : ''}</p></div>`);
     }
 
-    // ресурсное здание
-    if (!hall && cell.owner === ME) {
+    // ресурсное здание (если выбран свой генерал на этой клетке — сначала только он)
+    if (!hall && cell.owner === ME && unitPicked && (cell.building || cell.reserved)) {
+      parts.push(`<p class="muted">Tap the cell again to open the ${cell.building ? BUILDING_NAME[cell.building.kind].toLowerCase() : 'construction'}.</p>`);
+    } else if (!hall && cell.owner === ME) {
       const kinds = buildOptions(s, ME, cell).map((o) => o.kind);
       const top = cell.building ? maxLevelAt(s, ME, cell, cell.building.kind) || 5 : 5;
       if (cell.building) {
@@ -754,8 +757,10 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
     }
     // повторные касания перебирают своих на клетке (генерал, поселенец), а затем сам город
     const units = Object.values(s.generals).filter((g) => g.owner === ME && key(g.hex) === k).sort((a, b) => Number(!!a.settler) - Number(!!b.settler));
+    // город или своё здание (в том числе стройка) на клетке — после юнитов выбирается оно
     const hallHere = Object.values(s.halls).some((x) => key(x.hex) === k);
-    const seq: (string | undefined)[] = [...units.map((g) => g.id), ...(hallHere || !units.length ? [undefined] : [])];
+    const placeHere = hallHere || (s.cells[k].owner === ME && (!!s.cells[k].building || !!s.cells[k].reserved));
+    const seq: (string | undefined)[] = [...units.map((g) => g.id), ...(placeHere || !units.length ? [undefined] : [])];
     const same = sel.hex && key(sel.hex) === k;
     const at = same ? seq.indexOf(sel.gid) : -1;
     sel = { hex: h, gid: seq[(at + 1) % seq.length] };

@@ -9,7 +9,7 @@ export const NEUTRAL_COLOR = '#8c8a84';
 export const BANDIT_COLOR = '#3b2f2c';
 const SQRT3 = Math.sqrt(3);
 
-export type Highlight = { selected?: Hex; reach?: Set<string>; attack?: Set<string>; path?: Hex[] };
+export type Highlight = { selected?: Hex; unit?: string; reach?: Set<string>; attack?: Set<string>; path?: Hex[] };
 
 export const ownerColor = (s: GameState, owner?: string): string | null => {
   if (!owner) return null;
@@ -256,8 +256,17 @@ export class MapView {
         // готовые к ходу армии слегка покачиваются — их видно издалека
         const bob = ready ? Math.sin(this.time / 380 + g.hex.q) * S * 0.05 : 0;
         const at = this.slidePos(g.id, { x: g.settler && onHall ? x - S * 0.42 : gx, y: gy + bob });
-        if (g.settler) this.settler(at.x, at.y, onHall ? S * 0.78 : S, ownerColor(s, g.owner)!, ready);
-        else this.general(at.x, at.y, onHall ? S * 0.78 : S, ownerColor(s, g.owner)!, pieces, ready);
+        const sz = onHall ? S * 0.78 : S;
+        if (hl.unit === g.id) { // выбранный генерал — золотое пульсирующее кольцо вокруг фишки
+          const pulse = 1 + Math.sin(this.time / 260) * 0.06;
+          c.save();
+          c.shadowColor = 'rgba(255,230,140,0.95)'; c.shadowBlur = sz * 0.45;
+          c.strokeStyle = '#ffe28a'; c.lineWidth = Math.max(2.5, sz * 0.1);
+          c.beginPath(); c.arc(at.x, at.y, sz * 0.56 * pulse, 0, Math.PI * 2); c.stroke();
+          c.restore();
+        }
+        if (g.settler) this.settler(at.x, at.y, sz, ownerColor(s, g.owner)!, ready);
+        else this.general(at.x, at.y, sz, ownerColor(s, g.owner)!, pieces, ready);
       });
     }
     // 5. подсветка хода
@@ -287,7 +296,7 @@ export class MapView {
       c.strokeStyle = 'rgba(255,255,255,0.92)'; c.lineWidth = Math.max(1.5, S * 0.07); c.lineCap = 'round';
       c.beginPath(); c.moveTo(x - S * 0.22, y + S * 0.62); c.lineTo(x + S * 0.06, y + S * 0.34); c.moveTo(x + S * 0.22, y + S * 0.62); c.lineTo(x - S * 0.06, y + S * 0.34); c.stroke();
     }
-    if (hl.selected) {
+    if (hl.selected && !hl.unit) { // выбрана сама клетка (город, здание, местность) — светится клетка
       const { x, y } = this.toPixel(hl.selected);
       c.save();
       c.shadowColor = 'rgba(255,240,170,0.95)'; c.shadowBlur = S * 0.5;
