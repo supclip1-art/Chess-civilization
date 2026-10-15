@@ -135,10 +135,35 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
     const path = g && to ? findPath(s, g.id, to) ?? undefined : undefined;
     return { selected: sel.hex, reach, attack: atk, path };
   };
+  let seenCache = new Set<string>();
   const draw = () => {
     const seen = visible(s, ME);
+    seenCache = seen;
     remember(s, ME, seen); // память карты под туманом войны
     view.draw(s, ME, seen, highlight());
+  };
+  /** Перерисовка при движении камеры: не чаще кадра и без пересчёта тумана. */
+  let frame = 0;
+  const drawView = () => {
+    if (frame) return;
+    frame = requestAnimationFrame(() => { frame = 0; view.draw(s, ME, seenCache, highlight()); });
+  };
+  /** Плавно перевести камеру к клетке. */
+  let glide = 0;
+  const glideTo = (h: Hex) => {
+    cancelAnimationFrame(glide);
+    const x0 = view.ox, y0 = view.oy;
+    view.centerOn(h);
+    const x1 = view.ox, y1 = view.oy;
+    view.ox = x0; view.oy = y0;
+    const t0 = performance.now();
+    const step = (t: number) => {
+      const k = Math.min(1, (t - t0) / 320), e = 1 - (1 - k) ** 3;
+      view.ox = x0 + (x1 - x0) * e; view.oy = y0 + (y1 - y0) * e;
+      view.draw(s, ME, seenCache, highlight());
+      if (k < 1) glide = requestAnimationFrame(step);
+    };
+    glide = requestAnimationFrame(step);
   };
   iconsReady.then(() => draw());
 
@@ -401,8 +426,8 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
     const g = s.generals[c.slice(5)];
     if (!g) return;
     sel = { hex: { ...g.hex }, gid: g.id };
-    view.centerOn(g.hex);
     refresh();
+    glideTo(g.hex);
   };
   app.querySelector('#gensbtn')!.addEventListener('click', () => { if (!busy) { tap(); void generalsMenu(); } });
 
@@ -453,7 +478,7 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
       if (c === 'close') { modal(null); return; }
       if (c === 'city:prev') { cityIdx--; continue; }
       if (c === 'city:next') { cityIdx++; continue; }
-      if (c.startsWith('goto-city:')) { const h = s.halls[c.slice(10)]; modal(null); sel = { hex: { ...h.hex } }; view.centerOn(h.hex); refresh(); return; }
+      if (c.startsWith('goto-city:')) { const h = s.halls[c.slice(10)]; modal(null); sel = { hex: { ...h.hex } }; refresh(); glideTo(h.hex); return; }
       await handleAction(c);
     }
   };
@@ -647,7 +672,7 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
     if (idle && warnedTurn !== s.turn) {
       warnedTurn = s.turn;
       sel = { hex: idle.hex, gid: idle.id };
-      view.centerOn(idle.hex);
+      glideTo(idle.hex);
       refresh();
       toast(idle.settler ? 'This settler has not moved yet. Move him, found a city, hold — or press End turn again.' : 'This army has not moved yet. Move it, give it an order (march, explore, hold) — or press End turn again.');
       return;
@@ -688,7 +713,7 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
     const notes = [...news.map((e) => `${e.player && e.player !== ME ? (hasMet(s, ME, e.player) ? ownerName(s, e.player) : 'An unknown nation') + ': ' : ''}${e.text[0].toUpperCase()}${e.text.slice(1)}`), ...marched.map((m) => `General ${m.text}`)];
     if (notes.length) toast(notes.map((n) => `• ${n}`).join('\n'));
     const stopped = marched.find((m) => s.generals[m.gid] && /stopped|blocked/.test(m.text));
-    if (stopped) { sel = { hex: s.generals[stopped.gid].hex, gid: stopped.gid }; view.centerOn(s.generals[stopped.gid].hex); }
+    if (stopped) { sel = { hex: s.generals[stopped.gid].hex, gid: stopped.gid }; glideTo(s.generals[stopped.gid].hex); }
     sel = { hex: sel.hex, gid: sel.gid && s.generals[sel.gid] ? sel.gid : undefined };
     refresh();
     checkEnd();
@@ -752,7 +777,9 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
 
   const pointers = new Map<number, { x: number; y: number }>();
   let dragged = false, startX = 0, startY = 0, pinch = 0;
+  let vx = 0, vy = 0, lastT = 0, fling = 0; // скорость пальца — для инерции после свайпа
   canvas.addEventListener('pointerdown', (e) => {
+    cancelAnimationFrame(fling); cancelAnimationFrame(glide); vx = vy = 0; lastT = performance.now();
     canvas.setPointerCapture(e.pointerId);
     pointers.set(e.pointerId, { x: e.offsetX, y: e.offsetY });
     if (pointers.size === 1) { dragged = false; startX = e.offsetX; startY = e.offsetY; }
@@ -766,20 +793,36 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
       const [a, b] = [...pointers.values()];
       const d = Math.hypot(a.x - b.x, a.y - b.y);
       if (pinch) view.zoomAt(d / pinch, (a.x + b.x) / 2, (a.y + b.y) / 2);
-      pinch = d; dragged = true; draw(); return;
+      pinch = d; dragged = true; vx = vy = 0; drawView(); return;
     }
     if (Math.hypot(e.offsetX - startX, e.offsetY - startY) > 6) dragged = true;
-    if (dragged) { view.ox += e.offsetX - prev.x; view.oy += e.offsetY - prev.y; draw(); }
+    if (dragged) {
+      const dx = e.offsetX - prev.x, dy = e.offsetY - prev.y, now = performance.now(), dt = Math.max(1, now - lastT);
+      vx = 0.7 * (dx / dt) + 0.3 * vx; vy = 0.7 * (dy / dt) + 0.3 * vy; lastT = now;
+      view.ox += dx; view.oy += dy; drawView();
+    }
   });
   const up = (e: PointerEvent) => {
     const wasSingle = pointers.size === 1;
     pointers.delete(e.pointerId);
     if (pointers.size < 2) pinch = 0;
     if (wasSingle && !dragged) onTap(e.offsetX, e.offsetY);
+    // инерция: карта ещё немного катится после быстрого свайпа
+    if (wasSingle && dragged && performance.now() - lastT < 80 && Math.hypot(vx, vy) > 0.25) {
+      let last = performance.now();
+      const roll = (t: number) => {
+        const dt = t - last; last = t;
+        view.ox += vx * dt; view.oy += vy * dt;
+        const k = Math.pow(0.94, dt / 16); vx *= k; vy *= k;
+        view.draw(s, ME, seenCache, highlight());
+        if (Math.hypot(vx, vy) > 0.02) fling = requestAnimationFrame(roll);
+      };
+      fling = requestAnimationFrame(roll);
+    }
   };
   canvas.addEventListener('pointerup', up);
   canvas.addEventListener('pointercancel', (e) => pointers.delete(e.pointerId));
-  canvas.addEventListener('wheel', (e) => { e.preventDefault(); view.zoomAt(e.deltaY < 0 ? 1.12 : 1 / 1.12, e.offsetX, e.offsetY); draw(); }, { passive: false });
+  canvas.addEventListener('wheel', (e) => { e.preventDefault(); view.zoomAt(e.deltaY < 0 ? 1.12 : 1 / 1.12, e.offsetX, e.offsetY); drawView(); }, { passive: false });
 
   const tut = startTutorial(app, s, ME);
   const refresh = () => { bar(); sheet(); draw(); tut.update(); };

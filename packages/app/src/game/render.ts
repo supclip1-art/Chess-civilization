@@ -2,15 +2,12 @@
 // генералы, туман войны, подсветка хода. Камера: перетаскивание и щипок для масштаба.
 
 import { iconImage } from './icons.ts';
-import { type GameState, type Hex, type Job, type Terrain, key, neighbors } from '../../../core/src/index.ts';
+import { VARIANTS, tileSprite } from './tiles.ts';
+import { type GameState, type Hex, type Job, key, neighbors } from '../../../core/src/index.ts';
 
 export const PLAYER_COLORS = ['#2f6fd6', '#d64a3c', '#e0a020', '#8a52d6', '#1f9e86', '#d65f9c', '#6b8f2a', '#c76a1f'];
 export const NEUTRAL_COLOR = '#8c8a84';
 export const BANDIT_COLOR = '#3b2f2c';
-
-const TERRAIN: Record<Terrain, string> = {
-  field: '#cdd890', forest: '#6f9a5c', deposit: '#c7b27a', tundra: '#d5dcda', desert: '#e8d49e', mountain: '#8e877c', water: '#79a8cf',
-};
 const SQRT3 = Math.sqrt(3);
 
 export type Highlight = { selected?: Hex; reach?: Set<string>; attack?: Set<string>; path?: Hex[] };
@@ -20,6 +17,14 @@ export const ownerColor = (s: GameState, owner?: string): string | null => {
   const i = s.order.indexOf(owner);
   if (owner === 'bandits') return BANDIT_COLOR;
   return i >= 0 ? PLAYER_COLORS[i % PLAYER_COLORS.length] : NEUTRAL_COLOR;
+};
+
+/** Светлее (amount > 0) или темнее (< 0) цвет #rrggbb. */
+const shade = (hex: string, amount: number): string => {
+  const n = parseInt(hex.slice(1, 7), 16);
+  const ch = (v: number) => Math.round(amount >= 0 ? v + (255 - v) * amount : v * (1 + amount));
+  const r = ch((n >> 16) & 255), g = ch((n >> 8) & 255), b = ch(n & 255);
+  return `#${((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1)}`;
 };
 
 export class MapView {
@@ -118,36 +123,62 @@ export class MapView {
       for (const j of me.jobs) { const k = at(j); if (k) clocks.set(k, false); }
     }
 
-    // 1. местность и территория
-    for (const cell of cells) {
+    // 1. местность: рисованные клетки из кэша (несколько вариантов каждой, выбор по координатам)
+    c.fillStyle = '#2e5f8c'; c.fillRect(0, 0, w, h); // море за краем карты
+    const onScreen = cells.filter((cell) => { const p = this.toPixel(cell.hex); return p.x > -S * 2 && p.y > -S * 2 && p.x < w + S * 2 && p.y < h + S * 2; });
+    for (const cell of onScreen) {
       const { x, y } = this.toPixel(cell.hex);
-      if (x < -S * 2 || y < -S * 2 || x > w + S * 2 || y > h + S * 2) continue;
-      this.hexPath(x, y, S + 0.5);
-      c.fillStyle = TERRAIN[cell.terrain];
-      c.fill();
-      this.terrainMark(cell.terrain, x, y, S);
-      const k = key(cell.hex);
-      const col = ownerColor(s, known.get(k)?.owner);
-      if (col) { this.hexPath(x, y, S); c.fillStyle = col + '38'; c.fill(); }
-      c.strokeStyle = 'rgba(0,0,0,0.08)';
-      c.lineWidth = 1;
-      this.hexPath(x, y, S);
-      c.stroke();
+      const v = ((cell.hex.q * 73856093) ^ (cell.hex.r * 19349663)) >>> 0;
+      const { img, r } = tileSprite(cell.terrain, v % VARIANTS, S * dpr, !visible(key(cell.hex)) && !!mem[key(cell.hex)]);
+      const k = S / r;
+      c.drawImage(img, x - (img.width * k) / 2, y - (img.height * k) / 2, img.width * k, img.height * k);
+    }
+    // берега: полоса мелководья, песок и пена у суши
+    const dirs = [{ q: 1, r: 0 }, { q: 0, r: 1 }, { q: -1, r: 1 }, { q: -1, r: 0 }, { q: 0, r: -1 }, { q: 1, r: -1 }];
+    c.lineCap = 'round';
+    for (const cell of onScreen) {
+      if (cell.terrain !== 'water') continue;
+      const { x, y } = this.toPixel(cell.hex);
+      const corners = this.corners(x, y, S);
+      dirs.forEach((d, i) => {
+        const n = s.cells[key({ q: cell.hex.q + d.q, r: cell.hex.r + d.r })];
+        if (!n || n.terrain === 'water') return;
+        const [ax, ay] = corners[i], [bx, by] = corners[(i + 1) % 6];
+        const ix = (x - (ax + bx) / 2) * 0.22, iy = (y - (ay + by) / 2) * 0.22; // сдвиг внутрь воды
+        c.strokeStyle = 'rgba(150,215,235,0.5)'; c.lineWidth = S * 0.42;
+        c.beginPath(); c.moveTo(ax + ix, ay + iy); c.lineTo(bx + ix, by + iy); c.stroke();
+        c.strokeStyle = 'rgba(244,231,190,0.95)'; c.lineWidth = Math.max(1.5, S * 0.1);
+        c.beginPath(); c.moveTo(ax, ay); c.lineTo(bx, by); c.stroke();
+        c.strokeStyle = 'rgba(255,255,255,0.55)'; c.lineWidth = Math.max(1, S * 0.06);
+        c.beginPath(); c.moveTo(ax + ix * 0.5, ay + iy * 0.5); c.lineTo(bx + ix * 0.5, by + iy * 0.5); c.stroke();
+      });
+    }
+    // территории: лёгкая заливка цвета владельца
+    for (const cell of onScreen) {
+      const col = ownerColor(s, known.get(key(cell.hex))?.owner);
+      if (!col) continue;
+      const { x, y } = this.toPixel(cell.hex);
+      this.hexPath(x, y, S + 0.3); c.fillStyle = col + '2e'; c.fill();
     }
     // 2. границы территорий
     for (const cell of cells) {
       const owner = known.get(key(cell.hex))?.owner;
       if (!owner) continue;
       const { x, y } = this.toPixel(cell.hex);
-      const corners = this.corners(x, y, S - 1.2);
-      // соседи в порядке рёбер для pointy-top: E, SE, SW, W, NW, NE
-      const order = [{ q: 1, r: 0 }, { q: 0, r: 1 }, { q: -1, r: 1 }, { q: -1, r: 0 }, { q: 0, r: -1 }, { q: 1, r: -1 }];
-      c.strokeStyle = ownerColor(s, owner)!;
-      c.lineWidth = Math.max(2, 3 * this.zoom);
+      if (x < -S * 2 || y < -S * 2 || x > w + S * 2 || y > h + S * 2) continue;
+      const corners = this.corners(x, y, S - Math.max(1.5, S * 0.07));
+      const col = ownerColor(s, owner)!;
       c.lineCap = 'round';
-      order.forEach((d, i) => {
+      dirs.forEach((d, i) => {
         if (known.get(key({ q: cell.hex.q + d.q, r: cell.hex.r + d.r }))?.owner === owner) return;
         const [ax, ay] = corners[i], [bx, by] = corners[(i + 1) % 6];
+        // свечение внутрь, тёмная обводка и цветная линия — граница видна на любой местности
+        const ix = (x - (ax + bx) / 2) * 0.16, iy = (y - (ay + by) / 2) * 0.16;
+        c.strokeStyle = col + '55'; c.lineWidth = Math.max(3, S * 0.3);
+        c.beginPath(); c.moveTo(ax + ix, ay + iy); c.lineTo(bx + ix, by + iy); c.stroke();
+        c.strokeStyle = 'rgba(0,0,0,0.45)'; c.lineWidth = Math.max(3, 4.2 * this.zoom);
+        c.beginPath(); c.moveTo(ax, ay); c.lineTo(bx, by); c.stroke();
+        c.strokeStyle = col; c.lineWidth = Math.max(2, 2.6 * this.zoom);
         c.beginPath(); c.moveTo(ax, ay); c.lineTo(bx, by); c.stroke();
       });
     }
@@ -204,23 +235,50 @@ export class MapView {
     for (const k of hl.reach ?? []) {
       const cell = s.cells[k]; if (!cell) continue;
       const { x, y } = this.toPixel(cell.hex);
-      this.hexPath(x, y, S * 0.9); c.fillStyle = 'rgba(255,255,255,0.42)'; c.fill();
+      this.hexPath(x, y, S * 0.88); c.fillStyle = 'rgba(255,255,255,0.3)'; c.fill();
+      c.strokeStyle = 'rgba(255,255,255,0.85)'; c.lineWidth = Math.max(1.5, S * 0.06); c.setLineDash([S * 0.16, S * 0.12]); c.stroke(); c.setLineDash([]);
     }
     for (const k of hl.attack ?? []) {
       const cell = s.cells[k]; if (!cell) continue;
       const { x, y } = this.toPixel(cell.hex);
-      this.hexPath(x, y, S * 0.86); c.strokeStyle = '#d63a2a'; c.lineWidth = 3; c.stroke();
+      this.hexPath(x, y, S * 0.86); c.fillStyle = 'rgba(214,58,42,0.18)'; c.fill();
+      c.strokeStyle = '#e8432f'; c.lineWidth = Math.max(2.5, S * 0.1); c.stroke();
+      // скрещённые мечи внизу клетки
+      c.strokeStyle = 'rgba(255,255,255,0.92)'; c.lineWidth = Math.max(1.5, S * 0.07); c.lineCap = 'round';
+      c.beginPath(); c.moveTo(x - S * 0.22, y + S * 0.62); c.lineTo(x + S * 0.06, y + S * 0.34); c.moveTo(x + S * 0.22, y + S * 0.62); c.lineTo(x - S * 0.06, y + S * 0.34); c.stroke();
     }
     if (hl.selected) {
       const { x, y } = this.toPixel(hl.selected);
-      this.hexPath(x, y, S * 0.94); c.strokeStyle = '#ffffff'; c.lineWidth = 3; c.stroke();
-      this.hexPath(x, y, S * 0.94); c.strokeStyle = 'rgba(0,0,0,0.5)'; c.lineWidth = 1; c.stroke();
+      c.save();
+      c.shadowColor = 'rgba(255,240,170,0.95)'; c.shadowBlur = S * 0.5;
+      this.hexPath(x, y, S * 0.92); c.strokeStyle = '#fff6d0'; c.lineWidth = Math.max(2.5, S * 0.11); c.stroke();
+      c.restore();
+      this.hexPath(x, y, S * 0.92); c.strokeStyle = 'rgba(0,0,0,0.35)'; c.lineWidth = 1; c.stroke();
     }
-    // 6. туман войны поверх всего
-    for (const cell of cells) {
-      if (visible(key(cell.hex))) continue;
+    // 6. туман войны: виденное раньше — блёклое и темнее, неизведанное — тёмное облако с мягким краем
+    for (const cell of onScreen) {
+      const k = key(cell.hex);
+      if (visible(k)) continue;
       const { x, y } = this.toPixel(cell.hex);
-      this.hexPath(x, y, S + 0.6); c.fillStyle = 'rgba(28,30,34,0.62)'; c.fill();
+      if (mem[k]) {
+        this.hexPath(x, y, S + 0.6); c.fillStyle = 'rgba(22,26,40,0.18)'; c.fill(); // местность уже блёклая, приглушаем здания и границы
+      } else {
+        this.hexPath(x, y, S + 0.7); c.fillStyle = 'rgba(17,20,24,0.9)'; c.fill();
+      }
+    }
+    for (const cell of onScreen) {
+      const k = key(cell.hex);
+      if (visible(k) || mem[k]) continue;
+      const { x, y } = this.toPixel(cell.hex);
+      for (const d of dirs) {
+        const nk = key({ q: cell.hex.q + d.q, r: cell.hex.r + d.r });
+        if (!visible(nk) && !mem[nk]) continue;
+        const p = this.toPixel({ q: cell.hex.q + d.q, r: cell.hex.r + d.r });
+        const gx = (x + p.x) / 2, gy = (y + p.y) / 2;
+        const g = c.createRadialGradient(gx, gy, 0, gx, gy, S * 0.9);
+        g.addColorStop(0, 'rgba(17,20,24,0.5)'); g.addColorStop(1, 'rgba(17,20,24,0)');
+        c.fillStyle = g; c.beginPath(); c.arc(gx, gy, S * 0.9, 0, Math.PI * 2); c.fill();
+      }
     }
     // 7. названия городов, как в «Цивилизации»: плашка цвета владельца под городом
     if (S >= 12) {
@@ -231,71 +289,58 @@ export class MapView {
         this.cityLabel(x, y + S * 0.8, S, hall.name ?? 'City', ownerColor(s, hall.owner)!);
       }
     }
+    // 8. виньетка по краям экрана — карта выглядит объёмнее
+    const vg = c.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.45, w / 2, h / 2, Math.max(w, h) * 0.8);
+    vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(10,20,30,0.3)');
+    c.fillStyle = vg; c.fillRect(0, 0, w, h);
   }
 
   private cityLabel(x: number, y: number, S: number, name: string, color: string): void {
     const c = this.ctx;
     c.save();
-    c.font = `600 ${Math.max(10, Math.round(S * 0.36))}px system-ui, sans-serif`;
-    const w = c.measureText(name).width + S * 0.4;
-    const h = Math.max(13, S * 0.5);
+    c.font = `700 ${Math.max(10, Math.round(S * 0.36))}px system-ui, sans-serif`;
+    const w = c.measureText(name).width + S * 0.5;
+    const h = Math.max(14, S * 0.52);
+    c.shadowColor = 'rgba(0,0,0,0.35)'; c.shadowBlur = 4; c.shadowOffsetY = 1.5;
+    const g = c.createLinearGradient(0, y - h / 2, 0, y + h / 2);
+    g.addColorStop(0, color); g.addColorStop(1, shade(color, -0.25));
     c.beginPath(); c.roundRect(x - w / 2, y - h / 2, w, h, h / 2);
-    c.fillStyle = color; c.fill();
-    c.strokeStyle = 'rgba(0,0,0,0.35)'; c.lineWidth = 1; c.stroke();
+    c.fillStyle = g; c.fill();
+    c.shadowColor = 'transparent';
+    c.strokeStyle = 'rgba(255,255,255,0.65)'; c.lineWidth = 1.2; c.stroke();
     c.fillStyle = '#ffffff'; c.textAlign = 'center'; c.textBaseline = 'middle';
     c.fillText(name, x, y + 0.5);
     c.restore();
   }
 
-  private terrainMark(t: Terrain, x: number, y: number, S: number): void {
-    const c = this.ctx;
-    if (S < 14) return;
-    c.save();
-    if (t === 'forest') {
-      c.fillStyle = 'rgba(30,70,30,0.45)';
-      for (const [dx, dy] of [[-0.32, 0.18], [0.3, 0.22], [0, -0.28]]) {
-        c.beginPath(); c.moveTo(x + dx * S, y + (dy - 0.22) * S); c.lineTo(x + (dx - 0.16) * S, y + (dy + 0.1) * S); c.lineTo(x + (dx + 0.16) * S, y + (dy + 0.1) * S); c.fill();
-      }
-    } else if (t === 'mountain') {
-      c.fillStyle = 'rgba(60,55,50,0.55)';
-      c.beginPath(); c.moveTo(x - 0.5 * S, y + 0.3 * S); c.lineTo(x - 0.1 * S, y - 0.4 * S); c.lineTo(x + 0.15 * S, y); c.lineTo(x + 0.3 * S, y - 0.2 * S); c.lineTo(x + 0.55 * S, y + 0.3 * S); c.fill();
-      c.fillStyle = 'rgba(255,255,255,0.7)';
-      c.beginPath(); c.moveTo(x - 0.1 * S, y - 0.4 * S); c.lineTo(x - 0.22 * S, y - 0.18 * S); c.lineTo(x + 0.02 * S, y - 0.18 * S); c.fill();
-    } else if (t === 'deposit') {
-      c.fillStyle = '#d9a520';
-      for (const [dx, dy] of [[-0.22, 0.12], [0.18, 0.2], [0, -0.18]]) { c.beginPath(); c.arc(x + dx * S, y + dy * S, 0.1 * S, 0, Math.PI * 2); c.fill(); }
-    } else if (t === 'water') {
-      c.strokeStyle = 'rgba(255,255,255,0.45)'; c.lineWidth = 1.5;
-      for (const dy of [-0.15, 0.2]) { c.beginPath(); c.moveTo(x - 0.35 * S, y + dy * S); c.quadraticCurveTo(x - 0.1 * S, y + (dy - 0.12) * S, x + 0.1 * S, y + dy * S); c.quadraticCurveTo(x + 0.25 * S, y + (dy + 0.12) * S, x + 0.4 * S, y + dy * S); c.stroke(); }
-    } else if (t === 'field') {
-      c.strokeStyle = 'rgba(120,130,50,0.35)'; c.lineWidth = 1.2;
-      for (const dx of [-0.25, 0, 0.25]) { c.beginPath(); c.moveTo(x + dx * S, y - 0.3 * S); c.lineTo(x + dx * S, y + 0.3 * S); c.stroke(); }
-    }
-    c.restore();
-  }
-
-  /** Ресурсное здание: значок (колос, пила, кирка) на светлой плашке и уровень в кружке. */
+  /** Ресурсное здание: значок на светлой плашке с тенью и уровень в кружке. */
   private building(x: number, y: number, S: number, kind: 'farm' | 'sawmill' | 'mine' | 'fishery', level: number): void {
     const img = iconImage(kind);
     if (!img) { this.badge(x, y, S, kind === 'farm' ? 'F' : kind === 'sawmill' ? 'S' : kind === 'fishery' ? 'B' : 'M', level); return; }
     const c = this.ctx;
     const w = S * 0.86, top = y - S * 0.3;
-    c.fillStyle = 'rgba(255,255,255,0.9)';
-    c.strokeStyle = 'rgba(0,0,0,0.3)'; c.lineWidth = 1;
-    c.beginPath(); c.roundRect(x - w / 2, top, w, w, S * 0.2); c.fill(); c.stroke();
+    c.save();
+    c.shadowColor = 'rgba(0,0,0,0.35)'; c.shadowBlur = S * 0.18; c.shadowOffsetY = S * 0.06;
+    const g = c.createLinearGradient(0, top, 0, top + w);
+    g.addColorStop(0, '#fffdf6'); g.addColorStop(1, '#efe6cf');
+    c.fillStyle = g;
+    c.beginPath(); c.roundRect(x - w / 2, top, w, w, S * 0.22); c.fill();
+    c.restore();
+    c.strokeStyle = 'rgba(120,90,40,0.45)'; c.lineWidth = 1;
+    c.beginPath(); c.roundRect(x - w / 2, top, w, w, S * 0.22); c.stroke();
     const pad = w * 0.1;
     c.drawImage(img, x - w / 2 + pad, top + pad, w - 2 * pad, w - 2 * pad);
-    // уровень
     const rr = Math.max(6, S * 0.22), bx = x + w / 2 - rr * 0.35, by = top + w - rr * 0.35;
+    const lg = c.createLinearGradient(0, by - rr, 0, by + rr);
+    lg.addColorStop(0, '#4a4a44'); lg.addColorStop(1, '#1f1f1c');
     c.beginPath(); c.arc(bx, by, rr, 0, Math.PI * 2);
-    c.fillStyle = '#2a2a26'; c.fill();
-    c.strokeStyle = '#ffffff'; c.lineWidth = 1.2; c.stroke();
+    c.fillStyle = lg; c.fill();
+    c.strokeStyle = '#f3d27a'; c.lineWidth = 1.3; c.stroke();
     c.fillStyle = '#ffffff'; c.font = `700 ${Math.round(rr * 1.25)}px system-ui, sans-serif`;
     c.textAlign = 'center'; c.textBaseline = 'middle';
     c.fillText(String(level), bx, by + 0.5);
   }
 
-  /** Часы: стройка идёт; queued — серые, стройка ждёт свободного строителя. */
   private clock(x: number, y: number, r: number, queued: boolean): void {
     const c = this.ctx;
     c.save();
@@ -319,45 +364,106 @@ export class MapView {
     c.fillText(level ? `${letter}${level}` : letter, x, y + S * 0.08 + h / 2 + 1);
   }
 
+  /** Город: каменная крепость со знаменем цвета владельца, точки — уровень. */
   private hall(x: number, y: number, S: number, color: string, level: number, siege: boolean): void {
     const c = this.ctx;
-    const w = S * 0.9, h = S * 0.78, top = y - h * 0.62;
-    c.fillStyle = color; c.strokeStyle = '#ffffff'; c.lineWidth = 1.6;
+    const w = S * 0.98, h = S * 0.72, base = y + S * 0.28, top = base - h;
+    c.save();
+    // тень
+    c.fillStyle = 'rgba(0,0,0,0.3)';
+    c.beginPath(); c.ellipse(x + S * 0.06, base + S * 0.04, w * 0.58, S * 0.14, 0, 0, Math.PI * 2); c.fill();
+    // стена с зубцами
+    const stone = c.createLinearGradient(0, top, 0, base);
+    stone.addColorStop(0, '#efe7d6'); stone.addColorStop(1, '#b9ab90');
+    c.fillStyle = stone; c.strokeStyle = 'rgba(70,55,35,0.75)'; c.lineWidth = Math.max(1, S * 0.04);
     c.beginPath();
-    c.moveTo(x - w / 2, y + h * 0.38); c.lineTo(x - w / 2, top + h * 0.22);
-    for (let i = 0; i < 3; i++) { const bx = x - w / 2 + (i * w) / 2.5; c.lineTo(bx, top); c.lineTo(bx + w / 5, top); c.lineTo(bx + w / 5, top + h * 0.22); }
-    c.lineTo(x + w / 2, top + h * 0.22); c.lineTo(x + w / 2, y + h * 0.38); c.closePath();
+    c.moveTo(x - w / 2, base); c.lineTo(x - w / 2, top + h * 0.3);
+    const teeth = 5;
+    for (let i = 0; i < teeth; i++) {
+      const tx = x - w / 2 + (i * w) / (teeth - 0.5);
+      c.lineTo(tx, top + h * 0.12); c.lineTo(tx + w / (teeth * 2), top + h * 0.12); c.lineTo(tx + w / (teeth * 2), top + h * 0.3);
+      c.lineTo(Math.min(x + w / 2, tx + w / (teeth - 0.5)), top + h * 0.3);
+    }
+    c.lineTo(x + w / 2, top + h * 0.12); c.lineTo(x + w / 2, base); c.closePath();
     c.fill(); c.stroke();
-    c.fillStyle = '#ffffff';
-    for (let i = 0; i < level; i++) { c.beginPath(); c.arc(x - (level - 1) * S * 0.12 + i * S * 0.24, y + h * 0.1, S * 0.07, 0, Math.PI * 2); c.fill(); }
-    if (siege) { c.strokeStyle = '#d63a2a'; c.lineWidth = 3; c.beginPath(); c.arc(x, y, S * 0.78, 0, Math.PI * 2); c.stroke(); }
+    // центральная башня
+    const tw = w * 0.36;
+    c.fillStyle = stone;
+    c.beginPath(); c.rect(x - tw / 2, top - h * 0.18, tw, h * 1.18); c.fill(); c.stroke();
+    // ворота
+    c.fillStyle = '#5a4328';
+    c.beginPath(); c.moveTo(x - tw * 0.28, base); c.lineTo(x - tw * 0.28, base - h * 0.32); c.arc(x, base - h * 0.32, tw * 0.28, Math.PI, 0); c.lineTo(x + tw * 0.28, base); c.closePath(); c.fill();
+    // знамя
+    c.strokeStyle = '#4a3b2a'; c.lineWidth = Math.max(1, S * 0.04);
+    c.beginPath(); c.moveTo(x, top - h * 0.18); c.lineTo(x, top - h * 0.7); c.stroke();
+    c.fillStyle = color;
+    c.beginPath(); c.moveTo(x, top - h * 0.7); c.quadraticCurveTo(x + S * 0.22, top - h * 0.62, x + S * 0.36, top - h * 0.66); c.lineTo(x + S * 0.36, top - h * 0.38);
+    c.quadraticCurveTo(x + S * 0.2, top - h * 0.34, x, top - h * 0.42); c.closePath(); c.fill();
+    c.strokeStyle = 'rgba(0,0,0,0.35)'; c.lineWidth = 0.8; c.stroke();
+    // уровень — золотые точки на стене
+    for (let i = 0; i < level; i++) {
+      const dx = x - (level - 1) * S * 0.13 + i * S * 0.26;
+      c.fillStyle = '#f2c94c'; c.beginPath(); c.arc(dx + (dx >= x - 1 && dx <= x + 1 ? 0 : 0), top + h * 0.6, S * 0.065, 0, Math.PI * 2); c.fill();
+      c.strokeStyle = 'rgba(90,60,10,0.8)'; c.lineWidth = 0.8; c.stroke();
+    }
+    c.restore();
+    if (siege) {
+      c.save();
+      c.strokeStyle = '#e8432f'; c.lineWidth = Math.max(2.5, S * 0.1); c.setLineDash([S * 0.22, S * 0.14]);
+      c.beginPath(); c.arc(x, y, S * 0.82, 0, Math.PI * 2); c.stroke();
+      c.restore();
+    }
   }
 
-  /** Поселенец: светлый кружок с флажком цвета владельца. */
+  /** Поселенец: фишка с повозкой-флажком цвета владельца. */
   private settler(x: number, y: number, S: number, color: string, ready: boolean): void {
     const c = this.ctx;
     const r = S * 0.36;
-    c.fillStyle = '#f7f3e8'; c.strokeStyle = ready ? color : 'rgba(0,0,0,0.35)'; c.lineWidth = ready ? 2.5 : 1.5;
-    c.beginPath(); c.arc(x, y, r, 0, Math.PI * 2); c.fill(); c.stroke();
+    c.save();
+    c.fillStyle = 'rgba(0,0,0,0.3)';
+    c.beginPath(); c.ellipse(x + r * 0.15, y + r * 0.95, r * 0.9, r * 0.3, 0, 0, Math.PI * 2); c.fill();
+    const g = c.createRadialGradient(x - r * 0.35, y - r * 0.4, r * 0.1, x, y, r);
+    g.addColorStop(0, '#ffffff'); g.addColorStop(1, '#e6dcc4');
+    c.fillStyle = g;
+    c.beginPath(); c.arc(x, y, r, 0, Math.PI * 2); c.fill();
+    c.strokeStyle = ready ? color : 'rgba(0,0,0,0.35)'; c.lineWidth = ready ? Math.max(2.5, S * 0.09) : 1.5; c.stroke();
     c.strokeStyle = '#4a3424'; c.lineWidth = Math.max(1.2, S * 0.05); c.lineCap = 'round';
     c.beginPath(); c.moveTo(x - r * 0.35, y + r * 0.6); c.lineTo(x - r * 0.35, y - r * 0.62); c.stroke();
     c.fillStyle = color;
     c.beginPath(); c.moveTo(x - r * 0.3, y - r * 0.62); c.lineTo(x + r * 0.55, y - r * 0.35); c.lineTo(x - r * 0.3, y - r * 0.05); c.closePath(); c.fill();
+    c.restore();
   }
 
+  /** Генерал: блестящая фишка цвета владельца с королём, рядом — число фигур в армии. */
   private general(x: number, y: number, S: number, color: string, pieces: number, ready: boolean): void {
     const c = this.ctx;
     const r = S * 0.42;
-    c.fillStyle = color; c.strokeStyle = ready ? '#ffffff' : 'rgba(255,255,255,0.6)'; c.lineWidth = ready ? 2.5 : 1.5;
-    c.beginPath(); c.arc(x, y, r, 0, Math.PI * 2); c.fill(); c.stroke();
+    c.save();
+    // тень на земле
+    c.fillStyle = 'rgba(0,0,0,0.32)';
+    c.beginPath(); c.ellipse(x + r * 0.15, y + r * 0.95, r * 0.95, r * 0.32, 0, 0, Math.PI * 2); c.fill();
+    if (ready) { c.shadowColor = 'rgba(255,255,255,0.9)'; c.shadowBlur = S * 0.35; }
+    const g = c.createRadialGradient(x - r * 0.35, y - r * 0.45, r * 0.1, x, y, r * 1.05);
+    g.addColorStop(0, shade(color, 0.45)); g.addColorStop(0.55, color); g.addColorStop(1, shade(color, -0.35));
+    c.fillStyle = g;
+    c.beginPath(); c.arc(x, y, r, 0, Math.PI * 2); c.fill();
+    c.shadowColor = 'transparent';
+    c.strokeStyle = ready ? '#ffffff' : 'rgba(255,255,255,0.65)'; c.lineWidth = ready ? Math.max(2.2, S * 0.09) : 1.4; c.stroke();
+    // блик
+    c.fillStyle = 'rgba(255,255,255,0.28)';
+    c.beginPath(); c.ellipse(x - r * 0.25, y - r * 0.45, r * 0.45, r * 0.22, -0.4, 0, Math.PI * 2); c.fill();
     c.fillStyle = '#ffffff';
+    c.shadowColor = 'rgba(0,0,0,0.45)'; c.shadowBlur = 2; c.shadowOffsetY = 1;
     c.font = `${Math.round(S * 0.52)}px "Segoe UI Symbol", "Noto Sans Symbols 2", system-ui, sans-serif`;
     c.textAlign = 'center'; c.textBaseline = 'middle';
-    c.fillText('♚', x, y + 1);
+    c.fillText('\u265A', x, y + 1);
+    c.restore();
     if (pieces > 0) {
       const bx = x + r * 0.85, by = y - r * 0.85, br = S * 0.22;
       c.fillStyle = '#1d1d1b'; c.beginPath(); c.arc(bx, by, br, 0, Math.PI * 2); c.fill();
+      c.strokeStyle = '#f3d27a'; c.lineWidth = 1.2; c.stroke();
       c.fillStyle = '#ffffff'; c.font = `700 ${Math.round(S * 0.28)}px system-ui, sans-serif`;
+      c.textAlign = 'center'; c.textBaseline = 'middle';
       c.fillText(String(pieces), bx, by + 0.5);
     }
   }
