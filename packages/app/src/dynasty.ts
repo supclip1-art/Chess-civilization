@@ -1,21 +1,19 @@
 // Династия — прогресс между партиями. Опыт за кампании и достижения поднимает уровень династии (и титул правителя),
-// уровни открывают облики фигур, доски и стартовые бонусы. Коллекция: достижения и портреты правителей —
-// своих (за кого играли) и побеждённых. Хранится на устройстве и, если есть, в облаке Telegram (CloudStorage).
+// уровни открывают нации, карту, облики фигур, доски и стартовые бонусы. Хранится на устройстве и, если есть, в облаке Telegram (CloudStorage).
 
 import {
-  NATIONS, NATION_ORDER, TECHS, addElo, armyValue, nationStats, playerGenerals, playerHalls, relation, rulerOf, vassalsOf, finalScore,
+  NATIONS, TECHS, addElo, armyValue, nationStats, playerGenerals, playerHalls, relation, vassalsOf, finalScore,
   type GameState, type NationId, type TechId,
 } from '../../core/src/index.ts';
 
 export type Dynasty = {
   xp: number;
   achievements: Record<string, number>; // id → когда получено (Date.now)
-  rulers: Record<string, string>; // имя правителя → нация
   skin: string; board: string; bonus: string;
   campaigns: number; wins: number; bandits: number;
 };
 const KEY = 'chessciv.dynasty';
-const fresh = (): Dynasty => ({ xp: 0, achievements: {}, rulers: {}, skin: 'classic', board: 'green', bonus: 'none', campaigns: 0, wins: 0, bandits: 0 });
+const fresh = (): Dynasty => ({ xp: 0, achievements: {}, skin: 'classic', board: 'green', bonus: 'none', campaigns: 0, wins: 0, bandits: 0 });
 
 type Cloud = { getItem(k: string, cb: (e: unknown, v?: string) => void): void; setItem(k: string, v: string, cb?: (e: unknown) => void): void };
 const cloud = (): Cloud | undefined => (globalThis as { Telegram?: { WebApp?: { CloudStorage?: Cloud; isVersionAtLeast?: (v: string) => boolean } } }).Telegram?.WebApp?.isVersionAtLeast?.('6.9')
@@ -36,7 +34,7 @@ export const syncDynasty = (onChange: () => void): void => {
     cloud()?.getItem('dynasty', (_e, v) => {
       if (!v) { save(); return; }
       const other = { ...fresh(), ...JSON.parse(v) } as Dynasty;
-      if (other.xp > dyn.xp) { dyn = { ...other, achievements: { ...other.achievements, ...dyn.achievements }, rulers: { ...other.rulers, ...dyn.rulers } }; save(); onChange(); }
+      if (other.xp > dyn.xp) { dyn = { ...other, achievements: { ...other.achievements, ...dyn.achievements } }; save(); onChange(); }
     });
   } catch { /* облака нет */ }
 };
@@ -138,8 +136,6 @@ export type BattleNote = { won: boolean; myBefore: number; foeBefore: number; my
 export type Ach = { id: string; name: string; text: string; xp: number; check: (s: GameState, me: string, b?: BattleNote) => boolean };
 const eliminatedBy = (s: GameState, me: string) => s.log.some((e) => e.player === me && /is out of the game$/.test(e.text));
 const rules = (s: GameState, me: string, name: string) => playerHalls(s, me).some((h) => h.name === name);
-/** Японские города партии: столица Японии (из её списка) и японские города карты «Азия». */
-const JAPAN = new Set([...NATIONS.japan.cities, 'Tokyo', 'Osaka', 'Fukuoka', 'Sendai', 'Sapporo']);
 export const ACHIEVEMENTS: Ach[] = [
   { id: 'first_blood', name: 'First blood', text: 'win a battle', xp: 100, check: (_s, _m, b) => !!b?.won },
   { id: 'flawless', name: 'Flawless victory', text: 'win a battle without losing a single piece', xp: 150, check: (_s, _m, b) => !!b?.won && b.lost === 0 },
@@ -149,10 +145,7 @@ export const ACHIEVEMENTS: Ach[] = [
   { id: 'treasure', name: 'Treasure hunter', text: 'open an epic trophy chest', xp: 150, check: (_s, _m, b) => !!b?.epic },
   { id: 'conqueror', name: 'Conqueror', text: 'take a city by force', xp: 100, check: (s, me) => playerHalls(s, me).some((h) => h.takenAt !== undefined) },
   { id: 'constantinople', name: 'Take Constantinople', text: 'capture Istanbul, the Turkish capital, by force', xp: 300, check: (s, me) => playerHalls(s, me).some((h) => h.name === 'Istanbul' && h.takenAt !== undefined) },
-  { id: 'unify_japan', name: 'Unify Japan', text: 'rule every Japanese city in the game (at least 3)', xp: 300, check: (s, me) => {
-    const jp = Object.values(s.halls).filter((h) => JAPAN.has(h.name));
-    return jp.length >= 3 && jp.every((h) => h.owner === me);
-  } },
+  { id: 'genghis', name: 'Heir of Genghis Khan', text: 'conquer all of Asia: rule every city on the Asia map', xp: 500, check: (s, me) => s.settings.map === 'Asia' && Object.values(s.halls).every((h) => h.owner === me) },
   { id: 'rome', name: 'All roads lead to Rome', text: 'rule Rome', xp: 150, check: (s, me) => rules(s, me, 'Rome') },
   { id: 'silk_road', name: 'Silk Road', text: 'rule Samarkand, Bukhara and Kashgar', xp: 250, check: (s, me) => ['Samarkand', 'Bukhara', 'Kashgar'].every((n) => rules(s, me, n)) },
   { id: 'kingslayer', name: 'Kingslayer', text: 'knock a nation out of the game', xp: 300, check: (s, me) => eliminatedBy(s, me) },
@@ -183,13 +176,6 @@ export const checkAchievements = (s: GameState, me: string, b?: BattleNote): Ach
     try { ok = a.check(s, me, b); } catch { ok = false; }
     if (ok) { dyn.achievements[a.id] = Date.now(); dyn.xp += a.xp; got.push(a); changed = true; }
   }
-  // коллекция правителей: свой правитель и правители побеждённых стран
-  const add = (pid: string) => { const r = rulerOf(s, pid); if (!dyn.rulers[r]) { dyn.rulers[r] = s.players[pid].nation; changed = true; } };
-  add(me);
-  for (const id of s.order) {
-    const p = s.players[id];
-    if (!p.alive && s.log.some((e) => e.player === me && e.text === `${NATIONS[p.nation].name} is out of the game`)) add(id);
-  }
   if (changed) save();
   return got;
 };
@@ -213,7 +199,3 @@ export const finishCampaign = (s: GameState, me: string, how: 'victory' | 'defea
   save();
   return { lines, before, after: dyn.xp, got };
 };
-
-/** Все правители (по 3 на нацию) — для галереи коллекции. */
-export const allRulers = (): { nation: NationId; name: string }[] =>
-  NATION_ORDER.flatMap((n) => Object.values(NATIONS[n].rulers).map((name) => ({ nation: n, name })));

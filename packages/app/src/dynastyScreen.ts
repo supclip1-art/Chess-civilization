@@ -1,13 +1,9 @@
-// Экран династии: уровень и титул, награды по уровням, облик фигур и доски, стартовый бонус,
-// достижения и коллекция портретов правителей. Плюс золотая плашка «достижение получено» для экрана партии.
+// Экран династии: уровень и титул, награды по уровням, облик фигур и доски, стартовый бонус, достижения. Плюс золотая плашка «достижение получено» для экрана партии.
 
-import { NATIONS } from '../../core/src/index.ts';
 import {
-  ACHIEVEMENTS, BOARDS, SKINS, TITLES, UNLOCKS, allRulers, choose, dynasty, levelOf, unlocked, xpFor, type Ach, type Unlock,
+  ACHIEVEMENTS, BOARDS, SKINS, TITLES, UNLOCKS, choose, dynasty, levelOf, unlocked, xpFor, type Ach, type Unlock,
 } from './dynasty.ts';
 import { pieceHtml } from './game/pieces.ts';
-import { portraitSvg } from './game/portraits.ts';
-import { flagSvg } from './game/flags.ts';
 import { chestOpen } from './audio.ts';
 import { setBack, tap } from './tg.ts';
 
@@ -51,13 +47,12 @@ export const bonusOptions = (): { id: string; name: string; text: string; open: 
 
 export const openDynasty = (app: HTMLElement, back: () => void): void => {
   setBack(back);
-  let tab: 'rewards' | 'looks' | 'achievements' | 'rulers' = 'rewards';
+  let tab: 'rewards' | 'looks' | 'achievements' = 'rewards';
   try { tab = (localStorage.getItem('chessciv.dyntab') as typeof tab) || 'rewards'; } catch { /* по умолчанию */ }
+  if (!['rewards', 'looks', 'achievements'].includes(tab)) tab = 'rewards';
   const draw = () => {
     const d = dynasty(), l = levelOf(d.xp);
     const got = ACHIEVEMENTS.filter((a) => d.achievements[a.id]).length;
-    const rulers = allRulers();
-    const known = rulers.filter((r) => d.rulers[r.name]).length;
     let body = '';
     if (tab === 'rewards') {
       body = TITLES.map((t, i) => {
@@ -75,24 +70,17 @@ export const openDynasty = (app: HTMLElement, back: () => void): void => {
         <h2>Start bonus</h2><div class="bonuses">${bonusOptions().map((b) => `<button class="bonus ${d.bonus === b.id ? 'on' : ''}" data-bonus="${b.id}" ${b.open ? '' : 'disabled'}>
           <b>${esc(b.name)}</b><small>${b.open ? esc(b.text) : `level ${b.level}`}</small></button>`).join('')}</div>
         <p class="muted">The start bonus works in every new campaign until you change it.</p>`;
-    } else if (tab === 'achievements') {
+    } else {
       body = `<div class="achlist">${ACHIEVEMENTS.map((a) => {
         const at = d.achievements[a.id];
         return `<div class="ach ${at ? 'got' : ''}"><span class="medal">${at ? '★' : '☆'}</span><div><b>${esc(a.name)}</b><small>${esc(a.text)}</small></div><span class="axp">+${a.xp}</span></div>`;
       }).join('')}</div>`;
-    } else {
-      body = `<p class="muted">Rulers you have played and rulers you have defeated join the gallery.</p>
-        <div class="gallery">${rulers.map((r) => {
-          const have = !!d.rulers[r.name];
-          return `<div class="rl ${have ? 'got' : ''}"><span class="rp">${portraitSvg(r.nation, r.name, 64)}</span>
-            <b>${have ? esc(r.name) : '???'}</b><small><span class="fc">${flagSvg(r.nation, 14)}</span> ${esc(NATIONS[r.nation].name)}</small></div>`;
-        }).join('')}</div>`;
     }
     app.innerHTML = `
       <h1>Dynasty</h1>
       <div class="card dynhead"><span class="dyncrest big">${l}</span><div class="dyntext"><b>${TITLES[l - 1]}</b>${xpBar(d.xp)}
-        <small class="muted">Campaigns: ${d.campaigns} · Won: ${d.wins} · Achievements: ${got} / ${ACHIEVEMENTS.length} · Rulers: ${known} / ${rulers.length}</small></div></div>
-      <div class="seg wide" id="dyntabs">${([['rewards', 'Rewards'], ['looks', 'Looks'], ['achievements', 'Achievements'], ['rulers', 'Rulers']] as const)
+        <small class="muted">Campaigns: ${d.campaigns} · Won: ${d.wins} · Achievements: ${got} / ${ACHIEVEMENTS.length}</small></div></div>
+      <div class="seg wide" id="dyntabs">${([['rewards', 'Rewards'], ['looks', 'Looks'], ['achievements', 'Achievements']] as const)
         .map(([id, n]) => `<button data-t="${id}" class="${id === tab ? 'on' : ''}">${n}</button>`).join('')}</div>
       <div id="dynbody">${body}</div>
       <button id="dynback" class="ghost">Back</button>`;

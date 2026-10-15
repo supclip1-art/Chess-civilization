@@ -8,7 +8,7 @@ import { openGame } from './game/screen.ts';
 import { flagSvg } from './game/flags.ts';
 import { resetTutorial } from './game/tutorial.ts';
 import { clearSave, loadGame, saveGame } from './game/save.ts';
-import { audioPrefs, initAudio, page, setMusic, setSfx } from './audio.ts';
+import { MUSIC_STYLES, audioPrefs, initAudio, page, setMusic, setMusicStyle, setSfx } from './audio.ts';
 import { LANGS, initI18n, lang, setLang } from './i18n.ts';
 import { initTelegram, platformLabel, setBack, tap, userName } from './tg.ts';
 import { applyLook, applyStartBonus, choose, dynasty, level, mapLevel, nationLevel, syncDynasty } from './dynasty.ts';
@@ -39,6 +39,7 @@ const home = () => {
     <button id="howto" class="ghost">How to play</button>
     <div class="row"><span>Language</span><div class="seg notr" id="langs">${LANGS.map(([l, n]) => `<button data-l="${l}" class="${l === lang ? 'on' : ''}">${n}</button>`).join('')}</div></div>
     <div class="row soundrow"><button id="music" class="ghost">Music: ${audioPrefs().music ? 'on' : 'off'}</button><button id="sfx" class="ghost">Sounds: ${audioPrefs().sfx ? 'on' : 'off'}</button></div>
+    <div class="row"><span>Music style</span><select id="mstyle">${MUSIC_STYLES.map((m) => `<option value="${m.id}" ${m.id === (audioPrefs().style || 1) ? 'selected' : ''}>${m.id}. ${esc(m.name)}</option>`).join('')}</select></div>
     <button id="bench" class="ghost">Engine speed test</button>
     <p class="muted">Version ${esc(__BUILD__)} · ${esc(platformLabel())}</p>
     <p class="muted">Chess engine: <a href="https://github.com/official-stockfish/Stockfish" target="_blank" rel="noopener">Stockfish</a> (GPL-3.0). Pieces: cburnett by Colin M.L. Burnett (GPLv2+).</p>`);
@@ -48,6 +49,7 @@ const home = () => {
   for (const b of document.querySelectorAll<HTMLButtonElement>('#langs button')) b.addEventListener('click', () => { if (b.dataset.l !== lang) setLang(b.dataset.l as typeof lang); });
   on('music', () => { setMusic(!audioPrefs().music); home(); });
   on('sfx', () => { setSfx(!audioPrefs().sfx); home(); });
+  document.getElementById('mstyle')?.addEventListener('change', (e) => setMusicStyle(Number((e.target as HTMLSelectElement).value)));
   on('bench', () => { onHome = false; bench(); });
   on('howto', () => {
     resetTutorial();

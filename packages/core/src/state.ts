@@ -120,7 +120,7 @@ export type GameState = {
   turn: number; // номер круга, с 1
   current: number; // индекс игрока в order, который сейчас ходит
   order: string[];
-  settings: { elo: number };
+  settings: { elo: number; map?: string };
   cells: Record<string, Cell>;
   halls: Record<string, TownHall>;
   players: Record<string, Player>;
@@ -281,7 +281,7 @@ const pickNeutrals = (s: GameState, map: MapDef, cities: Hex[]): Hex[] => {
 export const createGame = (map: MapDef, setup: PlayerSetup[], opts: { elo: number; seed: number; bandits?: number }): GameState => {
   if (setup.length < 2 || setup.length > map.spawns.length) throw new Error(`players: 2..${map.spawns.length}`);
   const s: GameState = {
-    rng: { seed: opts.seed }, turn: 1, current: 0, order: [], settings: { elo: opts.elo },
+    rng: { seed: opts.seed }, turn: 1, current: 0, order: [], settings: { elo: opts.elo, map: map.name },
     cells: {}, halls: {}, players: {}, generals: {}, neutrals: {}, nextId: 1, log: [],
   };
   for (const c of map.cells) s.cells[key(c)] = { hex: { q: c.q, r: c.r }, terrain: c.terrain };
