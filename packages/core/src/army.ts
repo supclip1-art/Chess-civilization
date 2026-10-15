@@ -8,6 +8,7 @@ import { type Result, hasTech, mods, piecePrice, playerGenerals, playerHalls, re
 import { distance, key } from './hex.ts';
 import { freeCellNear } from './map.ts';
 import { type ChestReward, openChest } from './chest.ts';
+import { giveTrait, growHero, hasTrait, traitElo } from './heroes.ts';
 import { type Army, type GameState, addElo, emptyArmy, generalName, makeGeneral, say } from './state.ts';
 
 const ok: Result = { ok: true };
@@ -39,7 +40,7 @@ export const hirePiece = (s: GameState, pid: string, gid: string, piece: Piece):
     return no(bar ? `${h.name} needs barracks level ${HIRE_LEVEL[piece]} for this piece` : `${h.name} has no barracks: tap the city, then Build barracks`);
   }
   if (g.army[piece] >= ARMY_MAX[piece]) return no(`an army holds at most ${ARMY_MAX[piece]} ${PIECE_NAMES[piece]}${ARMY_MAX[piece] > 1 ? 's' : ''}`);
-  const price = piecePrice(s, pid, piece);
+  const price = Math.round(piecePrice(s, pid, piece) * (hasTrait(s.generals[gid], 'recruiter') ? 0.8 : 1)); // вербовщик
   if (p.res.gold < price) return no('not enough gold');
   const next = { ...g.army, [piece]: g.army[piece] + 1 };
   // пешку нанять можно всегда (она только чинит строй); фигуре нужно достаточно пешек
@@ -70,6 +71,7 @@ export const hireGeneral = (s: GameState, pid: string, hallId?: string): Result 
   p.res.gold -= gold;
   const g = makeGeneral(s, pid, spot, recruitElo(s, pid), emptyArmy(), generalName(s, pid));
   g.trained = p.research.done;
+  giveTrait(s, g);
   say(s, `new general hired in ${h.name} (ELO ${g.elo}, ${g.white})`, pid);
   return ok;
 };
@@ -107,7 +109,11 @@ export const battleSides = (s: GameState, attackerId: string, defenderId: string
     fortified = true;
     if (black.p < ARMY_MAX.p) black.p++; else blackElo += 50;
   }
-  return { white: { ...att.army }, black, whiteElo: att.elo, blackElo, fortified };
+  const count = (a: typeof black) => a.p + a.n + a.b + a.r + a.q;
+  // черты героев: мастер эндшпиля, любитель гамбитов, железная стена
+  const whiteElo = att.elo + traitElo(att, true, count(att.army));
+  blackElo += traitElo(def, false, count(black));
+  return { white: { ...att.army }, black, whiteElo, blackElo, fortified };
 };
 
 export type BattleEnd = 'mate' | 'resign' | 'stalemate' | 'repetition' | 'fifty' | 'insufficient' | 'limit';
@@ -198,7 +204,8 @@ export const applyBattle = (s: GameState, attackerId: string, defenderId: string
   if (winner && prize) { s.players[winner.owner].res.gold += prize; say(s, `flower war: +${prize} gold for the victory`, winner.owner); }
   if (winner && s.players[winner.owner] && winner.stars < MAX_STARS) {
     winner.stars++;
-    addElo(s, winner, hasTech(s, winner.owner, 'veterans') ? 25 : ELO_PER_WIN); // «Ветераны»
+    addElo(s, winner, (hasTech(s, winner.owner, 'veterans') ? 25 : ELO_PER_WIN) * (hasTrait(winner, 'veteran') ? 2 : 1)); // «Ветераны», закалённый в боях
+    growHero(s, winner);
   }
   say(s, `battle: ${out.note}`, att.owner);
   // сундук трофеев — каждому победителю-игроку (и ИИ тоже)

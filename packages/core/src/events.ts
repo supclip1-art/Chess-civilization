@@ -14,6 +14,7 @@ import { playerGenerals, playerHalls } from './economy.ts';
 import { distance, key, range } from './hex.ts';
 import { freeCellNear } from './map.ts';
 import { int, next } from './rng.ts';
+import { giveTrait } from './heroes.ts';
 import { type GameState, addElo, generalName, makeGeneral, say } from './state.ts';
 
 export type EventKind = 'harvest' | 'plague' | 'revolt' | 'master' | 'mercenaries' | 'caravan' | 'earthquake' | 'fire';
@@ -149,6 +150,7 @@ export const resolveEvent = (s: GameState, pid: string, ev: PendingEvent, choice
         p.res.gold -= MERCENARY_GOLD;
         const g = makeGeneral(s, pid, spot, s.settings.elo, { p: 4, n: 0, b: 0, r: 0, q: 0 }, generalName(s, pid));
         g.trained = 0; g.moveLeft = 0;
+        giveTrait(s, g);
         res = `${g.name} and his mercenaries joined you`;
       } else res = 'the mercenaries left';
       break;

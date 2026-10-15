@@ -177,3 +177,26 @@ test('сделки: ресурсы, города и технологии; гор
   assert.equal(relation(s, 'p1', 'p2').state, 'peace');
   assert.ok(['wood', 'food', 'gold'].includes(neediest(s, 'p2')));
 });
+
+test('герои: черта при найме, вторая — с третьей звездой; черты действуют в бою и на карте', async () => {
+  const { battleSides, hasTrait, growHero, TRAITS, hirePiece, playerHalls } = await import('../src/index.ts');
+  const s = game();
+  const g = Object.values(s.generals).find((x) => x.owner === 'p1')!;
+  const foe = Object.values(s.generals).find((x) => x.owner === 'p2')!;
+  assert.equal(g.traits?.length, 1, 'у стартового генерала одна черта');
+  assert.ok(TRAITS[g.traits![0]]);
+  g.traits = ['gambit']; foe.traits = ['wall'];
+  const b = battleSides(s, g.id, foe.id);
+  assert.equal(b.whiteElo, g.elo + 50);
+  assert.equal(b.blackElo, foe.elo + 50);
+  g.stars = 3; growHero(s, g);
+  assert.equal(g.traits.length, 2);
+  // вербовщик платит меньше
+  g.traits = ['recruiter'];
+  playerHalls(s, 'p1')[0].barracks = 1;
+  g.hex = { ...playerHalls(s, 'p1')[0].hex };
+  s.players.p1.res.gold = 100;
+  assert.ok(hirePiece(s, 'p1', g.id, 'p').ok);
+  assert.equal(s.players.p1.res.gold, 92);
+  assert.ok(hasTrait(g, 'recruiter'));
+});

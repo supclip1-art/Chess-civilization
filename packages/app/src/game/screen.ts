@@ -10,7 +10,7 @@ import {
   RESOURCE_OUTPUT, TAVERN, TOWN_HALL_FOUND, TOWN_HALL_UPGRADE, BUILDER_HIRE_FOOD, BUILDER_UPKEEP_FOOD, GENERAL_UPKEEP_FOOD, cityUpgradeCost, tavernCost, PIECES, barracksCost, buildOptions, buildingOutput, maxLevelAt, piecePrice, researchCost, researchTurns, resourceCost, aiEconomyTurn, aiMilitaryTurn, attack, endTurn, say,
   foundTownHall, freeBuilders, hireBuilder, hireGeneral, hirePiece, income, key, maxBuilders, move, playerGenerals,
   reachable, recruitElo, resolveBattle, startResearch, upgrade, upgradeBarracks, upgradeTavern, upgradeTownHall,
-  remember, upkeep, visible, winner, acceptChance, proposeDeal, emptyTerms, tradableCities, tradableTechs, termsText, type Deal, vassalsOf, makeVassal, setStance, nationMight, vassalMight, VASSAL_SHARE, type VassalStance, relation, warBlocked, declareWar, acceptsAlliance, makeAlliance, acceptsPeace, makePeace, breakAlliance, answerOffer, aggression, TRUCE_TURNS, BREAK_COOLDOWN, answerEvent, canSuppress, MERCENARY_GOLD, type EventKind, TECHS, chestText, type ChestReward, trainGeneral, trainingFor, hasTech, build, enqueue, cancelQueued, ELO_PER_RESEARCH, ARMY_MAX, startTech, type TechId, playerHalls, hasMet, jobHall, hallBuilders, banditsTurn, recordHistory, hireSettler, settlerCost, findPath, runOrders, armyMove, startMarch, MARCH_RESEARCH, ARMY_MOVE_MARCH, BUILDING_SLOTS, citySlots, generalLimit, nationStats, type QueueOrder, type Job, type GameState, type Hex, type Piece, type Res, type ResourceBuilding,
+  remember, upkeep, visible, winner, TRAITS, type TraitId, acceptChance, proposeDeal, emptyTerms, tradableCities, tradableTechs, termsText, type Deal, vassalsOf, makeVassal, setStance, nationMight, vassalMight, VASSAL_SHARE, type VassalStance, relation, warBlocked, declareWar, acceptsAlliance, makeAlliance, acceptsPeace, makePeace, breakAlliance, answerOffer, aggression, TRUCE_TURNS, BREAK_COOLDOWN, answerEvent, canSuppress, MERCENARY_GOLD, type EventKind, TECHS, chestText, type ChestReward, trainGeneral, trainingFor, hasTech, build, enqueue, cancelQueued, ELO_PER_RESEARCH, ARMY_MAX, startTech, type TechId, playerHalls, hasMet, jobHall, hallBuilders, banditsTurn, recordHistory, hireSettler, settlerCost, findPath, runOrders, armyMove, startMarch, MARCH_RESEARCH, ARMY_MOVE_MARCH, BUILDING_SLOTS, citySlots, generalLimit, nationStats, type QueueOrder, type Job, type GameState, type Hex, type Piece, type Res, type ResourceBuilding,
 } from '../../../core/src/index.ts';
 import { autobattle, type BattleRecord } from './battle.ts';
 import { playManual, showReplay } from './fight.ts';
@@ -47,6 +47,9 @@ const CHEST_SVG = `<svg viewBox="0 0 120 100" width="150" height="125" aria-hidd
   <g class="lid"><path d="M18 46c0-22 84-22 84 0z" fill="#9b6233" stroke="#4a2c12" stroke-width="3"/>
     <path d="M30 46c0-16 8-20 8-20M82 26s8 4 8 20" stroke="#e3b341" stroke-width="7"/><path d="M30 46c0-16 8-20 8-20M82 26s8 4 8 20" stroke="#9a7412" stroke-width="1.5" fill="none"/></g>
 </svg>`;
+/** Черты героя — бейджи с пояснением. */
+const traitChips = (g: { traits?: TraitId[] }) => g.traits?.length
+  ? `<div class="traits">${g.traits.map((t) => `<span class="trait" title="${TRAITS[t].text}"><b>${TRAITS[t].name}</b> — ${TRAITS[t].text}</span>`).join('')}</div>` : '';
 const BUILDING_NAME: Record<ResourceBuilding, string> = { farm: 'Farm', sawmill: 'Sawmill', mine: 'Gold mine', fishery: 'Fishery' };
 const TERRAIN_NAME: Record<string, string> = {
   field: 'Field', forest: 'Forest', deposit: 'Gold deposit', tundra: 'Tundra', desert: 'Desert', mountain: 'Mountains', water: 'Sea',
@@ -355,7 +358,7 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
       if (g.settler) { parts.push(settlerCard(g, cell)); continue; }
       const army = PIECES.filter((x) => g.army[x]).map((x) => `${g.army[x]} ${PIECE_NAME[x].toLowerCase()}${g.army[x] > 1 ? 's' : ''}`).join(', ') || 'no pieces';
       let html = `<div class="card"><div class="row"><b style="color:${ownerColor(s, g.owner)}">${mine ? `General ${esc(g.name)}` : esc(ownerName(s, g.owner))}</b><span>ELO ${g.elo} ${'★'.repeat(g.stars)}${!mine && s.players[g.owner] ? nationBtn(g.owner) : ''}</span></div>
-        <p>King + ${army}</p>`;
+        <p>King + ${army}</p>${traitChips(g)}`;
       if (mine) {
         const o = g.order;
         const where = o?.kind === 'goto' ? (Object.values(s.halls).find((h) => key(h.hex) === key(o.to))?.name ?? `${TERRAIN_NAME[s.cells[key(o.to)].terrain].toLowerCase()} far away`) : '';
@@ -377,7 +380,7 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
           // найм — по казарме города, на чьей земле стоит генерал; кнопки не отключаем: нажатие объясняет, чего не хватает
           const bar = home.barracks ?? 0;
           html += `<p class="muted hirehead">Hire pieces · barracks of <b>${esc(home.name)}</b>: ${bar ? `level ${bar}` : 'none yet — build them in this city'}</p>
-            <div class="acts">${PIECES.map((x) => btn(`hire:${g.id}:${x}`, PIECE_NAME[x], `${amount('gold', piecePrice(s, ME, x))}${g.army[x] >= ARMY_MAX[x] ? ` · max ${ARMY_MAX[x]}` : bar < HIRE_LEVEL[x] ? ` · barracks ${HIRE_LEVEL[x]}` : ''}`)
+            <div class="acts">${PIECES.map((x) => btn(`hire:${g.id}:${x}`, PIECE_NAME[x], `${amount('gold', Math.round(piecePrice(s, ME, x) * (g.traits?.includes('recruiter') ? 0.8 : 1)))}${g.army[x] >= ARMY_MAX[x] ? ` · max ${ARMY_MAX[x]}` : bar < HIRE_LEVEL[x] ? ` · barracks ${HIRE_LEVEL[x]}` : ''}`)
               .replace('class="act"', `class="act${bar >= HIRE_LEVEL[x] && p.res.gold >= piecePrice(s, ME, x) && g.army[x] < ARMY_MAX[x] ? '' : ' off'}"`)).join('')}</div>`;
         } else if (cell.owner === ME) {
           html += '<p class="muted hirehead">Pieces are hired on the land of a city with barracks.</p>';
@@ -645,7 +648,7 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
     const status = (g: typeof mine[number]) => g.order?.kind === 'goto' ? 'marching' : g.order?.kind === 'explore' ? 'exploring' : g.order?.kind === 'hold' ? 'holding'
       : g.attacked ? 'done this turn' : g.moveLeft > 0 ? `${g.moveLeft} move${g.moveLeft > 1 ? 's' : ''} left` : 'no moves left';
     modal(`<h2>Your generals</h2><div class="glist">${mine.map((g) => `<button class="grow ${g.moveLeft > 0 && !g.attacked && !g.order ? 'ready' : ''}" data-a="pick:${g.id}">
-        <span class="gname">${g.settler ? 'Settler' : `General ${esc(g.name)}`}${g.settler ? '' : ` <small>ELO ${g.elo}${g.stars ? ` ${'★'.repeat(g.stars)}` : ''}</small>`}</span>
+        <span class="gname">${g.settler ? 'Settler' : `General ${esc(g.name)}`}${g.settler ? '' : ` <small>ELO ${g.elo}${g.stars ? ` ${'★'.repeat(g.stars)}` : ''}${g.traits?.length ? ` · ${g.traits.map((t) => esc(TRAITS[t].name)).join(', ')}` : ''}</small>`}</span>
         <span class="garmy">${g.settler ? 'founds a city' : glyphs(g.army)}</span><span class="gmoves">${status(g)}</span></button>`).join('')}</div>
       <div class="acts">${btn('close', 'Close', '')}</div>`);
     const c = await ask();

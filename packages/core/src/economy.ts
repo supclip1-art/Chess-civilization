@@ -461,7 +461,7 @@ export const upkeep = (s: GameState, pid: string): number => {
   const p = s.players[pid];
   const gens = playerGenerals(s, pid);
   const rate = (mods(s, pid).armyUpkeepRate ?? ARMY_UPKEEP_RATE) * (hasTech(s, pid, 'quartermaster') ? 0.75 : 1); // «Интендантство»
-  const army = Math.ceil(gens.reduce((sum, g) => sum + armyValue(g.army), 0) * rate);
+  const army = Math.ceil(gens.reduce((sum, g) => sum + armyValue(g.army) * (g.traits?.includes('frugal') ? 0.5 : 1), 0) * rate); // бережливый — вдвое меньше
   const builderFood = mods(s, pid).freeBuilderUpkeep ? 0 : BUILDER_UPKEEP_FOOD;
   const extraBuilders = playerHalls(s, pid).reduce((n, h) => n + hallBuilders(h) - 1, 0); // первый строитель каждого города — бесплатно
   return army + extraBuilders * builderFood + Math.max(0, gens.length - 1) * GENERAL_UPKEEP_FOOD;

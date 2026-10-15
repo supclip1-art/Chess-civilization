@@ -70,6 +70,8 @@ export type General = {
   camp?: Hex;
   /** До какого хода генерал не может двигаться (подавляет бунт). */
   pinnedUntil?: number;
+  /** Черты характера (генералы стран). */
+  traits?: import('./heroes.ts').TraitId[];
 };
 
 export type GeneralOrder = { kind: 'goto'; to: Hex } | { kind: 'explore' } | { kind: 'hold' };
@@ -309,7 +311,8 @@ export const createGame = (map: MapDef, setup: PlayerSetup[], opts: { elo: numbe
       research: { done: 0 }, jobs: [], starterKnight: true, alive: true,
     };
     addHall(s, id, hex, 1);
-    makeGeneral(s, id, hex, opts.elo, { ...STARTING_ARMY }, generalName(s, id));
+    const hero = makeGeneral(s, id, hex, opts.elo, { ...STARTING_ARMY }, generalName(s, id));
+    hero.traits = [(['endgame', 'gambit', 'wall', 'pathfinder', 'frugal', 'recruiter', 'plunderer', 'veteran'] as const)[int(s.rng, 0, 7)]];
   });
   map.spawns.forEach((h, i) => { if (!spawnOf.includes(i)) addNeutral(s, h, map.names?.[key(h)]); });
   const freeSpawns = map.spawns.filter((_, i) => !spawnOf.includes(i));

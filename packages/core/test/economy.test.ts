@@ -44,7 +44,11 @@ test('ферма строится только на поле, за ход, од�
 
 test('стартовая армия ест 18 еды (70 золота × 0,25, вверх) — хватает одной фермы', () => {
   const s = game();
+  for (const g of Object.values(s.generals)) g.traits = []; // без черт героя
   assert.equal(upkeep(s, 'p1'), 18);
+  // бережливый генерал — вдвое меньше
+  Object.values(s.generals).find((g) => g.owner === 'p1')!.traits = ['frugal'];
+  assert.equal(upkeep(s, 'p1'), 9);
 });
 
 test('время улучшений растёт с уровнем; Германия строит ур.4–5 на ход быстрее', () => {

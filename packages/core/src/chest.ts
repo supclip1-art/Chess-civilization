@@ -25,6 +25,8 @@ export const openChest = (s: GameState, pid: string, gid: string): ChestReward |
   else if (roll < 0.30 && piece) r = { kind: 'piece', piece, rarity: 'rare' };
   else if (roll < 0.75) r = { kind: 'supplies', res: { wood: int(s.rng, 6, 12) * 10, food: int(s.rng, 5, 10) * 10, gold: 0 }, rarity: 'common' };
   else r = { kind: 'gold', amount: int(s.rng, 2, 4) * 10, rarity: 'common' };
+  // грабитель получает вдвое больше
+  if (g.traits?.includes('plunderer')) { if (r.kind === 'gold') r.amount *= 2; if (r.kind === 'supplies') { r.res.wood *= 2; r.res.food *= 2; } }
   if (r.kind === 'gold') p.res.gold += r.amount;
   if (r.kind === 'supplies') { p.res.wood += r.res.wood; p.res.food += r.res.food; }
   if (r.kind === 'piece') g.army[r.piece]++;

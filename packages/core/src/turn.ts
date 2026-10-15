@@ -19,7 +19,7 @@ export const startTurn = (s: GameState): void => {
   if (s.turn > 1 && s.players[pid]?.overlord) payOverlord(s, pid); // вассал отдаёт четверть дохода
   checkRebellion(s, pid);
   for (const g of Object.values(s.generals)) {
-    if (g.owner === pid) { g.moveLeft = (g.pinnedUntil ?? 0) > s.turn ? 0 : armyMove(s, pid); g.attacked = false; }
+    if (g.owner === pid) { g.moveLeft = (g.pinnedUntil ?? 0) > s.turn ? 0 : armyMove(s, pid) + (g.traits?.includes('pathfinder') ? 1 : 0); g.attacked = false; }
     // поселенец, который основывает город, стоит на месте
     if (g.owner === pid && g.settler && s.players[pid]?.jobs.some((j) => j.kind === 'found' && j.general === g.id)) g.moveLeft = 0;
   }
