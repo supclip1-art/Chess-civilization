@@ -99,6 +99,31 @@ const flute = (t: number, freq: number, dur: number, vol: number) => {
   o.start(t); vib.start(t); o.stop(t + dur + 0.05); vib.stop(t + dur + 0.05);
 };
 
+/** Духовые: волынка/гобой (язычковый тембр) и мягкий рожок для протяжных аккордов. */
+const wind = (t: number, freq: number, dur: number, vol: number, kind: 'reed' | 'horn') => {
+  const c = ctx!;
+  const g = c.createGain();
+  const attack = kind === 'reed' ? 0.07 : 0.22;
+  g.gain.setValueAtTime(0, t);
+  g.gain.linearRampToValueAtTime(vol, t + attack);
+  g.gain.setValueAtTime(vol * 0.9, t + Math.max(attack + 0.01, dur - 0.15));
+  g.gain.linearRampToValueAtTime(0, t + dur);
+  const lp = c.createBiquadFilter(); lp.type = 'lowpass';
+  lp.frequency.value = kind === 'reed' ? Math.min(2600, freq * 5) : Math.min(900, freq * 3); lp.Q.value = kind === 'reed' ? 2.5 : 0.7;
+  lp.connect(g); g.connect(musicBus);
+  const voices = kind === 'reed' ? [0] : [-4, 4]; // рожок — две чуть расстроенные трубы, звучит теплее
+  const vib = c.createOscillator(); vib.frequency.value = kind === 'reed' ? 5.6 : 4.2;
+  const vg = c.createGain(); vg.gain.value = freq * (kind === 'reed' ? 0.005 : 0.002);
+  vib.connect(vg);
+  for (const cents of voices) {
+    const o = c.createOscillator(); o.type = kind === 'reed' ? 'sawtooth' : 'sawtooth';
+    o.frequency.value = freq; o.detune.value = cents;
+    vg.connect(o.frequency);
+    o.connect(lp); o.start(t); o.stop(t + dur + 0.05);
+  }
+  vib.start(t); vib.stop(t + dur + 0.05);
+};
+
 let noiseBuf: AudioBuffer | null = null;
 const noise = (): AudioBuffer => {
   if (noiseBuf) return noiseBuf;
@@ -138,7 +163,7 @@ const drum = (t: number, vol: number) => {
 
 // ---------- музыка ----------
 
-const NOTE = (n: number) => 440 * 2 ** ((n - 69) / 12); // MIDI → Гц
+const NOTE = (n: number) => 432 * 2 ** ((n - 69) / 12); // MIDI → Гц, строй ля = 432 Гц (мягче привычных 440)
 // аккорды: тоника (MIDI) и лад; D-дорийский/минорный колорит с мажорными просветами — как у трактирных менестрелей
 const CH: Record<string, number[]> = {
   Dm: [50, 53, 57], C: [48, 52, 55], Bb: [46, 50, 53], F: [53, 57, 60], Gm: [55, 58, 62], A: [45, 49, 52], Am: [45, 48, 52], G: [43, 47, 50],
@@ -170,6 +195,8 @@ const scheduleBar = (t: number) => {
   pluck(t + 3 * BEAT, NOTE(fi - 12), 0.2, 0.15, -0.2);
   const arp = [r, fi, r + 12, fi, th + 12, fi];
   arp.forEach((n, i) => pluck(t + i * BEAT + (i % 3 === 0 ? 0 : 0.008), NOTE(n), i % 3 === 0 ? 0.2 : 0.15, 0.5, 0.25));
+  // рожок держит аккорд два такта подряд — духовая «подушка» под лютней
+  if (barNo % 2 === 0) { wind(t, NOTE(r), BEAT * 11.5, 0.035, 'horn'); wind(t, NOTE(th), BEAT * 11.5, 0.028, 'horn'); }
   // ударные: барабан на сильные доли, бубен на слабые
   drum(t, 0.28);
   drum(t + 3 * BEAT, 0.16);
@@ -181,11 +208,14 @@ const scheduleBar = (t: number) => {
   const lift = bar % 4 >= 2 ? 2 : 0;
   let rootIdx = SCALE.findIndex((x) => x % 12 === r % 12 && x >= 60);
   if (rootIdx < 0) rootIdx = 6;
+  // вторую половину фразы мелодию ведёт гобой-волынка, первую — свирель
+  const reedTurn = bar >= 4;
   phrase.motif.forEach((step, i) => {
     if (step < 0) return;
     const idx = Math.min(SCALE.length - 1, Math.max(0, rootIdx + step + lift));
     const len = phrase!.motif[i + 1] === -1 ? BEAT * 1.9 : BEAT * 0.95;
-    flute(t + i * BEAT, NOTE(SCALE[idx]), len, 0.09);
+    if (reedTurn) wind(t + i * BEAT, NOTE(SCALE[idx]), len, 0.05, 'reed');
+    else flute(t + i * BEAT, NOTE(SCALE[idx]), len, 0.09);
   });
 };
 
