@@ -119,7 +119,7 @@ const targetsFor = (s: GameState, g: General, field: Map<string, number>): Targe
     if (x.owner === g.owner || armyValue(x.army) === 0) continue;
     const steps = stepsTo(field, x.hex);
     if (steps === Infinity) continue;
-    const neutral = !!s.neutrals[x.owner];
+    const neutral = !!s.neutrals[x.owner] || x.owner === 'bandits'; // разбойников бьём так же, как нейтралов
     if (neutral) { if (mine >= ch.vsNeutral * power(x)) out.push({ hex: x.hex, steps, kind: 'neutral' }); continue; }
     if (myLand.has(key(x.hex)) && mine >= 1.1 * power(x)) { out.push({ hex: x.hex, steps, kind: 'intruder' }); continue; }
     if (warReady && mine >= ch.vsPlayer * power(x)) out.push({ hex: x.hex, steps, kind: 'army' });

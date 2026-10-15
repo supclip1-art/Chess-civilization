@@ -4,6 +4,8 @@
 
 import { armyMove, completeJobs, settleEconomy } from './economy.ts';
 import { resolveSieges } from './map.ts';
+import { spawnBandits } from './bandits.ts';
+import { recordHistory } from './stats.ts';
 import { type GameState, createGame } from './state.ts';
 
 export const currentPlayer = (s: GameState): string => s.order[s.current];
@@ -23,7 +25,9 @@ export const startTurn = (s: GameState): void => {
 /** Создать партию и начать ход первого игрока. */
 export const newGame = (...args: Parameters<typeof createGame>): GameState => {
   const s = createGame(...args);
+  if (args[2].bandits) spawnBandits(s, args[2].bandits);
   startTurn(s);
+  recordHistory(s);
   return s;
 };
 
@@ -33,4 +37,5 @@ export const endTurn = (s: GameState): void => {
     if (s.current === 0) s.turn++;
   } while (!s.players[currentPlayer(s)].alive);
   startTurn(s);
+  if (s.current === s.order.findIndex((id) => s.players[id].alive) && s.history?.at(-1)?.turn !== s.turn) recordHistory(s);
 };

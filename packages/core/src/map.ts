@@ -95,23 +95,34 @@ export const findPath = (s: GameState, gid: string, to: Hex): Hex[] | null => {
   return path; // path[0] — где генерал стоит сейчас
 };
 
-/** Ближайшая проходимая клетка, которую игрок ещё ни разу не видел, — цель разведки. */
+/** Цель разведки: неизвестная клетка, до которой близко и генералу, и родным городам, —
+ *  сначала открываем окрестности своей страны, потом идём дальше. */
 export const exploreGoal = (s: GameState, gid: string): Hex | null => {
   const g = s.generals[gid];
   const mem = s.memory?.[g.owner] ?? {};
-  const seen = new Set([key(g.hex)]);
+  const home = Object.values(s.halls).filter((h) => h.owner === g.owner);
+  const dist = new Map<string, number>([[key(g.hex), 0]]);
   const queue: Hex[] = [g.hex];
-  while (queue.length) {
+  let best: { hex: Hex; score: number } | null = null;
+  let found = 0;
+  while (queue.length && found < 40) {
     const cur = queue.shift()!;
+    const d = dist.get(key(cur))!;
     for (const n of neighbors(cur)) {
       const k = key(n);
-      if (seen.has(k) || !passableFor(s, g, n)) continue;
-      seen.add(k);
-      if (!mem[k]) return n;
+      if (dist.has(k) || !passableFor(s, g, n)) continue;
+      dist.set(k, d + 1);
+      if (!mem[k]) {
+        found++;
+        const toHome = home.length ? Math.min(...home.map((h) => distance(h.hex, n))) : 0;
+        const score = d + 1 + toHome;
+        if (!best || score < best.score) best = { hex: n, score };
+        continue; // за неизвестную клетку не заглядываем
+      }
       queue.push(n);
     }
   }
-  return null;
+  return best?.hex ?? null;
 };
 
 /** Сделать шаг по приказу: дойти по пути так далеко, как позволяют очки хода. */
@@ -124,8 +135,9 @@ const stepAlong = (s: GameState, gid: string, path: Hex[]): boolean => {
   return false;
 };
 
+/** Опасный сосед: армия другого игрока или разбойники (нейтральные гарнизоны сидят в своих городах — не в счёт). */
 const enemyNear = (s: GameState, g: General): General | undefined =>
-  Object.values(s.generals).find((x) => x.owner !== g.owner && armyValue(x.army) > 0 && distance(x.hex, g.hex) <= 2);
+  Object.values(s.generals).find((x) => x.owner !== g.owner && (s.players[x.owner] || x.owner === 'bandits') && armyValue(x.army) > 0 && distance(x.hex, g.hex) <= 2);
 
 /** Выполнить приказы генералов игрока (в начале его хода). Возвращает, что произошло, — для уведомлений. */
 export const runOrders = (s: GameState, pid: string): { gid: string; text: string }[] => {
@@ -194,7 +206,7 @@ export type AttackStart =
 /** Атака соседней клетки: там армия — бой; там пустая чужая ратуша — осада на один полный ход. */
 export const attack = (s: GameState, gid: string, target: Hex): AttackStart => {
   const g = s.generals[gid];
-  if (!g || !s.players[g.owner]) return { kind: 'error', reason: 'no such general' };
+  if (!g || !(s.players[g.owner] || g.owner === 'bandits')) return { kind: 'error', reason: 'no such general' };
   if (g.settler) return { kind: 'error', reason: 'a settler cannot attack' };
   if (g.attacked) return { kind: 'error', reason: 'this army has already attacked this turn' };
   if (armyValue(g.army) === 0) return { kind: 'error', reason: 'the army has no pieces' };
@@ -235,6 +247,7 @@ export const resolveBattle = (s: GameState, attackerId: string, defenderId: stri
   if (out.winner !== 'attacker') return out;
   const h = hallAt(s, defHex);
   if (!h || h.owner === att.owner) return out;
+  if (!s.players[att.owner]) return out; // разбойники города не захватывают
   // защитники города разбиты: если других армий в городе нет — город сразу переходит к победителю
   if (defenderAt(s, defHex, att.owner)) { h.siege = { by: att.id, since: s.turn }; return out; }
   const old = h.owner;

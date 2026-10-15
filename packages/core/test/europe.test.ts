@@ -69,3 +69,24 @@ test('память карты: под туманом виден город та�
   assert.ok(!visible(s, 'p1').has(k));
   assert.equal(s.memory!.p1[k].hall!.level, 1);
 });
+
+test('разбойники: шесть шаек вдали от городов, грабят город без армии, ведут историю для графиков', async () => {
+  const { bandits, banditsTurn, raidCity, BANDITS, endTurn } = await import('../src/index.ts');
+  const s = newGame(europeMap(), [{ nation: 'spain' }, { nation: 'italy' }], { elo: 1200, seed: 7, bandits: 6 });
+  const bs = bandits(s);
+  assert.equal(bs.length, 6);
+  for (const b of bs) for (const h of Object.values(s.halls)) assert.ok(distance(b.hex, h.hex) >= 6);
+  // набег: треть золота и одно здание
+  const cap = playerHalls(s, 'p1')[0];
+  s.players.p1.res.gold = 90;
+  raidCity(s, bs[0].id, cap.id);
+  assert.equal(s.players.p1.res.gold, 60);
+  // ходят раз в круг
+  const before = bs.map((b) => key(b.hex)).join();
+  banditsTurn(s);
+  assert.deepEqual(banditsTurn(s), []);
+  assert.ok(bandits(s).every((b) => b.owner === BANDITS));
+  void before;
+  for (let i = 0; i < 4; i++) endTurn(s);
+  assert.ok((s.history?.length ?? 0) >= 2, 'сводка пишется каждый круг');
+});

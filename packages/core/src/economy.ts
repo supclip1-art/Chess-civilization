@@ -422,11 +422,11 @@ export const completeJobs = (s: GameState, pid: string): void => {
     p.jobs.splice(p.jobs.indexOf(j), 1);
     if (j.kind === 'resource') {
       const c = s.cells[key(j.hex)];
-      if (j.level === 1) { c.reserved = false; if (c.owner === pid) c.building = { kind: j.building, level: 1 }; }
-      else if (c.building && c.owner === pid) c.building.level = j.level;
+      if (j.level === 1) { c.reserved = false; if (c.owner === pid) { c.building = { kind: j.building, level: 1 }; say(s, `${j.building} built`, pid); } }
+      else if (c.building && c.owner === pid) { c.building.level = j.level; say(s, `${j.building} upgraded to level ${j.level}`, pid); }
     } else if (j.kind === 'townhall') {
       const h = s.halls[j.hallId];
-      if (h && h.owner === pid) { h.level = j.level; recomputeTerritory(s); }
+      if (h && h.owner === pid) { h.level = j.level; recomputeTerritory(s); say(s, `${h.name} grew to level ${j.level}`, pid); }
     } else if (j.kind === 'found') {
       const c = s.cells[key(j.hex)];
       const settler = s.generals[j.general];
@@ -438,11 +438,11 @@ export const completeJobs = (s: GameState, pid: string): void => {
         recomputeTerritory(s);
         say(s, `${name} is founded`, pid);
       }
-    } else if (j.kind === 'barracks') { const h = s.halls[j.hallId]; if (h?.owner === pid) h.barracks = j.level; }
-    else if (j.kind === 'tavern') { const h = s.halls[j.hallId]; if (h?.owner === pid) h.tavern = j.level; }
+    } else if (j.kind === 'barracks') { const h = s.halls[j.hallId]; if (h?.owner === pid) { h.barracks = j.level; say(s, `barracks level ${j.level} ready in ${h.name}`, pid); } }
+    else if (j.kind === 'tavern') { const h = s.halls[j.hallId]; if (h?.owner === pid) { h.tavern = j.level; say(s, `tavern level ${j.level} ready in ${h.name}`, pid); } }
   }
   const r = p.research.active;
-  if (r && r.finish <= s.turn) { p.research.done = r.step + 1; p.research.active = undefined; }
+  if (r && r.finish <= s.turn) { p.research.done = r.step + 1; p.research.active = undefined; say(s, `Tactics ${p.research.done} researched: new generals +${ELO_PER_RESEARCH} ELO`, pid); }
   if (p.research.marchFinish && p.research.marchFinish <= s.turn) { p.research.march = true; p.research.marchFinish = undefined; say(s, 'Forced march researched: generals and settlers move 3 cells', pid); }
   startQueued(s, pid);
 };

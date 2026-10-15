@@ -1,7 +1,7 @@
 // Mini App: главное меню, новая партия, партия на карте (этап 3) и замер Stockfish.
 
 import {
-  NATIONS, NATION_ORDER, armiesFromFen, europeMap, insufficientMaterial, newGame, type Aggression, type NationId,
+  BANDIT_COUNT, NATIONS, NATION_ORDER, armiesFromFen, europeMap, insufficientMaterial, newGame, type Aggression, type NationId,
 } from '../../core/src/index.ts';
 import { Engine, profile } from './engine.ts';
 import { openGame } from './game/screen.ts';
@@ -114,7 +114,7 @@ const setup = () => {
         const aggression = AGGR[Math.floor(Math.random() * 3)];
         return { nation: n, ai: { aggression, ruler: NATIONS[n].rulers[aggression] } };
       }),
-    ], { elo, seed });
+    ], { elo, seed, bandits: BANDIT_COUNT });
     clearSave();
     saveGame(s);
     const wantPuzzle = (document.getElementById('warmup') as HTMLInputElement).checked;

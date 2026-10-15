@@ -9,12 +9,13 @@ import {
   RESOURCE_OUTPUT, TAVERN, TOWN_HALL_FOUND, TOWN_HALL_UPGRADE, BUILDER_HIRE_FOOD, BUILDER_UPKEEP_FOOD, GENERAL_UPKEEP_FOOD, cityUpgradeCost, tavernCost, PIECES, barracksCost, buildOptions, buildingOutput, maxLevelAt, piecePrice, researchCost, researchTurns, resourceCost, aiEconomyTurn, aiMilitaryTurn, attack, endTurn, say,
   foundTownHall, freeBuilders, hireBuilder, hireGeneral, hirePiece, income, key, maxBuilders, move, playerGenerals,
   reachable, recruitElo, resolveBattle, startResearch, upgrade, upgradeBarracks, upgradeTavern, upgradeTownHall,
-  remember, upkeep, visible, winner, build, enqueue, cancelQueued, ELO_PER_RESEARCH, ARMY_MAX, hireSettler, settlerCost, findPath, runOrders, armyMove, startMarch, MARCH_RESEARCH, ARMY_MOVE_MARCH, BUILDING_SLOTS, citySlots, generalLimit, nationStats, type QueueOrder, type Job, type GameState, type Hex, type Piece, type Res, type ResourceBuilding,
+  remember, upkeep, visible, winner, build, enqueue, cancelQueued, ELO_PER_RESEARCH, ARMY_MAX, banditsTurn, recordHistory, hireSettler, settlerCost, findPath, runOrders, armyMove, startMarch, MARCH_RESEARCH, ARMY_MOVE_MARCH, BUILDING_SLOTS, citySlots, generalLimit, nationStats, type QueueOrder, type Job, type GameState, type Hex, type Piece, type Res, type ResourceBuilding,
 } from '../../../core/src/index.ts';
 import { autobattle, type BattleRecord } from './battle.ts';
 import { playManual, showReplay } from './fight.ts';
 import { MapView, attackTargets, ownerColor } from './render.ts';
-import { saveGame } from './save.ts';
+import { clearSave, saveGame } from './save.ts';
+import { showSummary } from './summary.ts';
 import { setBack, tap } from '../tg.ts';
 
 const ME = 'p1';
@@ -31,6 +32,7 @@ const fmt = (n: number) => (Math.round(n * 10) / 10).toString();
 
 export const ownerName = (s: GameState, owner?: string): string => {
   if (!owner) return 'Unclaimed';
+  if (owner === 'bandits') return 'Bandits';
   if (s.neutrals[owner] || /^n\d+$/.test(owner)) return 'Neutral state'; // в т.ч. уже захваченный нейтрал из памяти
   const p = s.players[owner];
   return p ? (owner === ME ? `You (${NATIONS[p.nation].name})` : NATIONS[p.nation].name) : owner;
@@ -48,6 +50,7 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
     <div class="mapwrap"><canvas id="map"></canvas><button id="tactics" class="tacbtn"></button></div>
     <section class="sheet" id="sheet"></section>
     <div class="toast" id="toast" hidden></div><div class="aibanner" id="aibanner" hidden></div>
+    <div class="veil" id="veil" hidden><div class="veilcard"><p class="veilturn" id="veilturn"></p><div class="veilflags" id="veilflags"></div><p id="veilmsg"></p><div class="veilbar"><i></i></div></div></div>
     <div class="modal" id="modal" hidden><div class="dialog" id="dialog"></div></div>`;
   const canvas = app.querySelector<HTMLCanvasElement>('#map')!;
   const view = new MapView(canvas);
@@ -63,14 +66,24 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
     const t = app.querySelector<HTMLElement>('#toast')!;
     t.textContent = text; t.hidden = false;
     clearTimeout((t as unknown as { _h?: number })._h);
-    (t as unknown as { _h?: number })._h = window.setTimeout(() => (t.hidden = true), 2600);
+    (t as unknown as { _h?: number })._h = window.setTimeout(() => (t.hidden = true), Math.min(9000, 2600 + text.length * 35));
   };
-  /** Плашка «Германия ходит…» на время ходов ИИ (null — убрать). */
+  /** Строка состояния на заставке хода соперников (null — ничего). */
   const banner = (text: string | null) => {
-    const b = app.querySelector<HTMLElement>('#aibanner')!;
-    b.hidden = text === null;
-    if (text !== null) b.textContent = text;
+    const m = app.querySelector<HTMLElement>('#veilmsg');
+    if (m) m.textContent = text ?? '';
   };
+  /** Заставка «соперники ходят»: флаги всех держав по очереди, текущая подсвечена. */
+  const veil = (on: boolean, active?: string) => {
+    const v = app.querySelector<HTMLElement>('#veil')!;
+    v.hidden = !on;
+    if (!on) return;
+    app.querySelector('#veilturn')!.textContent = 'Other rulers are making their moves';
+    const who = [...s.order.filter((id) => s.players[id].alive), 'bandits'];
+    app.querySelector('#veilflags')!.innerHTML = who.map((id) => `<span class="${id === active ? 'on' : ''} ${who.indexOf(id) < who.indexOf(active ?? '') ? 'done' : ''}">${id === 'bandits'
+      ? '<b class="bandflag">☠</b>' : flagSvg(s.players[id].nation, 34)}</span>`).join('');
+  };
+  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
   const act = (r: { ok: boolean; reason?: string }) => {
     if (!r.ok) toast((r as { reason: string }).reason);
     else { tap(); saveGame(s); }
@@ -180,8 +193,13 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
 
     // генералы на клетке
     const gens = Object.values(s.generals).filter((g) => key(g.hex) === k);
+    const hallOnCell = Object.values(s.halls).some((x) => key(x.hex) === k);
+    const ownHere = gens.filter((g) => g.owner === ME);
+    if (hallOnCell && ownHere.length && !sel.gid) parts.push(`<p class="muted">${ownHere.length > 1 ? 'Your units are' : `Your ${ownHere[0].settler ? 'settler is' : 'general is'}`} here — tap the cell again to select.</p>`);
     for (const g of gens) {
       const mine = g.owner === ME;
+      // своих показываем только выбранного; без выбора на клетке города — сначала город
+      if (mine && (sel.gid ? g.id !== sel.gid : hallOnCell)) continue;
       if (g.settler) { parts.push(settlerCard(g, cell)); continue; }
       const army = PIECES.filter((x) => g.army[x]).map((x) => `${g.army[x]} ${PIECE_NAME[x].toLowerCase()}${g.army[x] > 1 ? 's' : ''}`).join(', ') || 'no pieces';
       let html = `<div class="card"><div class="row"><b style="color:${ownerColor(s, g.owner)}">${mine ? 'Your general' : esc(ownerName(s, g.owner))}</b><span>ELO ${g.elo} ${'★'.repeat(g.stars)}${!mine && s.players[g.owner] ? nationBtn(g.owner) : ''}</span></div>
@@ -211,7 +229,10 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
 
     // ратуша
     const hall = Object.values(s.halls).find((h) => key(h.hex) === k);
-    if (hall && hall.owner === ME) {
+    const unitPicked = !!sel.gid && s.generals[sel.gid]?.owner === ME;
+    if (hall && unitPicked) {
+      parts.push(`<p class="muted">Tap the cell again to open ${esc(hall.name)}.</p>`);
+    } else if (hall && hall.owner === ME) {
       const jobs = p.jobs.map((j) => `${jobName(j)} (${left(j.finish)})`);
       const queue = p.queue ?? [];
       const thUp = hall.level < 3 ? TOWN_HALL_UPGRADE[(hall.level + 1) as 2 | 3] : null;
@@ -331,9 +352,13 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
       </div>
       <p class="muted">Area — cells of land. Military — the value of all pieces, stronger with the generals' ELO (${st.generals} general${st.generals > 1 ? 's' : ''}, ${st.pieces} pieces). Economy — income per turn after feeding the army, gold counted ×4.</p>
       ${mineN ? `<p class="withico">Income: ${amount('wood', st.income.wood)} ${amount('food', st.income.food - st.upkeep)} ${amount('gold', st.income.gold)} per turn</p>` : ''}
-      <div class="acts">${btn('close', 'Close', '')}</div>`);
-    await ask();
+      <div class="acts">${btn('close', 'Close', '')}${mineN ? btn('endgame', 'End campaign', 'final standings and charts') : ''}</div>`);
+    const c = await ask();
     modal(null);
+    if (c !== 'endgame') return;
+    modal(`<h2>End this campaign?</h2><p>The game stops here: you will see how every nation grew and who was strongest. The save is deleted.</p>
+      <div class="acts">${btn('yes', 'End campaign', 'see the results')}${btn('no', 'Keep playing', '')}</div>`);
+    if (await ask() === 'yes') await finish('end'); else modal(null);
   };
   app.querySelector('#me')!.addEventListener('click', () => { if (!busy) { tap(); void nationInfo(ME); } });
 
@@ -441,6 +466,26 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
     checkEnd();
   };
 
+  /** Ход разбойников: набеги считаются сразу, бои с ними — как бои ИИ (на тебя — ты защищаешься). */
+  const banditsPhase = async () => {
+    for (const a of banditsTurn(s)) {
+      if (!s.generals[a.gid]) continue;
+      const r = attack(s, a.gid, a.target);
+      if (r.kind !== 'battle') continue;
+      const def = s.generals[r.defender];
+      if (def.owner === ME) {
+        veil(false);
+        refresh(); view.centerOn(def.hex); draw();
+        await fightBattle(r.attacker, r.defender, true);
+        veil(true, 'bandits');
+        continue;
+      }
+      banner(`Bandits attack ${ownerName(s, def.owner)}…`);
+      const rec = await autobattle(s, r.attacker, r.defender, (n) => banner(`Bandits attack ${ownerName(s, def.owner)} · move ${Math.ceil(n / 2)}`), true);
+      resolveBattle(s, r.attacker, r.defender, rec.report);
+    }
+  };
+
   /** Ход компьютерной страны: экономика, затем походы и бои. Бои ИИ против ИИ и нейтралов идут без показа. */
   const aiTurn = async (pid: string) => {
     const name = ownerName(s, pid);
@@ -451,10 +496,12 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
       const def = s.generals[r.defender];
       const target = Object.values(s.halls).find((h) => key(h.hex) === key(def.hex))?.name;
       if (def.owner === ME) {
+        veil(false);
         refresh();
         view.centerOn(def.hex);
         draw();
         await fightBattle(r.attacker, r.defender, true);
+        veil(true, pid);
         continue;
       }
       const title = `${name}: battle${target ? ` for ${target}` : ''}`;
@@ -466,12 +513,20 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
     }
   };
 
+  /** Конец кампании: итоги с графиками, потом — в меню (сохранение удаляется). */
+  const finish = async (how: 'victory' | 'defeat' | 'end') => {
+    busy = true;
+    modal(null);
+    clearSave();
+    if (s.history?.at(-1)?.turn !== s.turn) recordHistory(s); // последняя точка графиков — сейчас
+    await showSummary(app, s, ME, how);
+    exit();
+  };
+
   const checkEnd = () => {
     const w = winner(s);
-    if (!s.players[ME].alive) modal(`<h2>Defeat</h2><p>Your last city has fallen.</p><div class="acts">${btn('exit', 'Back to menu', '')}</div>`);
-    else if (w === ME) modal(`<h2>Victory</h2><p>You are the last nation standing on turn ${s.turn}.</p><div class="acts">${btn('exit', 'Back to menu', '')}</div>`);
-    else return;
-    app.querySelector('#dialog')!.addEventListener('click', exit, { once: true });
+    if (!s.players[ME].alive) void finish('defeat');
+    else if (w === ME) void finish('victory');
   };
 
   // ---------- ход ----------
@@ -490,24 +545,39 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
     }
     busy = true;
     const from = s.log.length;
+    sel = {};
+    refresh();
     endTurn(s);
     try {
       while (s.order[s.current] !== ME && s.players[ME].alive && !winner(s)) {
         const pid = s.order[s.current];
-        banner(`${ownerName(s, pid)} is moving…`);
+        veil(true, pid);
+        banner(`${ownerName(s, pid)} is thinking…`);
+        const t0 = performance.now();
         await aiTurn(pid);
+        await sleep(Math.max(0, 450 - (performance.now() - t0))); // чтобы глаз успевал заметить каждую страну
         endTurn(s);
+      }
+      if (s.players[ME].alive && !winner(s)) {
+        veil(true, 'bandits');
+        banner('Bandits roam the land…');
+        const t0 = performance.now();
+        await banditsPhase();
+        await sleep(Math.max(0, 400 - (performance.now() - t0)));
+        veil(true, ME);
+        banner('Your turn');
+        await sleep(350);
       }
     } catch (e) {
       toast(`AI turn error: ${(e as Error).message ?? e}`);
     }
-    banner(null);
+    veil(false);
     busy = false;
     const marched = s.players[ME].alive ? runOrders(s, ME) : [];
     saveGame(s);
     const news = s.log.slice(from).filter((e) => e.player === ME || /captured|out of the game|siege of/.test(e.text));
-    const notes = [...news.map((e) => `${e.player && e.player !== ME ? ownerName(s, e.player) + ': ' : ''}${e.text}`), ...marched.map((m) => `General ${m.text}`)];
-    if (notes.length) toast(notes.join(' · '));
+    const notes = [...news.map((e) => `${e.player && e.player !== ME ? ownerName(s, e.player) + ': ' : ''}${e.text[0].toUpperCase()}${e.text.slice(1)}`), ...marched.map((m) => `General ${m.text}`)];
+    if (notes.length) toast(notes.map((n) => `• ${n}`).join('\n'));
     const stopped = marched.find((m) => s.generals[m.gid] && /stopped|blocked/.test(m.text));
     if (stopped) { sel = { hex: s.generals[stopped.gid].hex, gid: stopped.gid }; view.centerOn(s.generals[stopped.gid].hex); }
     sel = { hex: sel.hex, gid: sel.gid && s.generals[sel.gid] ? sel.gid : undefined };
@@ -531,11 +601,13 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
       // если генерал уже идёт походом, касание другой клетки просто открывает её (маршрут не меняется)
       if (!own && s.generals[sel.gid].owner === ME && s.generals[sel.gid].order?.kind !== 'goto') { sel = { hex: h, gid: sel.gid, target: 'goto' }; refresh(); return; }
     }
-    // на клетке несколько своих (генерал и поселенец) — повторное касание выбирает следующего
+    // повторные касания перебирают своих на клетке (генерал, поселенец), а затем сам город
     const units = Object.values(s.generals).filter((g) => g.owner === ME && key(g.hex) === k).sort((a, b) => Number(!!a.settler) - Number(!!b.settler));
-    const at = units.findIndex((g) => g.id === sel.gid);
-    const mine = units.length ? units[(at + 1) % units.length] : undefined;
-    sel = { hex: h, gid: mine?.id };
+    const hallHere = Object.values(s.halls).some((x) => key(x.hex) === k);
+    const seq: (string | undefined)[] = [...units.map((g) => g.id), ...(hallHere || !units.length ? [undefined] : [])];
+    const same = sel.hex && key(sel.hex) === k;
+    const at = same ? seq.indexOf(sel.gid) : -1;
+    sel = { hex: h, gid: seq[(at + 1) % seq.length] };
     refresh();
   };
 

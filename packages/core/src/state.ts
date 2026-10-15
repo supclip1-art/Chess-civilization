@@ -35,6 +35,7 @@ export type TownHall = {
   order: number; // порядок основания: при спорной клетке её держит более ранний город
   barracks?: number; // казарма города: какие фигуры можно нанять на его земле (0 / нет — не построена)
   tavern?: number; // таверна города: в ней нанимают генералов
+  raidedAt?: number; // ход последнего набега разбойников
   siege?: { by: string; since: number }; // id осаждающего генерала и ход начала осады
 };
 
@@ -98,6 +99,10 @@ export type GameState = {
   neutrals: Record<string, Neutral>;
   nextId: number;
   log: { turn: number; player?: string; text: string }[];
+  /** Ход, в котором разбойники уже походили. */
+  banditsAt?: number;
+  /** Сводки держав по ходам — для графиков в конце кампании. */
+  history?: { turn: number; p: Record<string, { economy: number; military: number; cities: number; area: number }> }[];
   /** Что игрок видел на клетках, когда они были открыты (как в «Цивилизации»): под туманом войны
    *  карта показывает это, а не текущее положение. memory[игрок][клетка]. Армии не запоминаются. */
   memory?: Record<string, Record<string, CellMemory>>;
@@ -221,7 +226,7 @@ const pickNeutrals = (s: GameState, map: MapDef, cities: Hex[]): Hex[] => {
   return chosen;
 };
 
-export const createGame = (map: MapDef, setup: PlayerSetup[], opts: { elo: number; seed: number }): GameState => {
+export const createGame = (map: MapDef, setup: PlayerSetup[], opts: { elo: number; seed: number; bandits?: number }): GameState => {
   if (setup.length < 2 || setup.length > map.spawns.length) throw new Error(`players: 2..${map.spawns.length}`);
   const s: GameState = {
     rng: { seed: opts.seed }, turn: 1, current: 0, order: [], settings: { elo: opts.elo },

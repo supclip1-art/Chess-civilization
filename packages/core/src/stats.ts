@@ -39,6 +39,21 @@ const raw = (s: GameState, pid: string) => {
   };
 };
 
+/** Записать сводку всех держав за текущий ход (раз в круг) — для графиков. */
+export const recordHistory = (s: GameState): void => {
+  const p: NonNullable<GameState['history']>[number]['p'] = {};
+  for (const id of s.order) {
+    if (!s.players[id].alive) continue;
+    const r = raw(s, id);
+    p[id] = { economy: r.economy, military: r.military, cities: r.cities, area: r.area };
+  }
+  (s.history ??= []).push({ turn: s.turn, p });
+};
+
+/** Итоговая сила державы для сравнения: экономика, армия и земля вместе. */
+export const finalScore = (st: { economy: number; military: number; area: number; cities: number }): number =>
+  Math.round(Math.max(0, st.economy) * 2 + st.military + st.area * 3 + st.cities * 25);
+
 export const nationStats = (s: GameState, pid: string): NationStats => {
   const p = s.players[pid];
   const alive = s.order.filter((id) => s.players[id].alive);

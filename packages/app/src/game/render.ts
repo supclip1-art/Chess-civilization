@@ -6,6 +6,7 @@ import { type GameState, type Hex, type Job, type Terrain, key, neighbors } from
 
 export const PLAYER_COLORS = ['#2f6fd6', '#d64a3c', '#e0a020', '#8a52d6', '#1f9e86', '#d65f9c', '#6b8f2a', '#c76a1f'];
 export const NEUTRAL_COLOR = '#8c8a84';
+export const BANDIT_COLOR = '#3b2f2c';
 
 const TERRAIN: Record<Terrain, string> = {
   field: '#cdd890', forest: '#6f9a5c', deposit: '#c7b27a', tundra: '#d5dcda', desert: '#e8d49e', mountain: '#8e877c', water: '#79a8cf',
@@ -17,6 +18,7 @@ export type Highlight = { selected?: Hex; reach?: Set<string>; attack?: Set<stri
 export const ownerColor = (s: GameState, owner?: string): string | null => {
   if (!owner) return null;
   const i = s.order.indexOf(owner);
+  if (owner === 'bandits') return BANDIT_COLOR;
   return i >= 0 ? PLAYER_COLORS[i % PLAYER_COLORS.length] : NEUTRAL_COLOR;
 };
 
