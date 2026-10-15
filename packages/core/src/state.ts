@@ -82,7 +82,7 @@ export type Job =
 export type Player = {
   id: string;
   nation: NationId;
-  ai?: { aggression: Aggression; ruler: string; lastWar?: number; scout?: Hex }; // lastWar — ход последнего нападения на игрока
+  ai?: { aggression: Aggression; ruler: string; lastWar?: number; scout?: Hex; tributeAt?: number }; // lastWar — ход последнего нападения на игрока
   res: Res;
   /** Правитель игрока (у ИИ — ai.ruler). */
   ruler?: string;
@@ -100,6 +100,8 @@ export type Player = {
   /** События: ход следующего и событие, которое ждёт выбора игрока. */
   nextEvent?: number;
   event?: import('./events.ts').PendingEvent;
+  /** Предложение ИИ игроку: мир с выплатой ему или требование дани. */
+  offer?: { from: string; kind: 'peace' | 'tribute'; gold: number };
   starterKnight: boolean; // стартовый конь жив и всегда возвращается после боя
   alive: boolean;
 };
@@ -128,6 +130,9 @@ export type GameState = {
   /** Что игрок видел на клетках, когда они были открыты (как в «Цивилизации»): под туманом войны
    *  карта показывает это, а не текущее положение. memory[игрок][клетка]. Армии не запоминаются. */
   memory?: Record<string, Record<string, CellMemory>>;
+  /** Дипломатия: отношения пар стран («a|b») и агрессия каждой страны. */
+  diplo?: Record<string, import('./diplomacy.ts').Relation>;
+  aggro?: Record<string, number>;
 };
 
 export type CellMemory = {

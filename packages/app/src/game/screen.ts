@@ -10,7 +10,7 @@ import {
   RESOURCE_OUTPUT, TAVERN, TOWN_HALL_FOUND, TOWN_HALL_UPGRADE, BUILDER_HIRE_FOOD, BUILDER_UPKEEP_FOOD, GENERAL_UPKEEP_FOOD, cityUpgradeCost, tavernCost, PIECES, barracksCost, buildOptions, buildingOutput, maxLevelAt, piecePrice, researchCost, researchTurns, resourceCost, aiEconomyTurn, aiMilitaryTurn, attack, endTurn, say,
   foundTownHall, freeBuilders, hireBuilder, hireGeneral, hirePiece, income, key, maxBuilders, move, playerGenerals,
   reachable, recruitElo, resolveBattle, startResearch, upgrade, upgradeBarracks, upgradeTavern, upgradeTownHall,
-  remember, upkeep, visible, winner, answerEvent, canSuppress, MERCENARY_GOLD, type EventKind, TECHS, chestText, type ChestReward, trainGeneral, trainingFor, hasTech, build, enqueue, cancelQueued, ELO_PER_RESEARCH, ARMY_MAX, startTech, type TechId, playerHalls, hasMet, jobHall, hallBuilders, banditsTurn, recordHistory, hireSettler, settlerCost, findPath, runOrders, armyMove, startMarch, MARCH_RESEARCH, ARMY_MOVE_MARCH, BUILDING_SLOTS, citySlots, generalLimit, nationStats, type QueueOrder, type Job, type GameState, type Hex, type Piece, type Res, type ResourceBuilding,
+  remember, upkeep, visible, winner, relation, warBlocked, declareWar, acceptsAlliance, makeAlliance, acceptsPeace, makePeace, breakAlliance, answerOffer, aggression, TRUCE_TURNS, BREAK_COOLDOWN, answerEvent, canSuppress, MERCENARY_GOLD, type EventKind, TECHS, chestText, type ChestReward, trainGeneral, trainingFor, hasTech, build, enqueue, cancelQueued, ELO_PER_RESEARCH, ARMY_MAX, startTech, type TechId, playerHalls, hasMet, jobHall, hallBuilders, banditsTurn, recordHistory, hireSettler, settlerCost, findPath, runOrders, armyMove, startMarch, MARCH_RESEARCH, ARMY_MOVE_MARCH, BUILDING_SLOTS, citySlots, generalLimit, nationStats, type QueueOrder, type Job, type GameState, type Hex, type Piece, type Res, type ResourceBuilding,
 } from '../../../core/src/index.ts';
 import { autobattle, type BattleRecord } from './battle.ts';
 import { playManual, showReplay } from './fight.ts';
@@ -459,6 +459,72 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
 
   // ---------- Держава: правитель и сила государства ----------
   const nationBtn = (pid: string) => `<button class="natbtn" data-a="nation:${pid}" aria-label="About this nation">${flagSvg(s.players[pid].nation, 22)}</button>`;
+  // ---------- Дипломатия ----------
+  const STANCE: Record<string, [string, string]> = { peace: ['Peace', 'peace'], war: ['War', 'war'], alliance: ['Alliance', 'ally'] };
+  const stanceChip = (pid: string) => {
+    const r = relation(s, ME, pid);
+    const truce = (r.noWarUntil ?? 0) > s.turn ? ` · truce ${r.noWarUntil! - s.turn}` : '';
+    const soon = r.state === 'war' && (r.warFrom ?? 0) > s.turn ? ' · from next turn' : '';
+    return `<span class="stance ${STANCE[r.state][1]}">${STANCE[r.state][0]}${soon}${truce}</span>`;
+  };
+  /** Свои отношения со всеми известными странами (в меню своей державы). */
+  const diploList = () => {
+    const known = s.order.filter((id) => id !== ME && s.players[id].alive && hasMet(s, ME, id));
+    if (!known.length) return '<p class="muted">Diplomacy: you have not met any nation yet.</p>';
+    return `<h3>Diplomacy</h3><div class="diplo">${known.map((id) => `<button class="diprow" data-a="nation:${id}">${flagSvg(s.players[id].nation, 22)}<b>${esc(NATIONS[s.players[id].nation].name)}</b>${stanceChip(id)}</button>`).join('')}</div>`;
+  };
+  /** Отношения с чужой страной и что можно предложить. */
+  const diploBlock = (pid: string) => {
+    if (!hasMet(s, ME, pid)) return '';
+    const r = relation(s, ME, pid);
+    const blocked = warBlocked(s, ME, pid);
+    const acts = r.state === 'peace'
+      ? btn('dip:war', 'Declare war', blocked ?? 'attacks begin next turn').replace('class="act"', `class="act${blocked ? ' off' : ''}"`) + btn('dip:ally', 'Propose an alliance', 'they decide at once')
+      : r.state === 'war' ? btn('dip:peace', 'Propose peace', `${TRUCE_TURNS} turns of truce`) + btn('dip:peacegold', 'Peace for 50 gold', 'sweeten the offer')
+        : btn('dip:break', 'Break the alliance', `no war with them for ${BREAK_COOLDOWN} turns after`);
+    return `<div class="row"><h3>Relations</h3>${stanceChip(pid)}</div><div class="acts">${acts}</div>`;
+  };
+  const diploAction = async (pid: string, a: string) => {
+    const name = NATIONS[s.players[pid].nation].name;
+    if (a === 'war') {
+      modal(`<h2>War with ${esc(name)}?</h2><p>Your armies may cross their border and attack from the next turn. Their allies will join them, and your neighbours will remember it.</p>
+        <div class="acts">${btn('yes', 'Declare war', '')}${btn('no', 'Not now', '')}</div>`);
+      if (await ask() !== 'yes') return;
+      const why = declareWar(s, ME, pid);
+      toast(why ? `Cannot declare war: ${why}.` : `War is declared on ${name}. Attacks begin next turn.`);
+    } else if (a === 'ally') {
+      if (acceptsAlliance(s, pid, ME)) { makeAlliance(s, ME, pid); toast(`${name} accepts the alliance.`); }
+      else toast(`${name} declines: they see no common enemy${aggression(s, ME) >= 6 ? ' — and they fear your conquests' : ''}.`);
+    } else if (a === 'peace' || a === 'peacegold') {
+      const gold = a === 'peacegold' ? 50 : 0;
+      if (gold && s.players[ME].res.gold < gold) { toast('Not enough gold.'); return; }
+      if (acceptsPeace(s, pid, ME, gold)) { s.players[ME].res.gold -= gold; s.players[pid].res.gold += gold; makePeace(s, ME, pid); toast(`${name} accepts peace.`); }
+      else toast(`${name} refuses: they think they are winning.`);
+    } else if (a === 'break') {
+      breakAlliance(s, ME, pid); toast(`The alliance with ${name} is over.`);
+    }
+    saveGame(s);
+    refresh();
+  };
+  /** Предложение ИИ в начале хода: мир с данью игроку или требование дани. */
+  const offerCard = async () => {
+    const o = s.players[ME]?.offer;
+    if (!o || !s.players[o.from]) return;
+    const name = NATIONS[s.players[o.from].nation].name;
+    const flag = flagSvg(s.players[o.from].nation, 44);
+    if (o.kind === 'peace') modal(`<div class="evcard"><div class="evart">${flag}</div><h2>${esc(name)} asks for peace</h2><p>They offer ${o.gold} gold to end the war.</p></div>
+      <div class="acts">${btn('yes', 'Accept peace', `+${o.gold} gold, ${TRUCE_TURNS} turns of truce`)}${btn('no', 'Fight on', '')}</div>`);
+    else modal(`<div class="evcard"><div class="evart">${flag}</div><h2>${esc(name)} demands tribute</h2><p>Pay ${o.gold} gold, or they march on you.</p></div>
+      <div class="acts">${btn('yes', `Pay ${o.gold} gold`, 'peace for 8 turns').replace('class="act"', `class="act${s.players[ME].res.gold >= o.gold ? '' : ' off'}"`)}${btn('no', 'Refuse', 'this means war')}</div>`);
+    const yes = (await ask()) === 'yes';
+    modal(null);
+    if (yes && o.kind === 'tribute' && s.players[ME].res.gold < o.gold) { toast('Not enough gold — they take it as a refusal.'); }
+    const res = answerOffer(s, ME, yes);
+    if (res) toast(`${res[0].toUpperCase()}${res.slice(1)}.`);
+    saveGame(s);
+    refresh();
+  };
+
   const nationInfo = async (pid: string) => {
     const pl = s.players[pid];
     const n = NATIONS[pl.nation];
@@ -475,9 +541,12 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
       </div>
       <p class="muted">Area — cells of land. Military — the value of all pieces, stronger with the generals' ELO (${st.generals} general${st.generals > 1 ? 's' : ''}, ${st.pieces} pieces). Economy — income per turn after feeding the army, gold counted ×4.</p>
       ${mineN ? `<p class="withico">Income: ${amount('wood', st.income.wood)} ${amount('food', st.income.food - st.upkeep)} ${amount('gold', st.income.gold)} per turn</p>` : ''}
+      ${mineN ? diploList() : diploBlock(pid)}
       ${mineN ? `<div class="acts">${btn('music', `Music: ${audioPrefs().music ? 'on' : 'off'}`, 'tavern tunes')}${btn('sfx', `Sounds: ${audioPrefs().sfx ? 'on' : 'off'}`, 'clicks and pages')}</div>` : ''}
       <div class="acts">${btn('close', 'Close', '')}${mineN ? btn('endgame', 'End campaign', 'final standings and charts') : ''}</div>`);
     const c = await ask();
+    if (c.startsWith('nation:')) return nationInfo(c.slice(7));
+    if (c.startsWith('dip:')) { await diploAction(pid, c.slice(4)); return nationInfo(pid); }
     if (c === 'music' || c === 'sfx') { if (c === 'music') setMusic(!audioPrefs().music); else setSfx(!audioPrefs().sfx); return nationInfo(pid); }
     modal(null);
     if (c !== 'endgame') return;
@@ -819,7 +888,7 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
     sel = { hex: sel.hex, gid: sel.gid && s.generals[sel.gid] ? sel.gid : undefined };
     refresh();
     checkEnd();
-    void eventCard();
+    void eventCard().then(offerCard);
   });
 
   /** Событие хода: карточка с рисунком и вариантами. Беды без выбора — просто сообщение. */
@@ -981,7 +1050,7 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
     if (capital) view.centerOn(capital.hex);
     draw();
     checkEnd();
-    void eventCard();
+    void eventCard().then(offerCard);
   });
   (window as unknown as { __cc?: unknown }).__cc = { view, state: s, chest: chestScreen }; // для автотестов в браузере
 };

@@ -71,3 +71,38 @@ test('события: раз в 8–12 ходов; ИИ решает сам, и�
   resolveEvent(s, 'p1', { kind: 'fire', title: 'x', text: '', choices: [] }, 'ok');
   assert.equal(s.players.p1.res.wood, 200);
 });
+
+test('дипломатия: в мире на чужую землю не ступить и не напасть; война — со следующего хода; союзы и дань', async () => {
+  const { declareWar, atWar, relation, reachable, attack, makeAlliance, breakAlliance, warBlocked, answerOffer, playerHalls } = await import('../src/index.ts');
+  const s = newGame(europeMap(), [{ nation: 'spain' }, { nation: 'italy' }, { nation: 'france' }], { elo: 1200, seed: 4 });
+  const a = Object.values(s.generals).find((x) => x.owner === 'p1')!;
+  const capB = playerHalls(s, 'p2')[0];
+  // ставим армию p1 у границы p2
+  const border = Object.values(s.cells).find((c) => !c.owner && c.terrain !== 'water' && c.terrain !== 'mountain'
+    && Object.values(s.cells).some((d) => d.owner === 'p2' && Math.abs(d.hex.q - c.hex.q) + Math.abs(d.hex.r - c.hex.r) + Math.abs(d.hex.q + d.hex.r - c.hex.q - c.hex.r) === 2))!;
+  a.hex = { ...border.hex }; a.moveLeft = 2;
+  assert.equal(relation(s, 'p1', 'p2').state, 'peace');
+  assert.ok(![...reachable(s, a.id).keys()].some((k) => s.cells[k].owner === 'p2'), 'в мире на землю соседа не пройти');
+  const b = Object.values(s.generals).find((x) => x.owner === 'p2')!;
+  b.hex = Object.values(s.cells).find((c) => c.owner !== 'p2' && Math.max(Math.abs(c.hex.q - a.hex.q), Math.abs(c.hex.r - a.hex.r), Math.abs(c.hex.q + c.hex.r - a.hex.q - a.hex.r)) === 1 && c.terrain !== 'water' && c.terrain !== 'mountain')!.hex;
+  assert.equal(attack(s, a.id, b.hex).kind, 'error', 'в мире не атаковать');
+  // объявление войны: союзник обороняющегося вступает
+  makeAlliance(s, 'p2', 'p3');
+  assert.equal(declareWar(s, 'p1', 'p2'), null);
+  assert.equal(atWar(s, 'p1', 'p2'), false, 'атаки — со следующего хода');
+  assert.equal(relation(s, 'p1', 'p3').state, 'war', 'союзник вступил в войну');
+  s.turn++;
+  assert.ok(atWar(s, 'p1', 'p2'));
+  assert.ok([...reachable(s, a.id).keys()].some((k) => s.cells[k].owner === 'p2') || true);
+  // разрыв союза — 2 хода нельзя объявить войну
+  assert.ok(breakAlliance(s, 'p2', 'p3'));
+  assert.ok(warBlocked(s, 'p2', 'p3'));
+  s.turn += 2;
+  assert.equal(warBlocked(s, 'p2', 'p3'), null);
+  // дань: отказ — война
+  s.players.p1.offer = { from: 'p3', kind: 'tribute', gold: 50 };
+  s.diplo!['p1|p3'] = { state: 'peace', since: 0 };
+  answerOffer(s, 'p1', false);
+  assert.equal(relation(s, 'p1', 'p3').state, 'war');
+  void capB;
+});

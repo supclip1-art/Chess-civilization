@@ -5,7 +5,7 @@ import {
   newGame, nextDeserter, hireSettler, settleEconomy, startResearch, recruitElo, upgrade, upgradeTownHall, upkeep, playerHalls,
   key, emptyArmy, type GameState,
 } from '../src/index.ts';
-import { SPAWN_A, cellsAround, testMap } from './helpers.ts';
+import { SPAWN_A, cellsAround, testMap , war } from './helpers.ts';
 
 const game = (nations: [any, any] = ['germany', 'france']): GameState =>
   newGame(testMap(), [{ nation: nations[0] }, { nation: nations[1] }], { elo: 1200, seed: 7 });
@@ -112,6 +112,7 @@ test('основание города на ничейной земле, Росс
 test('поселенец гибнет, если на него напасть; стройка города отменяется', async () => {
   const { attack, emptyArmy: _e } = await import('../src/index.ts');
   const s = newGame(testMap(), [{ nation: 'germany' }, { nation: 'spain' }], { elo: 1200, seed: 1 });
+  war(s);
   s.players.p1.res = { wood: 500, food: 500, gold: 0 };
   assert.ok(hireSettler(s, 'p1', playerHalls(s, 'p1')[0].id).ok);
   const st = Object.values(s.generals).find((x) => x.owner === 'p1' && x.settler)!;

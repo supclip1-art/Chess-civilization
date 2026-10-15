@@ -34,10 +34,10 @@ test('ИИ захватывает нейтралов, воинственный �
   const { s, vs } = play(['warlike', 'moderate', 'peaceful', 'moderate'], 70);
   const captured = s.log.filter((e) => / is captured$/.test(e.text) && s.players[e.player!]).length;
   assert.ok(captured >= 4, `захватов: ${captured}`);
-  assert.ok(vs.some((v) => v.aggr === 'warlike' && !v.neutral), 'воинственный атакует игроков');
-  const peaceful = vs.filter((v) => v.aggr === 'peaceful' && !v.neutral && !v.defense).map((v) => v.turn); // отбиться можно всегда
-  assert.ok(peaceful.every((t) => t >= 18), 'миролюбивый — не раньше 18-го хода');
-  assert.ok(peaceful.every((t, i) => i === 0 || t - peaceful[i - 1] >= 4 || t === peaceful[i - 1]), 'и не чаще раза в 4 хода');
+  assert.ok(s.log.some((e) => /declared war/.test(e.text)), 'войны объявляются');
+  assert.ok(vs.some((v) => !v.neutral), 'страны воюют друг с другом');
+  // мирный живёт мирно: войну первым не объявляет раньше своего 14-го хода
+  assert.ok(!s.log.some((e) => e.turn < 14 && /^France declared war/.test(e.text)), 'миролюбивый не начинает войн рано');
   assert.ok(!vs.some((v) => v.aggr === 'moderate' && !v.neutral && v.turn < 10), 'умеренный — не раньше 10-го хода');
 });
 

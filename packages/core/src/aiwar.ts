@@ -12,6 +12,7 @@ import { armyValue, foundTownHall, hireSettler, playerGenerals, playerHalls, pla
 import { type Hex, distance, key, neighbors } from './hex.ts';
 import { next } from './rng.ts';
 import { move, reachable } from './map.ts';
+import { aiDiplomacy, atWar } from './diplomacy.ts';
 import { type Aggression } from './nations.ts';
 import { type GameState, type General, PASSABLE } from './state.ts';
 
@@ -112,7 +113,7 @@ const targetsFor = (s: GameState, g: General, field: Map<string, number>): Targe
   const me = s.players[g.owner];
   const ch = CHARACTER[me.ai!.aggression];
   // войны с игроками: не раньше своего хода и с передышкой после прошлого нападения
-  const warReady = s.turn >= ch.playersFrom && s.turn - (me.ai!.lastWar ?? -Infinity) >= ch.peace;
+  const warReady = (owner: string) => atWar(s, g.owner, owner); // со страной воюем, только когда война объявлена
   const out: Target[] = [];
   const mine = power(g);
   const myLand = new Set(Object.values(s.cells).filter((c) => c.owner === g.owner).map((c) => key(c.hex)));
@@ -123,13 +124,14 @@ const targetsFor = (s: GameState, g: General, field: Map<string, number>): Targe
     // разбойников бьём только с явным перевесом: проигрыш оставляет столицу без армии
     if (x.owner === 'bandits') { if (mine >= 1.5 * power(x)) out.push({ hex: x.hex, steps, kind: 'neutral' }); continue; }
     if (s.neutrals[x.owner]) { if (mine >= ch.vsNeutral * power(x)) out.push({ hex: x.hex, steps, kind: 'neutral' }); continue; }
+    if (!warReady(x.owner)) continue;
     if (myLand.has(key(x.hex)) && mine >= 1.25 * power(x)) { out.push({ hex: x.hex, steps, kind: 'intruder' }); continue; }
-    if (warReady && mine >= ch.vsPlayer * power(x)) out.push({ hex: x.hex, steps, kind: 'army' });
+    if (mine >= ch.vsPlayer * power(x)) out.push({ hex: x.hex, steps, kind: 'army' });
   }
   // пустые города других игроков — осада
-  if (warReady) {
+  {
     for (const h of Object.values(s.halls)) {
-      if (h.owner === g.owner || !s.players[h.owner] || h.siege) continue;
+      if (h.owner === g.owner || !s.players[h.owner] || h.siege || !warReady(h.owner)) continue;
       if (Object.values(s.generals).some((x) => x.owner === h.owner && x.hex.q === h.hex.q && x.hex.r === h.hex.r && armyValue(x.army) > 0)) continue;
       const steps = stepsTo(field, h.hex);
       if (steps !== Infinity) out.push({ hex: h.hex, steps, kind: 'city' });
@@ -170,12 +172,16 @@ export const aiMilitaryTurn = (s: GameState, pid: string): AiAttack[] => {
   const ch = CHARACTER[p.ai.aggression];
   const capital = playerHalls(s, pid).sort((a, b) => a.order - b.order)[0];
   const attacks: AiAttack[] = [];
+  // дипломатия: мир при проигрыше, коалиции против агрессора, объявление войны по характеру
+  aiDiplomacy(s, pid, { wantsWar: s.turn >= ch.playersFrom && s.turn - (p.ai.lastWar ?? -Infinity) >= ch.peace });
+  // враг — разбойники и страны, с которыми идёт война
+  const hostile = (owner: string) => owner !== pid && !s.neutrals[owner] && (owner === 'bandits' || atWar(s, pid, owner));
   const gens = playerGenerals(s, pid).sort((a, b) => Number(a.id.slice(1)) - Number(b.id.slice(1)));
   const besieged = Object.values(s.halls).filter((h) => h.owner === pid && h.siege);
   // гарнизоны: второй генерал — в столице, следующие — в остальных городах по порядку основания/захвата
   // после столицы гарнизон получают города, к которым ближе всего чужие армии (игроков и разбойников)
   const danger = (h: Hex) => Math.min(99, ...Object.values(s.generals)
-    .filter((x) => x.owner !== pid && !s.neutrals[x.owner] && !x.settler && armyValue(x.army) > 0).map((x) => distance(x.hex, h)));
+    .filter((x) => hostile(x.owner) && !x.settler && armyValue(x.army) > 0).map((x) => distance(x.hex, h)));
   const all = playerHalls(s, pid).sort((a, b) => a.order - b.order);
   const halls = [all[0], ...all.slice(1).sort((a, b) => danger(a.hex) - danger(b.hex) || b.level - a.level)].filter(Boolean);
   // гарнизон не бегает между городами каждый ход: кто уже стоит в городе из списка — там и остаётся
@@ -207,7 +213,7 @@ export const aiMilitaryTurn = (s: GameState, pid: string): AiAttack[] => {
     }
     // полевая армия: враг у своего города без гарнизона — сначала защитить
     const threat = armyValue(g.army) > 0 ? Object.values(s.generals)
-      .filter((x) => x.owner !== pid && !s.neutrals[x.owner] && !x.settler && armyValue(x.army) > 0
+      .filter((x) => hostile(x.owner) && !x.settler && armyValue(x.army) > 0
         && halls.some((h) => !guardedHex.has(key(h.hex)) && distance(h.hex, x.hex) <= 3) && power(g) >= 1.25 * power(x))
       .sort((a, b) => distance(a.hex, g.hex) - distance(b.hex, g.hex))[0] : undefined;
     if (threat && distance(g.hex, threat.hex) <= 10) {
@@ -220,7 +226,7 @@ export const aiMilitaryTurn = (s: GameState, pid: string): AiAttack[] => {
     // пока столицу некому охранять, а рядом бродят чужие армии, полевая армия далеко не уходит
     let leash = Infinity;
     if (capital && armyValue(g.army) > 0 && !guardedHex.has(key(capital.hex))) {
-      const near = Object.values(s.generals).filter((x) => x.owner !== pid && !s.neutrals[x.owner] && !x.settler
+      const near = Object.values(s.generals).filter((x) => hostile(x.owner) && !x.settler
         && armyValue(x.army) > 0 && distance(x.hex, capital.hex) <= 8);
       if (near.some((x) => distance(x.hex, capital.hex) <= 4 || power(x) > power(g))) {
         if (key(g.hex) !== key(capital.hex)) stepToward(s, g, capital.hex, false);
@@ -238,16 +244,15 @@ export const aiMilitaryTurn = (s: GameState, pid: string): AiAttack[] => {
     // идёт осада: стоять у стен, пока город не сдастся в начале следующего хода
     if (Object.values(s.halls).some((h) => h.siege?.by === g.id && distance(h.hex, g.hex) === 1)) continue;
     // чужой поселенец рядом — лёгкая добыча (если с этой страной уже можно воевать или он на нашей земле)
-    const warReady = s.turn >= ch.playersFrom && s.turn - (p.ai.lastWar ?? -Infinity) >= ch.peace;
     const prey = armyValue(g.army) > 0 ? Object.values(s.generals).find((x) => x.settler && x.owner !== pid && s.players[x.owner]
-      && distance(x.hex, g.hex) === 1 && (warReady || s.cells[key(x.hex)]?.owner === pid)) : undefined;
+      && distance(x.hex, g.hex) === 1 && atWar(s, pid, x.owner)) : undefined;
     if (prey) { attacks.push({ gid: g.id, target: prey.hex, defense: false }); continue; }
     const field = pathField(s, g);
     const targets = armyValue(g.army) >= ch.minArmy || armyValue(g.army) > 0 ? targetsFor(s, g, field) : [];
     const strongEnough = armyValue(g.army) >= ch.minArmy;
     // из столицы полевая армия уходит, только когда рядом гарнизон, готовый сразу её занять (он ходит после неё)
     const relief = capital && gens.slice(1).some((x) => armyValue(x.army) >= 40 && distance(x.hex, capital.hex) <= 2);
-    const prowl = capital && Object.values(s.generals).some((x) => x.owner !== pid && !s.neutrals[x.owner] && !x.settler
+    const prowl = capital && Object.values(s.generals).some((x) => hostile(x.owner) && !x.settler
       && armyValue(x.army) > 0 && distance(x.hex, capital.hex) <= 10);
     if (capital && key(g.hex) === key(capital.hex) && !relief && prowl && s.turn >= 6) leash = Math.min(leash, 1);
     const near = capital ? targets.filter((t) => distance(t.hex, capital.hex) <= leash) : targets;

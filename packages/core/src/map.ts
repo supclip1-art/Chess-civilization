@@ -5,6 +5,7 @@ import { ARMY_MOVE, FOG_RADIUS, SIEGE_TURNS } from './config.ts';
 import { type Result, armyValue, hasTech, playerHalls } from './economy.ts';
 import { type Hex, distance, key, neighbors, range } from './hex.ts';
 import { NATIONS } from './nations.ts';
+import { addAggression, atWar, mayEnter, relation } from './diplomacy.ts';
 import { type GameState, type General, type TownHall, PASSABLE, newId, recomputeTerritory, say } from './state.ts';
 
 const no = (reason: string): Result => ({ ok: false, reason });
@@ -41,6 +42,7 @@ export const reachable = (s: GameState, gid: string): Map<string, number> => {
       const c = s.cells[k];
       if (!c || !PASSABLE[c.terrain] || dist.has(k)) continue;
       if (c.noBandits && g.owner === 'bandits') continue; // в эти края разбойники не ходят
+      if (!mayEnter(s, g.owner, c.owner)) continue; // земля страны, с которой мир, — закрыта
       if (road && c.owner !== g.owner) continue;
       if (generalsAt(s, n).some((x) => x.owner !== g.owner)) continue; // чужая армия — только атакой
       const h = hallAt(s, n);
@@ -99,6 +101,7 @@ const passableFor = (s: GameState, g: General, n: Hex): boolean => {
   const c = s.cells[key(n)];
   if (!c || !PASSABLE[c.terrain]) return false;
   if (c.noBandits && g.owner === 'bandits') return false;
+  if (!mayEnter(s, g.owner, c.owner)) return false;
   if (generalsAt(s, n).some((x) => x.owner !== g.owner)) return false;
   const h = hallAt(s, n);
   return !(h && h.owner !== g.owner);
@@ -255,6 +258,13 @@ export const attack = (s: GameState, gid: string, target: Hex): AttackStart => {
   if (g.attacked) return { kind: 'error', reason: 'this army has already attacked this turn' };
   if (armyValue(g.army) === 0) return { kind: 'error', reason: 'the army has no pieces' };
   if (distance(g.hex, target) !== 1) return { kind: 'error', reason: 'you can only attack a neighbouring cell' };
+  // с кем мир или союз — того не трогаем; войну объявляют заранее, атаковать можно со следующего хода
+  const victim = generalsAt(s, target).find((x) => x.owner !== g.owner)?.owner ?? hallAt(s, target)?.owner;
+  if (victim && s.players[g.owner] && s.players[victim] && !atWar(s, g.owner, victim)) {
+    const r = relation(s, g.owner, victim);
+    return { kind: 'error', reason: r.state === 'war' ? 'war was declared this turn: attacks begin next turn'
+      : r.state === 'alliance' ? `${NATIONS[s.players[victim].nation].name} is your ally` : `you are at peace with ${NATIONS[s.players[victim].nation].name}: declare war first` };
+  }
   const def = defenderAt(s, target, g.owner);
   if (def) return { kind: 'battle', attacker: gid, defender: def.id };
   // беззащитные поселенцы гибнут
@@ -376,6 +386,7 @@ export const capture = (s: GameState, hallId: string, newOwner: string): void =>
     if (h.barracks) h.barracks--;
     if (h.tavern) h.tavern--;
   }
+  if (s.players[old] && s.players[newOwner]) addAggression(s, newOwner, 2); // захват городов стран — повод для коалиций
   h.owner = newOwner;
   h.siege = undefined;
   h.takenAt = s.turn;

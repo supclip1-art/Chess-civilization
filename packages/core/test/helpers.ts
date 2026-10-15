@@ -34,3 +34,8 @@ export const testMap = (): MapDef => {
 
 export const cellsAround = (c: Hex, terrain: Terrain, terr: MapDef): Hex[] =>
   range(c, 1).filter((h) => terr.cells.find((x) => x.q === h.q && x.r === h.r)?.terrain === terrain);
+
+/** Объявить войну между двумя странами (сразу в силе) — для тестов боёв. */
+export const war = (s: { diplo?: Record<string, { state: 'peace' | 'war' | 'alliance'; since: number; warFrom?: number }> }, a = 'p1', b = 'p2'): void => {
+  (s.diplo ??= {})[a < b ? `${a}|${b}` : `${b}|${a}`] = { state: 'war', since: 0, warFrom: 0 };
+};

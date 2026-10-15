@@ -4,7 +4,7 @@ import {
   armiesFromFen, canForceMate, insufficientMaterial, attack, emptyArmy, endTurn, formationOk, hireGeneral, hirePiece, judge, move, newGame, playerHalls,
   reachable, resolveBattle, returning, promotions, visible, winner, key, upgradeBarracks, type GameState, type Army,
 } from '../src/index.ts';
-import { NEUTRAL, SPAWN_A, SPAWN_B, testMap } from './helpers.ts';
+import { NEUTRAL, SPAWN_A, SPAWN_B, testMap , war } from './helpers.ts';
 
 const game = (): GameState => newGame(testMap(), [{ nation: 'germany' }, { nation: 'turkey' }], { elo: 1200, seed: 3 });
 const gen = (s: GameState, owner: string) => Object.values(s.generals).find((g) => g.owner === owner)!;
@@ -155,6 +155,7 @@ test('захват нейтрала: бой с гарнизоном, ратуш�
 
 test('осада: ратуша сдаётся после полного хода без подкрепления, страна выбывает', () => {
   const s = game();
+  war(s);
   const g = gen(s, 'p1');
   const defender = gen(s, 'p2');
   defender.hex = { q: 6, r: 0 };
@@ -172,6 +173,7 @@ test('осада: ратуша сдаётся после полного хода
 
 test('армия, защищавшая город, разбита — город сразу переходит к победителю', () => {
   const s = game();
+  war(s);
   const a = gen(s, 'p1');
   const d = gen(s, 'p2');
   d.hex = { ...SPAWN_B }; d.army = army({ p: 4 });
