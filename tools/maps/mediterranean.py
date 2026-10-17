@@ -77,7 +77,10 @@ SPAWNS = [  # нация, город, долгота, широта
     ('france', 'Massalia', 5.4, 43.3),
     ('syria', 'Antioch', 36.2, 36.2),
     ('byzantium', 'Byzantium', 28.95, 41.0),
+    ('libya', 'Cyrene', 21.86, 32.82),
+    ('morocco', 'Volubilis', -5.55, 34.07),
 ]
+MAX_PLAYERS = 8  # 10 мест: 8 игроков встают на случайные, свободные становятся вольными столицами
 HOME_EXTRA = {'Athens': {'deposit': 2}, 'Alexandria': {'field1': 4}, 'Carthage': {'field1': 3}}
 
 
@@ -90,8 +93,8 @@ NEUTRALS = [
     ('Genoa', 8.93, 44.41), ('Milan', 9.19, 45.46), ('Venice', 12.3, 45.4), ('Ravenna', 12.2, 44.4), ('Naples', 14.3, 40.85),
     ('Tarentum', 17.2, 40.47), ('Syracuse', 15.29, 37.07), ('Palermo', 13.36, 38.12), ('Ragusa', 18.1, 42.65), ('Thessaloniki', 22.94, 40.64),
     ('Sparta', 22.43, 37.07), ('Smyrna', 27.14, 38.42), ('Ancyra', 32.85, 39.93), ('Attalia', 30.7, 36.9), ('Damascus', 36.3, 33.5),
-    ('Jerusalem', 35.2, 31.78), ('Tyre', 35.2, 33.27), ('Memphis', 31.25, 29.85), ('Cyrene', 21.86, 32.82), ('Leptis Magna', 14.29, 32.64),
-    ('Tripoli', 13.18, 32.9), ('Hippo', 7.77, 36.9), ('Icosium', 3.06, 36.75), ('Tingis', -5.8, 35.77), ('Volubilis', -5.55, 34.07),
+    ('Jerusalem', 35.2, 31.78), ('Tyre', 35.2, 33.27), ('Memphis', 31.25, 29.85), ('Leptis Magna', 14.29, 32.64),
+    ('Tripoli', 13.18, 32.9), ('Hippo', 7.77, 36.9), ('Icosium', 3.06, 36.75), ('Tingis', -5.8, 35.77),
     ('Corduba', -4.78, 37.88), ('Tarraco', 1.25, 41.12), ('Lugdunum', 4.83, 45.76), ('Aquileia', 13.37, 45.77), ('Serdica', 23.32, 42.7),
     ('Philippopolis', 24.75, 42.15), ('Nicaea', 29.72, 40.43), ('Gordion', 31.99, 39.65), ('Tarsus', 34.9, 36.92), ('Sidon', 35.37, 33.56),
 ]

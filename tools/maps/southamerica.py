@@ -49,17 +49,17 @@ def climate(lon, lat, q, r, noise, smooth_noise):
 
 CROSSINGS = []
 
-SPAWNS = [
-    ('colombia', 'Bogotá', -74.1, 4.7),
-    ('venezuela', 'Caracas', -66.9, 10.5),
-    ('peru', 'Lima', -77.0, -12.0),
+SPAWNS = [  # подобраны так, чтобы до ближайшего соседа было 12–13 клеток по суше у каждого (tools: maximin по проходимой земле)
+    ('venezuela', 'Ciudad Bolívar', -63.55, 8.12),
+    ('brazil', 'São Luís', -44.3, -2.53),
+    ('peru', 'Iquitos', -73.25, -3.75),
     ('brazil', 'Manaus', -60.0, -3.1),
-    ('brazil', 'Salvador', -38.5, -13.0),
-    ('brazil', 'Rio de Janeiro', -43.2, -22.9),
-    ('argentina', 'Buenos Aires', -58.4, -34.6),
-    ('chile', 'Santiago', -70.6, -33.4),
+    ('bolivia', 'Santa Cruz', -63.18, -17.78),
+    ('brazil', 'Goiânia', -49.25, -16.68),
+    ('argentina', 'Córdoba', -64.18, -31.42),
+    ('brazil', 'Porto Alegre', -51.23, -30.03),
 ]
-HOME_EXTRA = {'Manaus': {'field1': 3}}
+HOME_EXTRA = {'Manaus': {'field1': 3}, 'Iquitos': {'field1': 3}}
 
 
 def NO_BANDITS(lon, lat):
@@ -67,13 +67,15 @@ def NO_BANDITS(lon, lat):
 
 
 NEUTRALS = [
+    ('Bogotá', -74.1, 4.7), ('Caracas', -66.9, 10.5), ('Lima', -77.0, -12.0), ('Salvador', -38.5, -13.0), ('Rio de Janeiro', -43.2, -22.9),
+    ('Buenos Aires', -58.4, -34.6), ('Santiago', -70.6, -33.4),
     ('Cartagena', -75.5, 10.4), ('Medellín', -75.57, 6.25), ('Cali', -76.53, 3.45), ('Maracaibo', -71.64, 10.65), ('Georgetown', -58.15, 6.8),
-    ('Paramaribo', -55.2, 5.85), ('Cayenne', -52.33, 4.92), ('Belém', -48.5, -1.45), ('São Luís', -44.3, -2.53), ('Fortaleza', -38.53, -3.73),
+    ('Paramaribo', -55.2, 5.85), ('Cayenne', -52.33, 4.92), ('Belém', -48.5, -1.45), ('Fortaleza', -38.53, -3.73),
     ('Recife', -34.9, -8.05), ('Brasília', -47.88, -15.79), ('Belo Horizonte', -43.94, -19.92), ('São Paulo', -46.63, -23.55), ('Curitiba', -49.27, -25.43),
-    ('Porto Alegre', -51.23, -30.03), ('Montevideo', -56.16, -34.9), ('Asunción', -57.58, -25.26), ('Córdoba', -64.18, -31.42), ('Mendoza', -68.83, -32.89),
+    ('Montevideo', -56.16, -34.9), ('Asunción', -57.58, -25.26), ('Mendoza', -68.83, -32.89),
     ('La Paz', -68.15, -16.5), ('Potosí', -65.75, -19.58), ('Cusco', -71.97, -13.53), ('Arequipa', -71.54, -16.4), ('Quito', -78.47, -0.18),
-    ('Guayaquil', -79.9, -2.19), ('Iquitos', -73.25, -3.75), ('Santa Cruz', -63.18, -17.78), ('Valparaíso', -71.62, -33.05), ('Bahía Blanca', -62.27, -38.72),
-    ('Trujillo', -79.03, -8.11), ('Ciudad Bolívar', -63.55, 8.12), ('Cuiabá', -56.1, -15.6), ('Goiânia', -49.25, -16.68), ('Salta', -65.41, -24.79),
+    ('Guayaquil', -79.9, -2.19), ('Valparaíso', -71.62, -33.05), ('Bahía Blanca', -62.27, -38.72),
+    ('Trujillo', -79.03, -8.11), ('Cuiabá', -56.1, -15.6), ('Salta', -65.41, -24.79),
     ('Concepción', -73.05, -36.82), ('Santarém', -54.7, -2.44), ('Porto Velho', -63.9, -8.76),
 ]
 NEUTRAL_COUNT = 26

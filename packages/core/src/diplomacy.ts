@@ -8,6 +8,7 @@
 //   • ИИ следит за агрессорами (объявленные войны, захваченные города) и собирает против них коалиции соседей.
 
 import { NATIONS } from './nations.ts';
+import { difficultyOf } from './difficulty.ts';
 import { distance } from './hex.ts';
 import { type GameState, say } from './state.ts';
 import { cityValue, emptyTerms, executeDeal, neediest, termsText, tradableCities } from './deals.ts';
@@ -198,7 +199,7 @@ export const aiDiplomacy = (s: GameState, pid: string, opts: { wantsWar: boolean
     const prey = neighbours(s, pid, 10).filter((x) => !warBlocked(s, pid, x) && (s.players[x].ai || knows(s, x, pid)))
       .map((x) => ({ x, score: might(s, x) / Math.max(1, me) - (s.players[x].ai ? 0 : 0.1) }))
       .sort((a, b) => a.score - b.score)[0];
-    if (prey && prey.score < 0.9) {
+    if (prey && prey.score < difficultyOf(s).prey) {
       // слабый живой игрок рядом — сначала требуем дань
       if (!s.players[prey.x].ai && !s.players[prey.x].offer && might(s, prey.x) < 0.8 * me && (p.ai.tributeAt ?? -99) + 10 <= s.turn) {
         p.ai.tributeAt = s.turn;

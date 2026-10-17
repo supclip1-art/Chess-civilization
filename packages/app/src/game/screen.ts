@@ -622,7 +622,7 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
     const mineN = pid === ME;
     const rank = (r: number) => `<small>${r === 1 ? '1st' : r === 2 ? '2nd' : r === 3 ? '3rd' : `${r}th`} of ${st.rank.of}</small>`;
     modal(`<div class="nation-head">${flagSvg(pl.nation, 44)}<div><h2>${esc(n.name)}</h2><p class="muted">${esc(n.bonus)}: ${esc(n.effect)}</p></div></div>
-      <div class="ruler">${portraitSvg(pl.nation, st.ruler, 76)}<div><b>${esc(st.ruler)}</b><p class="muted">${mineN ? 'Your ruler' : `Ruler${st.character ? ` · ${st.character}` : ''}`}</p></div></div>
+      <div class="ruler">${portraitSvg(pl.nation, st.ruler, 76)}<div><b>${esc(st.ruler)}</b><p class="muted">${mineN ? 'Your ruler' : `Ruler${st.character ? ` · ${st.character}` : ''}`}</p>${pl.startBonus ? `<p class="muted">Start bonus: ${esc(pl.startBonus)}</p>` : ''}</div></div>
       <div class="stats">
         <div><span>Cities</span><b>${st.cities}</b></div>
         <div><span>Area</span><b>${st.area}</b>${rank(st.rank.area)}</div>
@@ -1157,6 +1157,7 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
   const capital = Object.values(s.halls).filter((h) => h.owner === ME).sort((a, b) => a.order - b.order)[0];
   const g0 = playerGenerals(s, ME)[0];
   sel = capital ? { hex: capital.hex, gid: g0 && key(g0.hex) === key(capital.hex) ? g0.id : undefined } : g0 ? { hex: g0.hex, gid: g0.id } : {};
+  if (s.turn === 1 && s.players[ME].startBonus && !s.players[ME].outlaw) requestAnimationFrame(() => toast(`Start bonus: ${s.players[ME].startBonus}`));
   if (s.players[ME].outlaw && !capital && s.turn === 1) requestAnimationFrame(() => toast('You are outlaws: no crown recognises you and every nation is your enemy. Take a city by force — it becomes the seat of your kingdom.'));
   bar(); sheet();
   // центрируем после того, как нижняя панель заполнилась и карта получила свой настоящий размер

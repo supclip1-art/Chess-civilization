@@ -3,12 +3,11 @@
 
 import {
   BANDIT_COUNT, NATIONS, NATION_ORDER, africaMap, asiaMap, europeMap, mediterraneanMap, newGame, newWorldMap, southAmericaMap,
-  type Aggression, type GameState, type MapDef, type NationId, type Terrain,
+  DIFFICULTY, DIFFICULTIES, type Aggression, type Difficulty, type GameState, type MapDef, type NationId, type Terrain,
 } from '../../core/src/index.ts';
 import { flagSvg } from './game/flags.ts';
 import { portraitSvg } from './game/portraits.ts';
-import { applyStartBonus, choose, dynasty, level, mapLevel, nationLevel } from './dynasty.ts';
-import { bonusOptions } from './dynastyScreen.ts';
+import { dynasty, level, mapLevel, nationLevel, randomBonuses } from './dynasty.ts';
 import { setBack, tap } from './tg.ts';
 
 export const MAPS = {
@@ -82,10 +81,13 @@ export const openSetup = (app: HTMLElement, back: () => void, start: (s: GameSta
   if (mapLevel(mapId) > lv) mapId = 'europe';
   if (nationLevel(nation) > lv) nation = 'russia';
   if (!canOutlaw) outlaw = false;
-  let bonus = dynasty().bonus;
-  const bonuses = bonusOptions().filter((b) => b.open);
-  if (!bonuses.some((b) => b.id === bonus)) bonus = 'none';
-  const spawns = (id: MapId) => MAPS[id]().spawns.length;
+  let bonuses = true, difficulty: Difficulty = 'club';
+  try {
+    bonuses = localStorage.getItem('chessciv.bonuses') !== '0';
+    const d = localStorage.getItem('chessciv.difficulty') as Difficulty | null;
+    if (d && DIFFICULTY[d]) difficulty = d;
+  } catch { /* по умолчанию */ }
+  const spawns = (id: MapId) => { const m = MAPS[id](); return Math.min(m.spawns.length, m.maxPlayers ?? 99); };
   const clampPlayers = () => { const n = spawns(mapId); if (players < 2 || players > n) players = n; };
   clampPlayers();
 
@@ -120,13 +122,15 @@ export const openSetup = (app: HTMLElement, back: () => void, start: (s: GameSta
       <p>You start as a bandit band with no city. Seize one to found your kingdom — but no crown will recognise you: eternal war with every nation, no peace or trade. Vassals are still possible.</p>
       <small>${esc(NATIONS.outlaws.effect)}</small></div>
     </div>
+    <h2 class="sethead">Rivals' strength</h2>
+    <div class="diffs" id="diff">${DIFFICULTIES.map((d, i) => `<button class="diffcard ${d === difficulty ? 'on' : ''}" data-d="${d}"><span class="pips">${['♟', '♞', '♜', '♛'][i]}</span><b>${esc(DIFFICULTY[d].name)}</b></button>`).join('')}</div>
+    <p class="muted diffnote" id="diffnote"></p>
     <h2 class="sethead">Rules of war</h2>
     <div class="rules">
       <div class="stepper"><span>Rivals</span><button class="ghost stepb" data-s="players:-1" aria-label="Fewer">−</button><b id="playersv"></b><button class="ghost stepb" data-s="players:1" aria-label="More">+</button></div>
       <div class="stepper"><span>Generals' ELO</span><button class="ghost stepb" data-s="elo:-1" aria-label="Lower">−</button><b id="elov"></b><button class="ghost stepb" data-s="elo:1" aria-label="Higher">+</button></div>
-      <p class="muted">One ELO for every general in the game, yours and the AI's.</p>
-      <span class="ruletitle">Start bonus</span>
-      <div class="pills" id="bonus">${bonuses.map((b) => `<button class="pill ${b.id === bonus ? 'on' : ''}" data-b="${b.id}" title="${esc(b.text)}">${esc(b.name)}</button>`).join('')}</div>
+      <p class="muted">Base ELO of every general; rivals' strength adds to or takes from the AI's.</p>
+      <div class="stepper toggle"><span>Random start bonuses</span><button class="pill" id="bonus" aria-pressed="false"></button></div>
       <p class="muted" id="bonusnote"></p>
     </div>
     <div class="startbar"><button id="start" class="playbtn"><span>Start</span><small id="startsum"></small></button></div>`;
@@ -140,8 +144,12 @@ export const openSetup = (app: HTMLElement, back: () => void, start: (s: GameSta
     $('#elov').textContent = String(elo);
     for (const b of app.querySelectorAll<HTMLButtonElement>('#maps .mapcard')) b.classList.toggle('on', b.dataset.m === mapId);
     for (const b of app.querySelectorAll<HTMLButtonElement>('#mode .modecard')) b.classList.toggle('on', (b.dataset.o === '1') === outlaw);
-    for (const b of app.querySelectorAll<HTMLButtonElement>('#bonus .pill')) b.classList.toggle('on', b.dataset.b === bonus);
-    $('#bonusnote').textContent = bonuses.find((b) => b.id === bonus)?.text ?? '';
+    const bb = $('#bonus');
+    bb.textContent = bonuses ? 'On' : 'Off';
+    bb.classList.toggle('on', bonuses); bb.setAttribute('aria-pressed', String(bonuses));
+    $('#bonusnote').textContent = bonuses ? 'Every ruler starts with a random bonus: resources, gold, a veteran captain, scouts… Yours comes from the bonuses your dynasty has unlocked.' : 'Nobody gets a start bonus: a clean start for everyone.';
+    for (const b of app.querySelectorAll<HTMLButtonElement>('#diff .diffcard')) b.classList.toggle('on', b.dataset.d === difficulty);
+    $('#diffnote').textContent = `${DIFFICULTY[difficulty].name}: ${DIFFICULTY[difficulty].text}.`;
     $('#nationbox').hidden = outlaw;
     $('#outlawbox').hidden = !outlaw;
     const who = outlaw ? 'Outlaws' : NATIONS[nation].name;
@@ -170,7 +178,8 @@ export const openSetup = (app: HTMLElement, back: () => void, start: (s: GameSta
   $('#nextN').onclick = () => { tap(); goTo(ABC.indexOf(nation) + 1); };
   for (const b of app.querySelectorAll<HTMLButtonElement>('#maps .mapcard')) b.onclick = () => { tap(); mapId = b.dataset.m as MapId; players = spawns(mapId); refresh(); };
   for (const b of app.querySelectorAll<HTMLButtonElement>('#mode .modecard')) b.onclick = () => { tap(); outlaw = b.dataset.o === '1'; refresh(); };
-  for (const b of app.querySelectorAll<HTMLButtonElement>('#bonus .pill')) b.onclick = () => { tap(); bonus = b.dataset.b!; choose('bonus', bonus); refresh(); };
+  $('#bonus').onclick = () => { tap(); bonuses = !bonuses; refresh(); };
+  for (const b of app.querySelectorAll<HTMLButtonElement>('#diff .diffcard')) b.onclick = () => { tap(); difficulty = b.dataset.d as Difficulty; refresh(); };
   for (const b of app.querySelectorAll<HTMLButtonElement>('.stepb')) b.onclick = () => {
     tap();
     const [what, d] = b.dataset.s!.split(':');
@@ -190,13 +199,13 @@ export const openSetup = (app: HTMLElement, back: () => void, start: (s: GameSta
     const s = newGame(MAPS[mapId](), [
       { nation: me, ...(outlaw ? { outlaw: true } : {}) },
       ...others.map((n) => { const aggression = AGGR[Math.floor(Math.random() * 3)]; return { nation: n, ai: { aggression, ruler: NATIONS[n].rulers[aggression] } }; }),
-    ], { elo, seed: Math.floor(Math.random() * 1e9), bandits: BANDIT_COUNT });
-    choose('bonus', bonus);
-    applyStartBonus(s, 'p1');
+    ], { elo, seed: Math.floor(Math.random() * 1e9), bandits: BANDIT_COUNT, difficulty });
+    if (bonuses) randomBonuses(s);
     try {
       localStorage.setItem('chessciv.nation', nation); localStorage.setItem('chessciv.map', mapId);
       localStorage.setItem('chessciv.players', String(players)); localStorage.setItem('chessciv.elo', String(elo));
       localStorage.setItem('chessciv.outlaw', outlaw ? '1' : '0');
+      localStorage.setItem('chessciv.bonuses', bonuses ? '1' : '0'); localStorage.setItem('chessciv.difficulty', difficulty);
     } catch { /* ничего */ }
     start(s);
   };

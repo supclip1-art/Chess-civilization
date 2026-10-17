@@ -407,6 +407,8 @@ with open(OUT, 'w') as f:
     f.write('  spawns: [' + ', '.join(f'{{ q: {h[0]}, r: {h[1]} }}' for _, _, h in spawns) + '],\n')
     f.write('  // столицы: ' + ', '.join(nm for _, nm, _ in spawns) + ' — нации расставляются по ним случайно\n')
     f.write('  randomSpawns: true,\n')
+    if CFG.get('MAX_PLAYERS'):
+        f.write(f"  maxPlayers: {CFG['MAX_PLAYERS']},\n")
     f.write(f'  neutralCount: {NEUTRAL_COUNT},\n')
     f.write('  neutrals: [' + ', '.join(f'{{ q: {h[0]}, r: {h[1]} }}' for _, h in neutrals) + '],\n')
     if 'NO_BANDITS' in CFG:  # «тихий» край: разбойники здесь не появляются и сюда не ходят

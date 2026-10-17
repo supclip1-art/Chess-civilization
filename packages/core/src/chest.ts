@@ -22,7 +22,7 @@ export const openChest = (s: GameState, pid: string, gid: string): ChestReward |
   const piece = g.army.p < ARMY_MAX.p ? 'p' : (['n', 'b', 'r'] as Piece[]).find((x) => g.army[x] < ARMY_MAX[x]);
   const hoard = s.turn >= 15;
   if (hoard && roll < 0.05) r = { kind: 'gold', amount: int(s.rng, 100, 150), rarity: 'epic' };
-  else if (roll < 0.15 && g.elo + 25 <= eloCap(s)) r = { kind: 'scroll', elo: 25, rarity: 'rare' };
+  else if (roll < 0.15 && g.elo + 25 <= eloCap(s, pid)) r = { kind: 'scroll', elo: 25, rarity: 'rare' };
   else if (roll < 0.30 && piece) r = { kind: 'piece', piece, rarity: 'rare' };
   else if (roll < 0.30) r = { kind: 'gold', amount: int(s.rng, 4, 6) * 10, rarity: 'common' }; // полный набор — вместо фигуры золото
   else if (roll < 0.75) r = { kind: 'supplies', res: { wood: int(s.rng, 6, 12) * 10, food: int(s.rng, 5, 10) * 10, gold: 0 }, rarity: 'common' };

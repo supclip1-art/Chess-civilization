@@ -8,6 +8,7 @@
 //   peaceful — расширяется основанием городов и захватом слабых нейтралов; на игроков нападает поздно (с 25-го хода),
 //              редко (раз в 8 ходов) и только при большом перевесе; чужую армию со своей земли выбивает всегда.
 
+import { difficultyOf, shiftAggression } from './difficulty.ts';
 import { armyValue, foundTownHall, hireSettler, playerGenerals, playerHalls, playerSettlers, settlerCost } from './economy.ts';
 import { type Hex, distance, key, neighbors } from './hex.ts';
 import { next } from './rng.ts';
@@ -31,6 +32,13 @@ type Character = {
   minArmy: number;
   /** Сколько своих городов хочет иметь, основывая новые. */
   wantCities: number;
+};
+
+/** Характер ИИ с поправкой на сложность: ступень воинственности, перевес для нападения, ход начала войн, число городов. */
+export const characterOf = (s: GameState, pid: string): Character => {
+  const lvl = difficultyOf(s);
+  const base = CHARACTER[shiftAggression(s.players[pid].ai!.aggression, lvl.shift)];
+  return { ...base, vsNeutral: base.vsNeutral + lvl.vs / 2, vsPlayer: base.vsPlayer + lvl.vs, playersFrom: Math.max(4, base.playersFrom + lvl.war), wantCities: Math.max(2, base.wantCities + lvl.cities) };
 };
 
 export const CHARACTER: Record<Aggression, Character> = {
@@ -111,7 +119,7 @@ type Target = { hex: Hex; steps: number; kind: 'neutral' | 'army' | 'city' | 'in
 
 const targetsFor = (s: GameState, g: General, field: Map<string, number>): Target[] => {
   const me = s.players[g.owner];
-  const ch = CHARACTER[me.ai!.aggression];
+  const ch = characterOf(s, g.owner);
   // войны с игроками: не раньше своего хода и с передышкой после прошлого нападения
   const warReady = (owner: string) => atWar(s, g.owner, owner); // со страной воюем, только когда война объявлена
   const out: Target[] = [];
@@ -169,7 +177,7 @@ const citySite = (s: GameState, g: General, field: Map<string, number>): Hex | n
 export const aiMilitaryTurn = (s: GameState, pid: string): AiAttack[] => {
   const p = s.players[pid];
   if (!p?.ai || !p.alive) return [];
-  const ch = CHARACTER[p.ai.aggression];
+  const ch = characterOf(s, pid);
   const capital = playerHalls(s, pid).sort((a, b) => a.order - b.order)[0];
   const attacks: AiAttack[] = [];
   // дипломатия: мир при проигрыше, коалиции против агрессора, объявление войны по характеру

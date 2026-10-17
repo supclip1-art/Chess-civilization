@@ -113,22 +113,33 @@ export const pieceSkin = (key: string, uri: string, skin = dyn.skin): string => 
   return uri.replace(/fill='%23000'/g, `fill='${enc(sk[1])}'`).replace('%3Csvg ', `%3Csvg fill='${enc(sk[1])}' `);
 };
 
-// ---------- стартовый бонус ----------
-export const applyStartBonus = (s: GameState, me: string): void => {
-  const b = dyn.bonus;
-  const u = UNLOCKS.find((x) => x.kind === 'bonus' && x.id === b);
-  if (!u || !unlocked(u)) return;
-  const p = s.players[me];
-  const g = playerGenerals(s, me)[0];
+// ---------- стартовые бонусы ----------
+/** Все стартовые бонусы (открываются уровнями династии). */
+export const START_BONUSES = (): Unlock[] => UNLOCKS.filter((u) => u.kind === 'bonus');
+/** Случайные стартовые бонусы: игрок — из открытых ему, ИИ — из всех. Записывает название бонуса игроку. */
+export const randomBonuses = (s: GameState): void => {
+  const all = START_BONUSES();
+  for (const pid of s.order) {
+    const p = s.players[pid];
+    const pool = p.ai ? all : all.filter(unlocked);
+    if (!pool.length) continue;
+    const u = pool[Math.floor(Math.random() * pool.length)];
+    applyBonus(s, pid, u.id);
+    p.startBonus = u.name;
+  }
+};
+export const applyBonus = (s: GameState, pid: string, b: string): void => {
+  const p = s.players[pid];
+  const g = playerGenerals(s, pid)[0];
   if (b === 'granary') { p.res.wood += 60; p.res.food += 60; }
   if (b === 'warchest') p.res.gold += 40;
   if (b === 'captain' && g) addElo(s, g, 50);
   if (b === 'pawns' && g) g.army.p = Math.min(8, g.army.p + 2);
   if (b === 'militia') (p.research.techs ??= {}).militia = true;
   if (b === 'scouts') {
-    const cap = playerHalls(s, me)[0] ?? g;
+    const cap = playerHalls(s, pid)[0] ?? g;
     if (!cap) return;
-    const mem = ((s.memory ??= {})[me] ??= {});
+    const mem = ((s.memory ??= {})[pid] ??= {});
     for (const c of Object.values(s.cells)) {
       const d = (Math.abs(c.hex.q - cap.hex.q) + Math.abs(c.hex.r - cap.hex.r) + Math.abs(c.hex.q + c.hex.r - cap.hex.q - cap.hex.r)) / 2;
       if (d <= 7) mem[`${c.hex.q},${c.hex.r}`] = { turn: s.turn, owner: c.owner };

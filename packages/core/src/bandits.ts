@@ -7,6 +7,7 @@ import { type Hex, distance, key } from './hex.ts';
 import { findPath, isCapital, move, reachable, seizeByBandits } from './map.ts';
 import { power } from './aiwar.ts';
 import { int } from './rng.ts';
+import { difficultyOf } from './difficulty.ts';
 import { type Army, type GameState, type General, PASSABLE, makeGeneral, say } from './state.ts';
 
 export const BANDITS = 'bandits';
@@ -51,7 +52,8 @@ const spawnNear = (s: GameState, pid: string): boolean => {
   if (!spots.length) spots = ring(4, 9);
   if (!spots.length) return false;
   const c = spots[int(s.rng, 0, spots.length - 1)];
-  const g = makeGeneral(s, BANDITS, { ...c.hex }, s.settings.elo, banditArmy(s), 'Bandits');
+  // на «Новичке» и шайки слабее — как и генералы ИИ
+  const g = makeGeneral(s, BANDITS, { ...c.hex }, s.settings.elo + Math.min(0, difficultyOf(s).elo), banditArmy(s), 'Bandits');
   g.moveLeft = 0;
   g.camp = { ...c.hex };
   return true;

@@ -69,9 +69,9 @@ export const openDynasty = (app: HTMLElement, back: () => void): void => {
       const skins = UNLOCKS.filter((u) => u.kind === 'skin'), boards = UNLOCKS.filter((u) => u.kind === 'board');
       body = `<h2>Pieces</h2><div class="looks">${skins.map((u) => (SKINS[u.id] ? skinTile(u.id, d.skin === u.id, u) : '')).join('')}</div>
         <h2>Board</h2><div class="looks">${boards.map((u) => boardTile(u.id, d.board === u.id, u)).join('')}</div>
-        <h2>Start bonus</h2><div class="bonuses">${bonusOptions().map((b) => `<button class="bonus ${d.bonus === b.id ? 'on' : ''}" data-bonus="${b.id}" ${b.open ? '' : 'disabled'}>
-          <b>${esc(b.name)}</b><small>${b.open ? esc(b.text) : `level ${b.level}`}</small></button>`).join('')}</div>
-        <p class="muted">The start bonus works in every new campaign until you change it.</p>`;
+        <h2>Start bonuses</h2><div class="bonuses">${bonusOptions().filter((b) => b.id !== 'none').map((b) => `<div class="bonus ${b.open ? '' : 'off'}">
+          <b>${esc(b.name)}</b><small>${b.open ? esc(b.text) : `level ${b.level}`}</small></div>`).join('')}</div>
+        <p class="muted">With random start bonuses on, every ruler begins with one at random — you, from the ones your dynasty has unlocked.</p>`;
     } else {
       body = `<div class="achlist">${ACHIEVEMENTS.map((a) => {
         const at = d.achievements[a.id];
@@ -93,7 +93,6 @@ export const openDynasty = (app: HTMLElement, back: () => void): void => {
     };
     for (const b of app.querySelectorAll<HTMLButtonElement>('[data-skin]')) b.onclick = () => { tap(); choose('skin', b.dataset.skin!); draw(); };
     for (const b of app.querySelectorAll<HTMLButtonElement>('[data-board]')) b.onclick = () => { tap(); choose('board', b.dataset.board!); draw(); };
-    for (const b of app.querySelectorAll<HTMLButtonElement>('[data-bonus]')) b.onclick = () => { tap(); choose('bonus', b.dataset.bonus!); draw(); };
     app.querySelector<HTMLButtonElement>('#dynback')!.onclick = () => { tap(); back(); };
   };
   draw();

@@ -245,3 +245,14 @@ test('разбойник: шайка без города, вечная войн�
   endTurn(s);
   assert.equal(s.players.p1.alive, false);
 });
+
+test('сложность: ИИ на «Гроссмейстере» богаче и сильнее, на «Новичке» — слабее; игроку ничего', () => {
+  const mk = (difficulty: 'novice' | 'grandmaster') => newGame(europeMap(), [{ nation: 'spain' }, { nation: 'italy', ai: { aggression: 'moderate', ruler: 'x' } }], { elo: 1200, seed: 4, difficulty });
+  const gm = mk('grandmaster'), nv = mk('novice');
+  const ai = (s: GameState) => Object.values(s.generals).find((g) => g.owner === 'p2')!;
+  const me = (s: GameState) => Object.values(s.generals).find((g) => g.owner === 'p1')!;
+  assert.ok(gm.players.p2.res.wood > nv.players.p2.res.wood);
+  assert.ok(ai(gm).elo > ai(nv).elo && armyValue(ai(gm).army) > armyValue(ai(nv).army));
+  assert.equal(me(gm).elo, me(nv).elo);
+  assert.deepEqual(gm.players.p1.res, nv.players.p1.res);
+});

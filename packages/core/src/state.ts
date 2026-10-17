@@ -5,6 +5,7 @@ import { STARTING_ARMY, START_RESOURCES, TOWN_HALL_RADIUS, type Piece, type Res,
 import { type Hex, distance, key, range } from './hex.ts';
 import { NATIONS, NEUTRAL_CITIES, commanderNames, type Aggression, type NationId } from './nations.ts';
 import { type Rng, int } from './rng.ts';
+import { DIFFICULTY, type Difficulty } from './difficulty.ts';
 
 export type Terrain = 'field' | 'forest' | 'deposit' | 'tundra' | 'desert' | 'mountain' | 'water';
 export const PASSABLE: Record<Terrain, boolean> = {
@@ -114,6 +115,8 @@ export type Player = {
   stance?: 'expand' | 'defend' | 'economy';
   starterKnight: boolean; // стартовый конь жив и всегда возвращается после боя
   alive: boolean;
+  /** Случайный стартовый бонус партии (название — для показа). */
+  startBonus?: string;
   /** Разбойник: начинает шайкой без города, его не признают — вечная война со всеми, переговоров нет. */
   outlaw?: boolean;
 };
@@ -125,7 +128,7 @@ export type GameState = {
   turn: number; // номер круга, с 1
   current: number; // индекс игрока в order, который сейчас ходит
   order: string[];
-  settings: { elo: number; map?: string };
+  settings: { elo: number; map?: string; difficulty?: import('./difficulty.ts').Difficulty };
   cells: Record<string, Cell>;
   halls: Record<string, TownHall>;
   players: Record<string, Player>;
@@ -161,6 +164,8 @@ export type MapDef = {
   spawns: Hex[];
   /** Нация каждой стартовой точки — только для старых карт; на новых нации расставляются случайно (randomSpawns). */
   spawnNations?: NationId[];
+  /** Сколько игроков вмещает карта (если стартовых мест больше — лишние остаются вольными столицами). */
+  maxPlayers?: number;
   /** Расставить игроков по стартовым точкам случайно (по зерну партии). */
   randomSpawns?: boolean;
   /** Места нейтральных городов. Если задан neutralCount — это кандидаты, из которых в партии появляется часть. */
@@ -226,9 +231,10 @@ export const generalName = (s: GameState, owner: string): string => {
 
 /** Потолок ELO генерала: не выше стартового ELO партии + 200, как ни копи бонусы (Тактика, победы, академия, события). */
 export const ELO_CAP_BONUS = 200;
-export const eloCap = (s: GameState): number => s.settings.elo + ELO_CAP_BONUS;
+export const eloCap = (s: GameState, pid?: string): number =>
+  s.settings.elo + ELO_CAP_BONUS + (pid && s.players[pid]?.ai ? DIFFICULTY[s.settings.difficulty ?? 'club'].elo : 0); // у ИИ потолок сдвинут сложностью
 /** Прибавить генералу ELO с учётом потолка. */
-export const addElo = (s: GameState, g: General, d: number): void => { g.elo = Math.max(g.elo, Math.min(eloCap(s), g.elo + d)); };
+export const addElo = (s: GameState, g: General, d: number): void => { g.elo = Math.max(g.elo, Math.min(eloCap(s, g.owner), g.elo + d)); };
 
 export const makeGeneral = (s: GameState, owner: string, hex: Hex, elo: number, army: Army, name: string): General => {
   const g: General = {
@@ -296,10 +302,10 @@ const pickNeutrals = (s: GameState, map: MapDef, cities: Hex[]): Hex[] => {
   return chosen;
 };
 
-export const createGame = (map: MapDef, setup: PlayerSetup[], opts: { elo: number; seed: number; bandits?: number }): GameState => {
+export const createGame = (map: MapDef, setup: PlayerSetup[], opts: { elo: number; seed: number; bandits?: number; difficulty?: Difficulty }): GameState => {
   if (setup.length < 2 || setup.length > map.spawns.length) throw new Error(`players: 2..${map.spawns.length}`);
   const s: GameState = {
-    rng: { seed: opts.seed }, turn: 1, current: 0, order: [], settings: { elo: opts.elo, map: map.name },
+    rng: { seed: opts.seed }, turn: 1, current: 0, order: [], settings: { elo: opts.elo, map: map.name, ...(opts.difficulty ? { difficulty: opts.difficulty } : {}) },
     cells: {}, halls: {}, players: {}, generals: {}, neutrals: {}, nextId: 1, log: [],
   };
   for (const c of map.cells) s.cells[key(c)] = { hex: { q: c.q, r: c.r }, terrain: c.terrain };
@@ -340,6 +346,17 @@ export const createGame = (map: MapDef, setup: PlayerSetup[], opts: { elo: numbe
   pickNeutrals(s, map, [...spawnOf.filter((i) => i >= 0).map((i) => map.spawns[i]), ...freeSpawns]).forEach((h) => addNeutral(s, h, map.names?.[key(h)]));
   recomputeTerritory(s);
   setup.forEach((p, i) => { if (p.outlaw) placeOutlaw(s, `p${i + 1}`, opts.elo); });
+  // сложность: ИИ получает стартовые ресурсы, фигуры и ELO
+  const lvl = DIFFICULTY[opts.difficulty ?? 'club'];
+  for (const p of Object.values(s.players)) {
+    if (!p.ai) continue;
+    for (const r of ['wood', 'food', 'gold'] as const) p.res[r] += lvl.res[r];
+    for (const g of Object.values(s.generals)) {
+      if (g.owner !== p.id) continue;
+      g.elo = Math.max(600, g.elo + lvl.elo);
+      for (const [k, n] of Object.entries(lvl.army) as [Piece, number][]) g.army[k] += n;
+    }
+  }
   return s;
 };
 
@@ -355,7 +372,7 @@ const placeOutlaw = (s: GameState, id: string, elo: number): void => {
   if (!spots.length) spots = land;
   spots.sort((a, b) => distance(a.hex, { q: Math.round(mid.q), r: Math.round(mid.r) }) - distance(b.hex, { q: Math.round(mid.q), r: Math.round(mid.r) }));
   const c = spots[int(s.rng, 0, Math.min(spots.length, 12) - 1)];
-  const band = makeGeneral(s, id, { ...c.hex }, elo, { ...emptyArmy(), p: 6, n: 2, b: 1, r: 1 }, generalName(s, id));
+  const band = makeGeneral(s, id, { ...c.hex }, elo, { ...STARTING_ARMY }, generalName(s, id)); // как у обычного игрока
   band.traits = ['plunderer'];
   s.players[id].res.gold += 60;
 };
