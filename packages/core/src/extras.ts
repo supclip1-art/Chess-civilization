@@ -10,7 +10,10 @@ import {
   barracksCost, buildTurns, canAfford, cityUpgradeCost, citySlots, freeBuilders, playerHalls, resourceCost, tavernCost,
 } from './economy.ts';
 import { type Hex, key, neighbors } from './hex.ts';
-import { type GameState, type Job, PASSABLE, say } from './state.ts';
+import { type GameState, type Job, PASSABLE, hasWonder, say } from './state.ts';
+import { WONDER, WONDERS, type WonderId } from './wonders.ts';
+import { NATIONS } from './nations.ts';
+import { allied, atWar, isNation } from './diplomacy.ts';
 
 type Result = { ok: true } | { ok: false; reason: string };
 const ok: Result = { ok: true };
@@ -61,17 +64,19 @@ export const upgradeMarket = (s: GameState, pid: string, hallId: string): Result
 };
 /** Уровень лучшего рынка страны (0 — рынка нет). */
 export const marketLevel = (s: GameState, pid: string): number => Math.max(0, ...playerHalls(s, pid).map((h) => h.market ?? 0));
+/** Курс обмена: по лучшему рынку; «Шёлковый путь» — 1:1 даже без рынка. 0 — торговать негде. */
+export const tradeRate = (s: GameState, pid: string): number => hasWonder(s, pid, 'silkroad') ? 1 : marketLevel(s, pid) ? MARKET[marketLevel(s, pid) as 1 | 2 | 3].rate : 0;
 /** Ценность ресурса при обмене: золото втрое дороже дерева и еды. */
 const VALUE: Record<keyof Res, number> = { wood: 1, food: 1, gold: 3 };
 /** Сколько получишь за amount ресурса from в ресурсе to по курсу лучшего рынка. */
 export const tradeQuote = (s: GameState, pid: string, from: keyof Res, to: keyof Res, amount: number): number => {
-  const lv = marketLevel(s, pid);
-  if (!lv || from === to || amount <= 0) return 0;
-  return Math.floor((amount * VALUE[from]) / VALUE[to] / MARKET[lv as 1 | 2 | 3].rate);
+  const rate = tradeRate(s, pid);
+  if (!rate || from === to || amount <= 0) return 0;
+  return Math.floor((amount * VALUE[from]) / VALUE[to] / rate);
 };
 export const trade = (s: GameState, pid: string, from: keyof Res, to: keyof Res, amount: number): Result => {
   const p = s.players[pid];
-  if (!marketLevel(s, pid)) return no('build a market first');
+  if (!tradeRate(s, pid)) return no('build a market first');
   if (amount <= 0 || p.res[from] < amount) return no(`not enough ${from}`);
   const get = tradeQuote(s, pid, from, to, amount);
   if (get <= 0) return no('too little to trade');
@@ -156,6 +161,8 @@ const jobCost = (s: GameState, pid: string, j: Job): Res | null => {
     case 'market': return MARKET[j.level as 1 | 2 | 3].cost;
     case 'tower': return TOWER.cost;
     case 'road': return res(j.cells.filter((k) => !s.cells[k]?.road).length * ROAD_WOOD_PER_CELL, 0);
+    case 'wonder': return WONDER.cost;
+    case 'searoute': return res(j.cells.length * 6, 0);
     default: return null; // основание города отменить нельзя
   }
 };
@@ -168,11 +175,60 @@ export const cancelJob = (s: GameState, pid: string, index: number): Result => {
   if (!c) return no('this cannot be cancelled');
   p.jobs.splice(index, 1);
   refund(p.res, c);
+  if (j.kind === 'wonder') { p.wonder = undefined; for (const o of Object.values(s.players)) if (o.id !== pid && o.alive) say(s, `${NATIONS[p.nation].name} stopped building the ${WONDERS[j.wonder as WonderId].name}`, o.id); }
   if ((j.kind === 'resource' && j.level === 1) || j.kind === 'tower') s.cells[key(j.hex)].reserved = false;
   say(s, 'construction cancelled, resources returned', pid);
   return ok;
 };
-/** Снести ресурсное здание или башню: место освобождается, ресурсы не возвращаются. */
+/** Во что обошлось здание на клетке (все уровни) или башня — для сноса и грабежа. */
+export const buildingValue = (s: GameState, hex: Hex): Res => {
+  const c = s.cells[key(hex)];
+  if (c?.tower) return { ...TOWER.cost };
+  if (!c?.building || !c.owner || !s.players[c.owner]) return res(0, 0);
+  const t = res(0, 0);
+  for (let l = 1; l <= c.building.level; l++) refund(t, resourceCost(s, c.owner, c.building.kind, l));
+  return t;
+};
+const part = (r: Res, k: number): Res => res(Math.floor(r.wood * k), Math.floor(r.food * k), Math.floor(r.gold * k));
+/** Сколько вернёт снос (половина вложенного). */
+export const demolishRefund = (s: GameState, hex: Hex): Res => part(buildingValue(s, hex), 1 / 2);
+/** Сколько даст грабёж (треть вложенного). */
+export const pillageLoot = (s: GameState, hex: Hex): Res => part(buildingValue(s, hex), 1 / 3);
+
+/** Может ли генерал разграбить клетку, на которой стоит: чужое здание или башня страны, с которой война. */
+export const canPillage = (s: GameState, gid: string): Result => {
+  const g = s.generals[gid];
+  if (!g || g.settler || g.camp) return no('only a general can pillage');
+  const c = s.cells[key(g.hex)];
+  if (!c || (!c.building && !c.tower) || !c.owner || c.owner === g.owner) return no('nothing to pillage here');
+  if (!s.players[c.owner]) return no('nothing to pillage here');
+  if (allied(s, g.owner, c.owner) || (isNation(s, g.owner) && isNation(s, c.owner) && !atWar(s, g.owner, c.owner))) return no('you are not at war');
+  if (g.attacked) return no('the general has already fought this turn');
+  return ok;
+};
+/** Разграбить: здание разрушено, треть его цены достаётся грабителю, генерал на этот ход больше не ходит и не бьётся. */
+export const pillage = (s: GameState, gid: string): Result => {
+  const r = canPillage(s, gid);
+  if (!r.ok) return r;
+  const g = s.generals[gid];
+  const c = s.cells[key(g.hex)];
+  const loot = pillageLoot(s, g.hex);
+  const victim = c.owner!;
+  const what = c.building ? c.building.kind : 'watchtower';
+  const vp = s.players[victim];
+  vp.jobs = vp.jobs.filter((j) => !((j.kind === 'resource' || j.kind === 'tower') && key(j.hex) === key(g.hex)));
+  vp.queue = vp.queue?.filter((q) => !(q.job.kind === 'resource' && key(q.job.hex) === key(g.hex)));
+  c.building = undefined; c.tower = undefined; c.reserved = false;
+  const gp = s.players[g.owner];
+  if (gp) refund(gp.res, loot);
+  g.moveLeft = 0; g.attacked = true;
+  const txt = [loot.wood && `${loot.wood} wood`, loot.food && `${loot.food} food`, loot.gold && `${loot.gold} gold`].filter(Boolean).join(', ') || 'nothing';
+  say(s, `${g.name} pillaged a ${what}: ${txt}`, g.owner);
+  say(s, `the enemy pillaged our ${what}`, victim);
+  return ok;
+};
+
+/** Снести ресурсное здание или башню: место освобождается, возвращается половина вложенного. */
 export const demolish = (s: GameState, pid: string, hex: Hex): Result => {
   const p = s.players[pid];
   const c = s.cells[key(hex)];
@@ -180,8 +236,9 @@ export const demolish = (s: GameState, pid: string, hex: Hex): Result => {
   if (p.jobs.some((j) => (j.kind === 'resource' || j.kind === 'tower') && key(j.hex) === key(hex))) return no('cancel the work on it first');
   p.queue = p.queue?.filter((q) => !(q.job.kind === 'resource' && key(q.job.hex) === key(hex)));
   const what = c.building ? c.building.kind : 'watchtower';
+  refund(p.res, demolishRefund(s, hex));
   c.building = undefined;
   c.tower = undefined;
-  say(s, `${what} demolished`, pid);
+  say(s, `${what} demolished, half of the cost returned`, pid);
   return ok;
 };

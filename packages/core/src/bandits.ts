@@ -7,7 +7,7 @@ import { type Hex, distance, key } from './hex.ts';
 import { findPath, isCapital, move, reachable, seizeByBandits } from './map.ts';
 import { power } from './aiwar.ts';
 import { int } from './rng.ts';
-import { type Army, type GameState, type General, PASSABLE, makeGeneral, say } from './state.ts';
+import { type Army, type GameState, type General, PASSABLE, hasWonder, makeGeneral, say } from './state.ts';
 
 export const BANDITS = 'bandits';
 export const BANDIT_COUNT = 6; // устарело: шаек столько, сколько игроков
@@ -40,7 +40,7 @@ export const bandits = (s: GameState): General[] => Object.values(s.generals).fi
 /** Поставить шайку недалеко от столицы игрока: на ничейной земле в 5–7 клетках от неё, не вплотную к чужим городам и армиям. */
 const spawnNear = (s: GameState, pid: string): boolean => {
   const cap = Object.values(s.halls).filter((h) => h.owner === pid).sort((a, b) => a.order - b.order)[0];
-  if (!cap || s.cells[key(cap.hex)]?.noBandits) return false; // у столицы в «тихом» крае шаек нет
+  if (!cap || s.cells[key(cap.hex)]?.noBandits || hasWonder(s, pid, 'greatwall')) return false; // «Великая стена» — шаек у границ нет // у столицы в «тихом» крае шаек нет
   const halls = Object.values(s.halls);
   // обычно 5–7 клеток от столицы; если там места нет (полуостров, соседи вплотную) — чуть шире
   const ring = (lo: number, hi: number) => Object.values(s.cells).filter((c) => PASSABLE[c.terrain] && !c.owner && !c.noBandits
@@ -89,7 +89,7 @@ const banditSieges = (s: GameState, b: General): boolean => {
   if (!h) return false;
   const defended = Object.values(s.generals).some((x) => x.owner === h.owner && key(x.hex) === key(h.hex) && armyValue(x.army) > 0);
   if (distance(b.hex, h.hex) > 1 || defended) { h.siege = undefined; if (defended) say(s, `the bandit siege of ${h.name} is lifted`, h.owner); return false; }
-  const hold = (isCapital(s, h) ? 1 : 0) + (h.walls ? 1 : 0); // столица — ход, стены — ещё ход
+  const hold = (isCapital(s, h) ? 1 : 0) + (h.walls ? 1 : 0) + (hasWonder(s, h.owner, 'greatwall') ? 1 : 0); // столица — ход, стены — ещё ход
   if (s.turn >= h.siege!.since + Math.max(1, hold)) seizeByBandits(s, b.id, h.id);
   return true; // осаждает — стоит на месте
 };

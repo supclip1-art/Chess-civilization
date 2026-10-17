@@ -84,7 +84,7 @@ const dynastyBlock = (x: CampaignXp): string => {
     ${items.length ? `<p style="margin-top:6px">Unlocked: ${items.map((u) => esc(u.name)).join(', ')}</p>` : ''}</div>`;
 };
 
-export const showSummary = (app: HTMLElement, s: GameState, me: string, how: 'victory' | 'defeat' | 'end', xp?: CampaignXp): Promise<void> =>
+export const showSummary = (app: HTMLElement, s: GameState, me: string, how: 'victory' | 'defeat' | 'end', xp?: CampaignXp, custom?: { head: string; sub: string }): Promise<void> =>
   new Promise((resolve) => {
     const hist = s.history ?? [];
     const last = (id: string) => [...hist].reverse().find((h) => h.p[id])?.p[id];
@@ -100,9 +100,9 @@ export const showSummary = (app: HTMLElement, s: GameState, me: string, how: 'vi
       points: hist.filter((h) => h.p[id]).map((h) => ({ turn: h.turn, v: h.p[id][k] })),
     })).filter((x) => x.points.length);
     const myPlace = rows.findIndex((r) => r.id === me) + 1;
-    const head = how === 'victory' ? 'Victory' : how === 'defeat' ? 'Defeat' : 'Campaign over';
-    const sub = how === 'victory' ? `You are the last nation standing on turn ${s.turn}.`
-      : how === 'defeat' ? `Your last city fell on turn ${s.turn}.` : `Ended on turn ${s.turn}. Your nation placed ${myPlace} of ${rows.length}.`;
+    const head = custom?.head ?? (how === 'victory' ? 'Victory' : how === 'defeat' ? 'Defeat' : 'Campaign over');
+    const sub = custom?.sub ?? (how === 'victory' ? `You are the last nation standing on turn ${s.turn}.`
+      : how === 'defeat' ? `Your last city fell on turn ${s.turn}.` : `Ended on turn ${s.turn}. Your nation placed ${myPlace} of ${rows.length}.`);
     const el = document.createElement('div');
     el.className = 'summary';
     el.innerHTML = `<div class="sumbox">

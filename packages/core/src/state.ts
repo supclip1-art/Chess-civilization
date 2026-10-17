@@ -93,7 +93,9 @@ export type Job =
   | { kind: 'walls'; hallId: string; level: number; finish: number }
   | { kind: 'market'; hallId: string; level: number; finish: number }
   | { kind: 'tower'; hex: Hex; finish: number }
-  | { kind: 'road'; hallId: string; to: string; cells: string[]; finish: number };
+  | { kind: 'road'; hallId: string; to: string; cells: string[]; finish: number }
+  | { kind: 'wonder'; hallId: string; wonder: string; finish: number }
+  | { kind: 'searoute'; hallId: string; to: string; cells: string[]; finish: number };
 
 export type Player = {
   id: string;
@@ -127,6 +129,8 @@ export type Player = {
   startBonus?: string;
   /** Разбойник: начинает шайкой без города, его не признают — вечная война со всеми, переговоров нет. */
   outlaw?: boolean;
+  /** Чудо света, которое игрок строит или построил в этой партии (одно за партию). */
+  wonder?: string;
 };
 
 export type Neutral = { id: string; hallId: string };
@@ -156,6 +160,21 @@ export type GameState = {
   /** Дипломатия: отношения пар стран («a|b») и агрессия каждой страны. */
   diplo?: Record<string, import('./diplomacy.ts').Relation>;
   aggro?: Record<string, number>;
+  /** Чудеса света: в каком городе стоит каждое построенное (бонус — у хозяина города) и кто построил. */
+  wonders?: Record<string, { hallId: string; builder: string; turn: number }>;
+  /** Морские торговые пути между двумя городами: работают, пока оба города у одного хозяина. */
+  seaRoutes?: { a: string; b: string; cells: string[] }[];
+  /** Глава кампании «Хроники империй»: номер, столица игрока, соперники и их столицы, что уже случилось. */
+  campaign?: {
+    chapter: number; capital?: string; rivals: string[]; caps: string[];
+    lostCity?: boolean; lostBattle?: boolean; genLost?: boolean; gold1000?: boolean; wins?: number; briefed?: boolean;
+  };
+};
+
+/** Есть ли у игрока это чудо света (стоит в его городе). */
+export const hasWonder = (s: GameState, pid: string, id: string): boolean => {
+  const w = s.wonders?.[id];
+  return !!w && s.halls[w.hallId]?.owner === pid;
 };
 
 export type CellMemory = {

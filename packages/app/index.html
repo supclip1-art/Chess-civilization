@@ -95,6 +95,19 @@
     .brow .upb { border-radius: 12px; border: 0; color: #3a2604; background: linear-gradient(#f6cf6a, #d89e2c); box-shadow: 0 2px 0 #a8741a; }
     .brow .upb small .amt { color: #3a2604; }
     button.tradeb { width: auto; padding: 4px 10px; font-size: 12.5px; border-radius: 999px; margin-top: 2px; }
+    .wcoll { display: grid; gap: 8px; margin-bottom: 10px; } .wcoll .wicons { display: flex; flex-wrap: wrap; gap: 6px; }
+    .wcoll .wico { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; font: bold 18px serif; color: #8a8478; background: rgba(140,130,110,.18); border: 1px dashed rgba(140,130,110,.5); }
+    .wcoll .wico.on { color: #5a3608; border: 0; background: radial-gradient(circle at 35% 30%, #fff3b8, #e6b84a 60%, #a8741c); box-shadow: 0 0 8px rgba(255,210,110,.5), inset 0 0 0 1.5px #6b4510; }
+    .wlist { display: grid; gap: 8px; margin: 10px 0; max-height: 56vh; overflow-y: auto; }
+    .wrow { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; padding: 9px 10px; border-radius: 16px; background: var(--card); border: 1px solid var(--line); }
+    .wrow.done { opacity: .78; }
+    .wrow .wico { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; font: bold 21px serif; color: #5a3608;
+      background: radial-gradient(circle at 35% 30%, #fff3b8, #e6b84a 60%, #a8741c); box-shadow: 0 0 10px rgba(255,210,110,.45), inset 0 0 0 1.5px #6b4510; }
+    .wrow .wtext { display: grid; gap: 2px; min-width: 0; } .wrow .wtext small { color: var(--muted); font-size: 12.5px; }
+    .wrow .wst { font-size: 11.5px; font-weight: 700; justify-self: start; padding: 1px 8px; border-radius: 99px; }
+    .wst.free { background: rgba(90,170,90,.18); color: #3f8a3f; } .wst.race { background: rgba(230,150,40,.2); color: #b06c10; } .wst.built { background: rgba(120,120,120,.18); color: var(--muted); }
+    .wrow .upb { border-radius: 12px; border: 0; color: #3a2604; background: linear-gradient(#f6cf6a, #d89e2c); box-shadow: 0 2px 0 #a8741a; padding: 6px 10px; display: grid; font-weight: 700; }
+    .wrow .upb small { font-weight: 500; font-size: 11px; } .wrow .upb small .amt { color: #3a2604; } .wrow .upb.off { filter: grayscale(.7); opacity: .6; }
     .tradepick { display: flex; align-items: center; justify-content: space-between; gap: 10px; } .tradepick .seg button { width: auto; padding: 7px 12px; display: inline-flex; align-items: center; gap: 4px; }
     button.act.danger b { color: var(--bad); }
     .autorow .seg button.on { background: linear-gradient(#f6cf6a, #d89e2c); color: #3a2604; font-weight: 700; }
@@ -178,6 +191,35 @@
     button.playbtn:active { transform: translateY(3px); box-shadow: 0 1px 0 #94650f, 0 6px 12px rgba(160, 105, 20, .3); }
     button.playbtn.second { font-size: 16px; color: var(--ink); background: var(--card); border: 1.5px solid var(--line); box-shadow: none; }
     .dynnext { font-size: 12px; color: #6b5320; }
+    /* ---------- кампания ---------- */
+    button.campbtn { display: flex; align-items: center; gap: 12px; text-align: left; padding: 12px 14px; border-radius: 18px; color: #f8ecd0;
+      background: linear-gradient(135deg, #5b2a1a, #8a4a22 55%, #b07a2e); border: 1px solid #6e3a16; box-shadow: 0 8px 18px rgba(90, 40, 10, .3); }
+    .campbtn .campico { font-size: 28px; } .campbtn b { display: block; font-family: 'Cinzel', Georgia, serif; font-size: 16px; letter-spacing: .03em; }
+    .campbtn small { color: #f3d9a8; font-size: 12.5px; }
+    .camphero { margin: -16px -16px 6px; padding: calc(24px + env(safe-area-inset-top, 0px)) 18px 18px; color: #fbf1da; border-radius: 0 0 26px 26px;
+      background: radial-gradient(120% 90% at 20% 0%, #a86a2c, #5a2716 60%, #2c140c); }
+    .camphero p { margin: 6px 0 10px; color: #f1dcb4; }
+    .camptotal { display: inline-flex; align-items: center; gap: 8px; padding: 5px 12px; border-radius: 999px; background: rgba(0,0,0,.28); }
+    .campnote { margin: 4px 2px 10px; font-size: 12.5px; }
+    .cstars { display: inline-flex; gap: 1px; font-size: 18px; } .cstars i { font-style: normal; color: rgba(150,130,100,.35); } .cstars i.on { color: #f2b632; text-shadow: 0 0 6px rgba(242,182,50,.55); }
+    .chapters { display: flex; flex-direction: column; gap: 12px; padding-bottom: 24px; }
+    .chapter { position: relative; padding: 14px; border-radius: 20px; background: linear-gradient(170deg, #fbf3df, #f0e1bd); color: #3b2a12;
+      border: 1px solid #d8bd85; box-shadow: 0 8px 20px rgba(80, 50, 10, .14); }
+    .chapter.locked { filter: grayscale(.85); opacity: .6; }
+    .chapter.done { border-color: #d6a838; }
+    .chtop { display: flex; align-items: center; gap: 10px; }
+    .chnum { flex: none; width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; font: 700 15px 'Cinzel', Georgia, serif; color: #fff4d6; background: linear-gradient(#a8721f, #6d4410); }
+    .chflag svg { display: block; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,.3); }
+    .chname { flex: 1; min-width: 0; display: grid; } .chname b { font: 700 16px 'Cinzel', Georgia, serif; } .chname small { color: #7a5f35; font-size: 12px; }
+    .chstory { margin: 10px 0 8px; font-style: italic; line-height: 1.4; }
+    .chfacts { display: grid; gap: 3px; font-size: 12.5px; color: #5d4522; margin-bottom: 10px; }
+    .chapter .chplay { width: 100%; padding: 11px; font-size: 16px; }
+    .chlock { margin: 0; font-weight: 600; color: #7a5f35; }
+    .goalpill { position: absolute; left: 50%; bottom: 44px; transform: translateX(-50%); z-index: 2; width: auto; max-width: calc(100% - 20px); display: inline-flex; align-items: center; gap: 6px;
+      padding: 6px 12px; border-radius: 999px; font-size: 12.5px; font-weight: 600; color: #3b2a12; background: linear-gradient(#fbf0d4, #ecd39c); border: 1px solid #c99b2e; box-shadow: 0 2px 6px rgba(0,0,0,.3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .goalpill[hidden] { display: none; }
+    .brief { text-align: center; } .brief .chflag { display: inline-block; margin: 4px 0; } .brief .chstory { color: var(--ink); }
+    .brief .goalbox { padding: 10px; border-radius: 14px; background: color-mix(in srgb, #f2b632 18%, var(--card)); text-align: left; display: grid; gap: 4px; font-size: 13.5px; }
     .homerow { display: flex; gap: 10px; } .homerow button { flex: 1; }
     .settings { display: flex; flex-direction: column; gap: 10px; padding: 14px; border-radius: 16px; background: var(--card); }
     .settings[hidden] { display: none; }
@@ -315,6 +357,7 @@
     .techinfo p { margin: 4px 0; }
     .dialog h3 { margin: 18px 0 4px; font-size: 16px; }
     .tacbtn { position: absolute; left: 10px; top: calc(10px + var(--toast, 0px)); transition: top .2s; z-index: 2; width: auto; display: inline-flex; align-items: center; gap: 7px; padding: 4px 12px 4px 4px; border-radius: 999px; background: var(--card); color: var(--ink); border: 1px solid rgba(0,0,0,.15); box-shadow: 0 1px 4px rgba(0,0,0,.25); font-size: 13px; font-weight: 400; }
+    .tacbtn[hidden] { display: none; }
     .rmenu { position: absolute; right: 10px; top: calc(10px + var(--toast, 0px)); transition: top .2s; z-index: 2; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
     .rmenu .tacbtn { position: static; padding: 6px 12px 6px 9px; }
     .kingico { font-size: 18px; line-height: 1; font-family: "Segoe UI Symbol", "Noto Sans Symbols 2", system-ui, sans-serif; }

@@ -6,7 +6,8 @@ import { type Result, armyValue, hasTech, playerHalls } from './economy.ts';
 import { type Hex, distance, key, neighbors, range } from './hex.ts';
 import { NATIONS } from './nations.ts';
 import { addAggression, atWar, mayEnter, relation } from './diplomacy.ts';
-import { type GameState, type General, type TownHall, PASSABLE, newId, recomputeTerritory, say } from './state.ts';
+import { type GameState, type General, type TownHall, PASSABLE, hasWonder, newId, recomputeTerritory, say } from './state.ts';
+import { wonderSight } from './wonders.ts';
 
 const no = (reason: string): Result => ({ ok: false, reason });
 
@@ -220,6 +221,7 @@ export const visible = (s: GameState, pid: string): Set<string> => {
   const far = s.players[pid] && hasTech(s, pid, 'cartography') ? FOG_RADIUS + 1 : FOG_RADIUS; // «Картография»
   for (const g of Object.values(s.generals)) if (mine(g.owner)) add(g.hex, g.owner === pid ? far : FOG_RADIUS);
   for (const c of Object.values(s.cells)) if (c.tower && mine(c.owner)) add(c.hex, 4); // сторожевые башни
+  if (s.players[pid]) wonderSight(s, pid, seen); // «Оракул» и «Маяк»
   return seen;
 };
 
@@ -359,7 +361,7 @@ export const resolveSieges = (s: GameState, pid: string): void => {
     const g = h.siege && s.generals[h.siege.by];
     if (!h.siege || !g || g.owner !== pid) continue;
     const castles = s.players[h.owner] && NATIONS[s.players[h.owner].nation].mods.castles;
-    if (s.turn < h.siege.since + SIEGE_TURNS + (castles ? 1 : 0) + (h.walls ? 1 : 0)) continue; // японский замок и стены — на ход дольше
+    if (s.turn < h.siege.since + SIEGE_TURNS + (castles ? 1 : 0) + (h.walls ? 1 : 0) + (hasWonder(s, h.owner, 'greatwall') ? 1 : 0)) continue; // японский замок и стены — на ход дольше
     if (distance(g.hex, h.hex) > 1) { h.siege = undefined; continue; }
     if (defenderAt(s, h.hex, pid)) { h.siege = undefined; say(s, `reinforcements lifted the siege`, pid); continue; }
     capture(s, h.id, pid);
@@ -385,8 +387,9 @@ export const capture = (s: GameState, hallId: string, newOwner: string): void =>
   }
   const oldPlayer = s.players[old];
   if (oldPlayer) {
+    if (oldPlayer.jobs.some((j) => j.kind === 'wonder' && j.hallId === hallId)) oldPlayer.wonder = undefined; // стройка чуда потеряна вместе со столицей
     oldPlayer.jobs = oldPlayer.jobs.filter((j) =>
-      !(j.kind === 'resource' && s.cells[key(j.hex)]?.hall === hallId) && !((j.kind === 'townhall' || j.kind === 'barracks' || j.kind === 'tavern') && j.hallId === hallId));
+      !((j.kind === 'resource' || j.kind === 'tower') && s.cells[key(j.hex)]?.hall === hallId) && !('hallId' in j && j.hallId === hallId) && !(j.kind === 'searoute' && j.to === hallId));
     oldPlayer.queue = oldPlayer.queue?.filter((q) => !('hallId' in q.job && q.job.hallId === hallId));
   }
   if (!keep) {

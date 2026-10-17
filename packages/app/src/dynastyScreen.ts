@@ -4,6 +4,7 @@ import {
   ACHIEVEMENTS, BOARDS, SKINS, TITLES, UNLOCKS, choose, dynasty, levelOf, unlocked, xpFor, type Ach, type Unlock,
 } from './dynasty.ts';
 import { pieceHtml } from './game/pieces.ts';
+import { WONDERS, WONDER_IDS } from '../../core/src/index.ts';
 import { chestOpen } from './audio.ts';
 import { setBack, tap } from './tg.ts';
 
@@ -73,9 +74,14 @@ export const openDynasty = (app: HTMLElement, back: () => void): void => {
           <b>${esc(b.name)}</b><small>${b.open ? esc(b.text) : `level ${b.level}`}</small></div>`).join('')}</div>
         <p class="muted">With random start bonuses on, every ruler begins with one at random — you, from the ones your dynasty has unlocked.</p>`;
     } else {
-      body = `<div class="achlist">${ACHIEVEMENTS.map((a) => {
+      const built = d.wonders ?? [];
+      const wonders = `<div class="card wcoll"><b>Wonders built by your house · ${Math.min(7, built.length)} / 7</b>
+        <div class="wicons">${WONDER_IDS.map((id) => `<span class="wico ${built.includes(id) ? 'on' : ''}" title="${WONDERS[id].name}">${WONDERS[id].icon}</span>`).join('')}</div>
+        <small class="muted">Each wonder you complete in any game is recorded here. Seven different ones earn «Seven wonders».</small></div>`;
+      body = wonders + `<div class="achlist">${ACHIEVEMENTS.map((a) => {
         const at = d.achievements[a.id];
-        return `<div class="ach ${at ? 'got' : ''}"><span class="medal">${at ? '★' : '☆'}</span><div><b>${esc(a.name)}</b><small>${esc(a.text)}</small></div><span class="axp">+${a.xp}</span></div>`;
+        const hide = a.secret && !at; // тайное достижение — пока не получено, не раскрываем
+        return `<div class="ach ${at ? 'got' : ''}"><span class="medal">${at ? '★' : '☆'}</span><div><b>${hide ? 'Secret achievement' : esc(a.name)}</b><small>${hide ? 'Complete the last chapter of the Chronicles to find out' : esc(a.text)}</small></div><span class="axp">+${a.xp}</span></div>`;
       }).join('')}</div>`;
     }
     app.innerHTML = `

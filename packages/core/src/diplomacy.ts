@@ -17,7 +17,7 @@ export type Stance = 'peace' | 'war' | 'alliance';
 export type Relation = { state: Stance; since: number; warFrom?: number; noWarUntil?: number };
 
 const pairKey = (a: string, b: string) => (a < b ? `${a}|${b}` : `${b}|${a}`);
-const isNation = (s: GameState, id: string) => !!s.players[id];
+export const isNation = (s: GameState, id: string) => !!s.players[id];
 const nameOf = (s: GameState, id: string) => (s.players[id] ? NATIONS[s.players[id].nation].name : id === 'bandits' ? 'Bandits' : 'a free city');
 
 export const TRUCE_TURNS = 5;

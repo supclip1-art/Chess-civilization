@@ -8,6 +8,8 @@ import { openGame } from './game/screen.ts';
 import { flagSvg } from './game/flags.ts';
 import { drawHero } from './hero.ts';
 import { openSetup } from './setup.ts';
+import { openCampaign } from './campaignScreen.ts';
+import { totalStars } from './campaign.ts';
 import { resetTutorial } from './game/tutorial.ts';
 import { clearSave, loadGame, saveGame } from './game/save.ts';
 import { MUSIC_STYLES, audioPrefs, initAudio, page, setMusic, setMusicStyle, setSfx } from './audio.ts';
@@ -50,6 +52,7 @@ const home = () => {
       ${name ? `<p class="hello">Welcome, ${esc(name)}.</p>` : ''}
       ${cont}
       <button id="new" class="playbtn ${alive ? 'second' : ''}">New game</button>
+      <button id="campaign" class="campbtn"><span class="campico">📜</span><span><b>Chronicles of Empires</b><small>Campaign · ${totalStars()} / 24 ★</small></span></button>
       ${dynastyButton()}
       <div class="homerow"><button id="howto" class="ghost">How to play</button><button id="settingsbtn" class="ghost" aria-expanded="false">Settings</button></div>
       <div class="settings" id="settings" hidden>
@@ -74,6 +77,7 @@ const home = () => {
   on('settingsbtn', () => showSettings(!settingsOpen));
   on('continue', () => { if (saved) { onHome = false; openGame(app, saved, home); } });
   on('new', () => { page(); setup(); });
+  on('campaign', () => { page(); onHome = false; openCampaign(app, home, (s) => { clearSave(); saveGame(s); openGame(app, s, home); }); });
   on('dynasty', () => { page(); onHome = false; openDynasty(app, home); });
   for (const b of document.querySelectorAll<HTMLButtonElement>('#langs button')) b.addEventListener('click', () => { if (b.dataset.l !== lang) setLang(b.dataset.l as typeof lang); });
   on('music', () => { setMusic(!audioPrefs().music); home(); });

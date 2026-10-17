@@ -2,7 +2,7 @@
 // генералы, туман войны, подсветка хода. Камера: перетаскивание и щипок для масштаба.
 
 import { VARIANTS, tileSprite } from './tiles.ts';
-import { type GameState, type Hex, type Job, key, neighbors } from '../../../core/src/index.ts';
+import { type GameState, type Hex, type Job, type WonderId, WONDERS, key, neighbors } from '../../../core/src/index.ts';
 
 export const PLAYER_COLORS = ['#2f6fd6', '#d64a3c', '#e0a020', '#8a52d6', '#1f9e86', '#d65f9c', '#6b8f2a', '#c76a1f'];
 export const NEUTRAL_COLOR = '#8c8a84';
@@ -64,6 +64,33 @@ export class MapView {
   }
 
   get size(): number { return this.base * this.zoom; }
+
+  /** Значок чуда света у города: золотой медальон с символом чуда. */
+  private wonderBadge(x: number, y: number, r: number, icon: string): void {
+    const c = this.ctx;
+    c.save();
+    c.shadowColor = 'rgba(255,215,120,.9)'; c.shadowBlur = r * 0.9;
+    const g = c.createRadialGradient(x - r * 0.3, y - r * 0.3, r * 0.1, x, y, r);
+    g.addColorStop(0, '#fff3b8'); g.addColorStop(0.6, '#e6b84a'); g.addColorStop(1, '#a8741c');
+    c.fillStyle = g; c.beginPath(); c.arc(x, y, r, 0, Math.PI * 2); c.fill();
+    c.shadowBlur = 0; c.strokeStyle = '#6b4510'; c.lineWidth = Math.max(1, r * 0.14); c.stroke();
+    c.fillStyle = '#5a3608'; c.font = `bold ${Math.round(r * 1.25)}px serif`; c.textAlign = 'center'; c.textBaseline = 'middle';
+    c.fillText(icon, x, y + r * 0.06);
+    c.restore();
+  }
+
+  /** Торговый кораблик на морском пути. */
+  private ship(x: number, y: number, s: number, right: boolean): void {
+    const c = this.ctx;
+    c.save(); c.translate(x, y); if (!right) c.scale(-1, 1);
+    c.fillStyle = 'rgba(0,0,0,.25)'; c.beginPath(); c.ellipse(0, s * 0.35, s * 0.6, s * 0.12, 0, 0, Math.PI * 2); c.fill();
+    c.fillStyle = '#7a4a22'; c.beginPath(); c.moveTo(-s * 0.55, s * 0.05); c.lineTo(s * 0.6, s * 0.05); c.lineTo(s * 0.38, s * 0.32); c.lineTo(-s * 0.4, s * 0.32); c.closePath(); c.fill();
+    c.strokeStyle = '#4a2a10'; c.lineWidth = Math.max(1, s * 0.05); c.stroke();
+    c.fillStyle = '#5a3a1a'; c.fillRect(-s * 0.03, -s * 0.6, s * 0.06, s * 0.65);
+    c.fillStyle = '#fbf3dc'; c.beginPath(); c.moveTo(s * 0.03, -s * 0.58); c.quadraticCurveTo(s * 0.45, -s * 0.3, s * 0.03, 0); c.closePath(); c.fill();
+    c.beginPath(); c.moveTo(-s * 0.03, -s * 0.5); c.quadraticCurveTo(-s * 0.36, -s * 0.25, -s * 0.03, -s * 0.02); c.closePath(); c.fill();
+    c.restore();
+  }
 
   toPixel(h: Hex): { x: number; y: number } {
     return { x: this.ox + this.size * SQRT3 * (h.q + h.r / 2), y: this.oy + this.size * 1.5 * h.r };
@@ -225,24 +252,58 @@ export class MapView {
         c.beginPath(); c.moveTo(ax, ay); c.lineTo(bx, by); c.stroke();
       });
     }
-    // дороги: полоса утоптанной земли между соседними клетками с дорогой (там, где игрок знает местность)
-    c.lineCap = 'round';
+    // дороги: мощёная камнем серая лента. В каждой клетке дорога идёт плавной дугой от середины одного края
+    // к середине другого через центр клетки, поэтому на поворотах нет углов
+    const road = new Path2D();
+    let anyRoad = false;
     for (const cell of onScreen) {
       if (!cell.road || !known.has(key(cell.hex))) continue;
-      const { x, y } = this.toPixel(cell.hex);
-      for (const d of dirs.slice(0, 3)) {
-        const n = s.cells[key({ q: cell.hex.q + d.q, r: cell.hex.r + d.r })];
-        if (!n?.road || !known.has(key(n.hex))) continue;
-        const b = this.toPixel(n.hex);
-        c.strokeStyle = 'rgba(70,45,20,.55)'; c.lineWidth = Math.max(3, S * 0.34);
-        c.beginPath(); c.moveTo(x, y); c.lineTo(b.x, b.y); c.stroke();
-        c.strokeStyle = '#d8b67a'; c.lineWidth = Math.max(2, S * 0.22);
-        c.beginPath(); c.moveTo(x, y); c.lineTo(b.x, b.y); c.stroke();
-        c.strokeStyle = 'rgba(255,240,200,.6)'; c.lineWidth = Math.max(1, S * 0.05); c.setLineDash([S * 0.18, S * 0.22]);
-        c.beginPath(); c.moveTo(x, y); c.lineTo(b.x, b.y); c.stroke(); c.setLineDash([]);
+      const o = this.toPixel(cell.hex);
+      const ends = dirs.map((d) => s.cells[key({ q: cell.hex.q + d.q, r: cell.hex.r + d.r })])
+        .filter((n) => n?.road && known.has(key(n.hex)))
+        .map((n) => { const b = this.toPixel(n!.hex); return { x: (o.x + b.x) / 2, y: (o.y + b.y) / 2 }; });
+      anyRoad = true;
+      if (ends.length === 0) { road.moveTo(o.x - S * 0.2, o.y); road.lineTo(o.x + S * 0.2, o.y); continue; }
+      if (ends.length === 1) { road.moveTo(o.x, o.y); road.lineTo(ends[0].x, ends[0].y); continue; }
+      for (let i = 0; i < ends.length; i++) for (let j = i + 1; j < ends.length; j++) {
+        road.moveTo(ends[i].x, ends[i].y); road.quadraticCurveTo(o.x, o.y, ends[j].x, ends[j].y);
+      }
+    }
+    if (anyRoad) {
+      c.save();
+      c.lineCap = 'round'; c.lineJoin = 'round';
+      c.strokeStyle = 'rgba(25,27,30,.5)'; c.lineWidth = Math.max(4, S * 0.42); c.stroke(road); // тень и бордюр
+      c.strokeStyle = '#7d8187'; c.lineWidth = Math.max(3, S * 0.34); c.stroke(road); // швы между камнями
+      // булыжники: круглые камни в шахматном порядке, светлые и чуть темнее
+      c.strokeStyle = '#b3b6ba'; c.lineWidth = Math.max(2, S * 0.17); c.setLineDash([0.01, S * 0.15]); c.stroke(road);
+      c.strokeStyle = '#a2a5aa'; c.lineWidth = Math.max(1.5, S * 0.12); c.lineDashOffset = S * 0.075; c.stroke(road);
+      c.strokeStyle = 'rgba(235,238,242,.5)'; c.lineWidth = Math.max(1, S * 0.05); c.lineDashOffset = S * 0.02; c.stroke(road); // блики
+      c.restore();
+    }
+    // морские торговые пути: пунктир по воде от города к городу, по нему плывёт кораблик
+    for (const r of s.seaRoutes ?? []) {
+      const ha = s.halls[r.a], hb = s.halls[r.b];
+      if (!ha || !hb || !r.cells.some((k) => known.has(k))) continue;
+      const pts = [this.toPixel(ha.hex), ...r.cells.map((k) => { const [q, rr] = k.split(',').map(Number); return this.toPixel({ q, r: rr }); }), this.toPixel(hb.hex)];
+      const live = ha.owner === hb.owner;
+      const path = new Path2D();
+      path.moveTo(pts[0].x, pts[0].y);
+      for (let i = 1; i < pts.length - 1; i++) path.quadraticCurveTo(pts[i].x, pts[i].y, (pts[i].x + pts[i + 1].x) / 2, (pts[i].y + pts[i + 1].y) / 2);
+      path.lineTo(pts[pts.length - 1].x, pts[pts.length - 1].y);
+      c.save(); c.lineCap = 'round';
+      c.strokeStyle = 'rgba(10,40,70,.35)'; c.lineWidth = Math.max(3, S * 0.16); c.stroke(path);
+      c.strokeStyle = live ? 'rgba(255,248,225,.9)' : 'rgba(255,255,255,.35)'; c.lineWidth = Math.max(1.5, S * 0.07);
+      c.setLineDash([S * 0.18, S * 0.16]); c.lineDashOffset = live ? -this.time / 90 : 0; c.stroke(path);
+      c.restore();
+      if (live && pts.length > 2) { // кораблик ходит туда и обратно
+        const span = pts.length - 1, ph = (this.time / 1600) % (2 * span), at = ph < span ? ph : 2 * span - ph;
+        const i = Math.min(span - 1, Math.floor(at)), f = at - i;
+        const x = pts[i].x + (pts[i + 1].x - pts[i].x) * f, y = pts[i].y + (pts[i + 1].y - pts[i].y) * f;
+        this.ship(x, y, S * 0.34, ph < span ? pts[i + 1].x >= pts[i].x : pts[i + 1].x < pts[i].x);
       }
     }
     // 3. здания и ратуши
+    const wonderAt = new Map(Object.entries(s.wonders ?? {}).map(([id, w]) => [w.hallId, id]));
     for (const cell of cells) {
       const v = known.get(key(cell.hex));
       if (!v) continue;
@@ -257,6 +318,9 @@ export class MapView {
         c.setLineDash([]); c.restore();
       }
       if (v.hall) this.hall(x, y, S, ownerColor(s, v.hall.owner)!, v.hall.level, !!v.hall.siege);
+      const hid = v.hall ? hallAt.get(key(cell.hex))?.id : undefined;
+      const wid = hid ? wonderAt.get(hid) : undefined;
+      if (wid) this.wonderBadge(x - S * 0.58, y + S * 0.02, Math.max(7, S * 0.24), WONDERS[wid as WonderId].icon);
     }
     // часы над стройками игрока: идёт стройка (белые) или ждёт в очереди (серые)
     for (const [k, queued] of clocks) {

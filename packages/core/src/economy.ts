@@ -2,6 +2,7 @@
 // доход, содержание и голод.
 
 import { completeExtra } from './extras.ts';
+import { colossusGold, completeSeaRoute, completeWonder, seaRoutesGold } from './wonders.ts';
 import {
   ARMY_MOVE, ARMY_MOVE_MARCH, TECHS, type TechId, ARMY_UPKEEP_RATE, BARRACKS, BUILDING_SLOTS, CITY_WOOD, BUILDER_HIRE_FOOD, BUILDER_UPKEEP_FOOD, BUILD_TURNS, ELO_PER_RESEARCH,
   GENERAL_UPKEEP_FOOD, MAX_RESOURCE_LEVEL, PAWNS_REQUIRED, PIECE_PRICE, RESEARCH, RESOURCE_COST, RESOURCE_OF, TRAIN_GOLD_PER_STEP,
@@ -12,7 +13,7 @@ import { type Hex, key, neighbors } from './hex.ts';
 import { freeCellNear } from './map.ts';
 import { NATIONS, type Mods } from './nations.ts';
 import {
-  BUILDING_TERRAIN, PASSABLE, makeGeneral, type Army, type Cell, type GameState, type General, type Job, type Player, cityName, newId, recomputeTerritory, say, addElo, eloCap,
+  BUILDING_TERRAIN, PASSABLE, makeGeneral, type Army, type Cell, type GameState, type General, type Job, type Player, type TownHall, cityName, hasWonder, newId, recomputeTerritory, say, addElo, eloCap,
 } from './state.ts';
 
 export type Result = { ok: true } | { ok: false; reason: string };
@@ -57,7 +58,7 @@ export const resourceCost = (s: GameState, pid: string, kind: ResourceBuilding, 
   return scale(RESOURCE_COST[kind][level - 1], (m.buildCostMult?.[kind] ?? 1) * (level >= 2 ? m.upgradeCostMult?.[kind] ?? 1 : 1));
 };
 export const barracksCost = (s: GameState, pid: string, level: 1 | 2 | 3 | 4 | 5): Res => scale(BARRACKS[level].cost, mods(s, pid).barracksCostMult ?? 1);
-export const researchCost = (s: GameState, pid: string, step: number): Res => scale(RESEARCH[step].cost, mods(s, pid).researchCostMult ?? 1);
+export const researchCost = (s: GameState, pid: string, step: number): Res => scale(RESEARCH[step].cost, (mods(s, pid).researchCostMult ?? 1) * (hasWonder(s, pid, 'library') ? 0.7 : 1));
 export const researchTurns = (s: GameState, pid: string, step: number): number => Math.max(1, RESEARCH[step].turns - (mods(s, pid).researchTurnsMinus ?? 0));
 export const piecePrice = (s: GameState, pid: string, piece: Piece): number => {
   const base = mods(s, pid).piecePrice?.[piece] ?? PIECE_PRICE[piece];
@@ -80,7 +81,7 @@ export const buildingOutput = (s: GameState, pid: string, cell: Cell): Res => {
 
 /** Цена улучшения города до уровня level с учётом бонуса нации. */
 export const cityUpgradeCost = (s: GameState, pid: string, level: 2 | 3): Res =>
-  scale(TOWN_HALL_UPGRADE[level].cost, 1 - (mods(s, pid).upgradeDiscount ?? 0));
+  scale(TOWN_HALL_UPGRADE[level].cost, (1 - (mods(s, pid).upgradeDiscount ?? 0)) * (hasWonder(s, pid, 'gardens') ? 0.75 : 1)); // «Висячие сады»
 /** Цена таверны уровня level с учётом бонуса нации. */
 export const tavernCost = (s: GameState, pid: string, level: 1 | 2 | 3 | 4): Res =>
   scale(TAVERN[level].cost, 1 - (mods(s, pid).upgradeDiscount ?? 0));
@@ -90,6 +91,8 @@ export const tavernCost = (s: GameState, pid: string, level: 1 | 2 | 3 | 4): Res
 /** Стройки, которые занимают строителя (основание ратуши ведёт генерал, а не строитель). */
 /** Строители у каждого города свои (по умолчанию один). */
 export const hallBuilders = (h: { builders?: number }): number => h.builders ?? 1;
+/** Сколько строителей реально работает в городе: свои плюс один от «Пирамид». */
+export const workBuilders = (s: GameState, h: TownHall): number => hallBuilders(h) + (hasWonder(s, h.owner, 'pyramids') ? 1 : 0);
 
 /** Город, чей строитель занят этой стройкой (основание города ведёт поселенец — строитель не нужен). */
 export const jobHall = (s: GameState, j: Job): string | undefined =>
@@ -101,8 +104,8 @@ export const busyBuilders = (s: GameState, pid: string, hallId: string): number 
 /** Город, где сейчас нельзя строить (карантин, недовольство после бунта). */
 export const halted = (s: GameState, h: { haltUntil?: number }): boolean => (h.haltUntil ?? 0) > s.turn;
 export const freeBuilders = (s: GameState, pid: string, hallId?: string): number => {
-  if (hallId) { const h = s.halls[hallId]; return h && h.owner === pid && !halted(s, h) ? hallBuilders(h) - busyBuilders(s, pid, hallId) : 0; }
-  return playerHalls(s, pid).filter((h) => !halted(s, h)).reduce((n, h) => n + Math.max(0, hallBuilders(h) - busyBuilders(s, pid, h.id)), 0);
+  if (hallId) { const h = s.halls[hallId]; return h && h.owner === pid && !halted(s, h) ? workBuilders(s, h) - busyBuilders(s, pid, hallId) : 0; }
+  return playerHalls(s, pid).filter((h) => !halted(s, h)).reduce((n, h) => n + Math.max(0, workBuilders(s, h) - busyBuilders(s, pid, h.id)), 0);
 };
 const noBuilder = (s: GameState, hallId?: string) => {
   const h = hallId ? s.halls[hallId] : undefined;
@@ -298,7 +301,7 @@ export const startTech = (s: GameState, pid: string, id: TechId): Result => {
   return ok;
 };
 /** Цена технологии с бонусом нации (Корея). */
-export const techCost = (s: GameState, pid: string, id: TechId): Res => scale(TECHS[id].cost, mods(s, pid).researchCostMult ?? 1);
+export const techCost = (s: GameState, pid: string, id: TechId): Res => scale(TECHS[id].cost, (mods(s, pid).researchCostMult ?? 1) * (hasWonder(s, pid, 'library') ? 0.7 : 1)); // «Великая библиотека»
 
 /** Сколько ступеней «Тактики» генерал может догнать в «Военной академии» и почём. */
 export const trainingFor = (s: GameState, gid: string): { steps: number; gold: number } => {
@@ -455,6 +458,9 @@ export const income = (s: GameState, pid: string): Res => {
   inc.wood += CITY_WOOD * playerHalls(s, pid).length; // базовый доход города
   const perCity = mods(s, pid).goldPerCity ?? 0;
   if (perCity) inc.gold += perCity * Math.max(0, playerHalls(s, pid).length - 1);
+  inc.gold += colossusGold(s, pid) + seaRoutesGold(s, pid); // «Колосс» и морские торговые пути
+  if (hasWonder(s, pid, 'gardens')) inc.food = Math.round(inc.food * 1.2); // «Висячие сады»
+  if (hasWonder(s, pid, 'silkroad')) inc.gold = Math.round(inc.gold * 1.1); // «Шёлковый путь»
   return inc;
 };
 
@@ -525,6 +531,8 @@ export const completeJobs = (s: GameState, pid: string): void => {
       }
     } else if (j.kind === 'barracks') { const h = s.halls[j.hallId]; if (h?.owner === pid) { h.barracks = j.level; say(s, `barracks level ${j.level} ready in ${h.name}`, pid); } }
     else if (j.kind === 'tavern') { const h = s.halls[j.hallId]; if (h?.owner === pid) { h.tavern = j.level; say(s, `tavern level ${j.level} ready in ${h.name}`, pid); } }
+    else if (j.kind === 'wonder') completeWonder(s, pid, j);
+    else if (j.kind === 'searoute') completeSeaRoute(s, pid, j);
     else completeExtra(s, pid, j);
   }
   const r = p.research.active;

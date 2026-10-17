@@ -6,7 +6,7 @@ import { flagSvg } from './flags.ts';
 import { portraitSvg } from './portraits.ts';
 import { startTutorial } from './tutorial.ts';
 import {
-  canAfford, armyValue, WALLS, MARKET, TOWER, TOWER_TERRAIN, ROAD_WOOD_PER_CELL, ROAD_MAX, marketLevel, tradeQuote, trade, buildWalls, upgradeMarket, buildTower, roadPath, roadCost, buildRoad, cancelJob, demolish, isOutlaw, setAuto, autoDevelop, type AutoFocus,   BARRACKS, BUILD_TURNS, BUILDING_TERRAIN, GENERAL_HIRE_GOLD, HIRE_LEVEL, NATIONS, PIECE_PRICE, RESEARCH, RESOURCE_COST,
+  canAfford, armyValue, WALLS, MARKET, TOWER, TOWER_TERRAIN, ROAD_WOOD_PER_CELL, ROAD_MAX, marketLevel, tradeQuote, trade, buildWalls, upgradeMarket, buildTower, roadPath, roadCost, buildRoad, cancelJob, WONDERS, WONDER, WONDER_IDS, wonderStatus, wonderBlocked, startWonder, type WonderId, seaRouteTargets, buildSeaRoute, seaRouteGold, coastal, routesOf, activeSeaRoutes, SEA_ROUTE, tradeRate, isCapital, demolish, demolishRefund, canPillage, pillage, pillageLoot, isOutlaw, setAuto, autoDevelop, type AutoFocus,   BARRACKS, BUILD_TURNS, BUILDING_TERRAIN, GENERAL_HIRE_GOLD, HIRE_LEVEL, NATIONS, PIECE_PRICE, RESEARCH, RESOURCE_COST,
   RESOURCE_OUTPUT, TAVERN, TOWN_HALL_FOUND, TOWN_HALL_UPGRADE, BUILDER_HIRE_FOOD, BUILDER_UPKEEP_FOOD, GENERAL_UPKEEP_FOOD, cityUpgradeCost, tavernCost, PIECES, barracksCost, buildOptions, buildingOutput, maxLevelAt, piecePrice, researchCost, researchTurns, resourceCost, aiEconomyTurn, aiMilitaryTurn, attack, endTurn, say,
   foundTownHall, freeBuilders, hireBuilder, hireGeneral, hirePiece, income, key, maxBuilders, move, playerGenerals,
   reachable, recruitElo, resolveBattle, startResearch, upgrade, upgradeBarracks, upgradeTavern, upgradeTownHall,
@@ -20,6 +20,7 @@ import { showSummary } from './summary.ts';
 import { techNodes, techTreeHtml } from './techtree.ts';
 import { setBack, tap } from '../tg.ts';
 import { checkAchievements, finishCampaign, level, type BattleNote } from '../dynasty.ts';
+import { chapterOf, completeChapter, note, progress, verdict } from '../campaign.ts';
 import { announce } from '../dynastyScreen.ts';
 
 const ME = 'p1';
@@ -93,7 +94,7 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
       <button id="end" class="end">End turn</button>
     </header>
     <div class="mapwrap"><canvas id="map"></canvas><button id="tactics" class="tacbtn"></button>
-      <div class="soon" id="soon" hidden></div><button id="vassalsbtn" class="tacbtn vasbtn" hidden></button><div class="rmenu"><button id="gensbtn" class="tacbtn"></button><button id="citiesbtn" class="tacbtn"></button></div></div>
+      <div class="soon" id="soon" hidden></div><button class="goalpill" id="goalpill" hidden></button><button id="vassalsbtn" class="tacbtn vasbtn" hidden></button><div class="rmenu"><button id="gensbtn" class="tacbtn"></button><button id="citiesbtn" class="tacbtn"></button></div></div>
     <section class="sheet" id="sheet"></section>
     <div class="toast" id="toast" hidden></div><div class="aibanner" id="aibanner" hidden></div>
     <div class="veil" id="veil" hidden><div class="veilcard"><p class="veilturn" id="veilturn"></p><div class="veilflags" id="veilflags"></div><p id="veilmsg"></p><div class="veilbar"><i></i></div></div></div>
@@ -148,6 +149,7 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
   const jobName = (j: Job) => j.kind === 'resource' ? `${BUILDING_NAME[j.building]}${j.level > 1 ? ` → ${j.level}` : ''}`
     : j.kind === 'found' ? 'New city' : j.kind === 'tower' ? 'Watchtower' : j.kind === 'townhall' ? `${s.halls[j.hallId]?.name ?? 'City'} → ${j.level}`
       : j.kind === 'road' ? `Road to ${s.halls[j.to]?.name ?? 'a city'}` : j.kind === 'walls' ? 'Walls'
+        : j.kind === 'wonder' ? WONDERS[j.wonder as WonderId].name : j.kind === 'searoute' ? `Sea route to ${s.halls[j.to]?.name ?? 'a city'}`
         : `${s.halls[j.hallId]?.name ?? 'City'}: ${j.kind} → ${j.level}`;
 
   // ---------- верхняя панель ----------
@@ -376,6 +378,7 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
           <div class="acts">${o?.kind === 'goto' ? btn(`order:${g.id}:none`, 'Stop the march', 'the general waits for orders') : ''}
             ${btn(`order:${g.id}:${o?.kind === 'explore' ? 'none' : 'explore'}`, o?.kind === 'explore' ? 'Stop exploring' : 'Explore', o?.kind === 'explore' ? 'back to your orders' : 'walks into the unknown by himself every turn')}
             ${btn(`order:${g.id}:${o?.kind === 'hold' ? 'none' : 'hold'}`, o?.kind === 'hold' ? 'Stop holding' : 'Hold position', o?.kind === 'hold' ? 'remind me about him again' : 'stays put; no end-of-turn reminder')}</div>
+          ${canPillage(s, g.id).ok ? `<div class="acts">${btn(`pillage:${g.id}`, `Pillage the ${cell.building ? BUILDING_NAME[cell.building.kind].toLowerCase() : 'watchtower'}`, `destroys it · you get ${cost(pillageLoot(s, g.hex))} · ends his turn`).replace('class="act"', 'class="act danger"')}</div>` : ''}
           ${(() => { // «Военная академия»: догнать новые ступени «Тактики»
             const tr = trainingFor(s, g.id);
             if (!tr.steps) return '';
@@ -424,7 +427,7 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
       parts.push(`<div class="citycard">
         <div class="cityrow">${crest(hall.level)}<div class="cityname"><b>${esc(hall.name)}</b>
           <span class="citystats">${pips(sl.used, sl.max)}<span>${sl.used}/${sl.max} slots</span><span class="hammers">${'⚒'.repeat(free)}<i>${'⚒'.repeat(Math.max(0, total - free))}</i></span><span>${free}/${total} builders</span></span></div></div>
-        <div class="chips">${hb ? `<span class="chip ok">⚔ Barracks ${hb}</span>` : '<span class="chip">⚔ no barracks</span>'}${ht ? `<span class="chip ok">♚ Tavern ${ht}</span>` : '<span class="chip">♚ no tavern</span>'}${hall.walls ? '<span class="chip ok">▥ Walls</span>' : ''}${hall.market ? `<span class="chip ok">⚖ Market ${hall.market}</span>` : ''}${hall.auto ? `<span class="chip gold">⟳ Auto: ${hall.auto === 'army' ? 'army' : 'economy'}</span>` : ''}</div>
+        <div class="chips">${hb ? `<span class="chip ok">⚔ Barracks ${hb}</span>` : '<span class="chip">⚔ no barracks</span>'}${ht ? `<span class="chip ok">♚ Tavern ${ht}</span>` : '<span class="chip">♚ no tavern</span>'}${hall.walls ? '<span class="chip ok">▥ Walls</span>' : ''}${hall.market ? `<span class="chip ok">⚖ Market ${hall.market}</span>` : ''}${Object.entries(s.wonders ?? {}).filter(([, w]) => w.hallId === hall.id).map(([id]) => `<span class="chip gold">${WONDERS[id as WonderId].icon} ${WONDERS[id as WonderId].name}</span>`).join('')}${routesOf(s, hall.id).length ? `<span class="chip ok">⛵ Sea routes ${routesOf(s, hall.id).length}</span>` : ''}${hall.auto ? `<span class="chip gold">⟳ Auto: ${hall.auto === 'army' ? 'army' : 'economy'}</span>` : ''}</div>
         <div class="ctiles">
           ${thUp ? tile(`th:${hall.id}`, '🏰', `City → ${hall.level + 1}`, cityUpgradeCost(s, ME, (hall.level + 1) as 2 | 3), ` · ${thUp.turns} turn · ${BUILDING_SLOTS[hall.level]} slots, +1 builder, wider land`) : ''}
           ${nb <= maxBuilders(s, ME, hall.id) ? tile(`builder:${hall.id}`, '⚒', `Hire builder ${nb}`, NATIONS[p.nation].mods.freeBuilderHire ? null : { wood: 0, food: BUILDER_HIRE_FOOD[nb as 2 | 3], gold: 0 }, `${NATIONS[p.nation].mods.freeBuilderHire ? 'free' : ''} · ${NATIONS[p.nation].mods.freeBuilderUpkeep ? 'eats nothing' : `eats ${amount('food', BUILDER_UPKEEP_FOOD)}/turn`}`) : ''}
@@ -432,7 +435,9 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
           ${tavNext ? tile(`tavern:${hall.id}`, '♚', ht ? `Tavern → ${ht + 1}` : 'Build tavern', tavernCost(s, ME, (ht + 1) as 1 | 2 | 3 | 4), ` · ${tavNext.turns} turn${tavNext.turns > 1 ? 's' : ''} · up to ${Math.min(5, ht + 2)} generals`) : ''}
           ${!hall.walls && !p.jobs.some((j) => j.kind === 'walls' && j.hallId === hall.id) ? tile(`walls:${hall.id}`, '▥', 'Build walls', WALLS.cost, ` · ${WALLS.turns} turns · sieges last a turn longer`) : ''}
           ${(hall.market ?? 0) < 3 && !p.jobs.some((j) => j.kind === 'market' && j.hallId === hall.id) ? tile(`market:${hall.id}`, '⚖', hall.market ? `Market → ${hall.market + 1}` : 'Build a market', MARKET[((hall.market ?? 0) + 1) as 1 | 2 | 3].cost, ` · trade at ${MARKET[((hall.market ?? 0) + 1) as 1 | 2 | 3].rate}:1`) : ''}
-          ${marketLevel(s, ME) ? tile('trade', '⇄', 'Trade at the market', null, `rate ${MARKET[marketLevel(s, ME) as 1 | 2 | 3].rate}:1 · gold is worth 3`) : ''}
+          ${tradeRate(s, ME) ? tile('trade', '⇄', 'Trade at the market', null, `rate ${tradeRate(s, ME)}:1 · gold is worth 3`) : ''}
+          ${isCapital(s, hall) ? tile('wonders', '✦', p.wonder && !s.wonders?.[p.wonder] ? `Building: ${WONDERS[p.wonder as WonderId].name}` : 'Wonders of the world', null, p.wonder && s.wonders?.[p.wonder]?.builder === ME ? ' · your wonder is built' : p.wonder ? ` · see the race` : ` · one per game · capital level ${WONDER.cityLevel}`) : ''}
+          ${coastal(s, hall.id) && playerHalls(s, ME).some((h) => h.id !== hall.id && coastal(s, h.id)) ? tile(`searoute:${hall.id}`, '⛵', 'Sea trade route', null, ` · to another coastal city · gold every turn`) : ''}
           ${playerHalls(s, ME).length > 1 ? tile(`road:${hall.id}`, '⛙', 'Build a road', null, `to another city · ${ROAD_WOOD_PER_CELL} wood per cell · +1 move along it`) : ''}
           ${tile(`settler:${hall.id}`, '⛺', 'Train a settler', settlerCost(s, ME), ` · founds a new city · moves ${armyMove(s, ME)} cells`)}
           ${ht && gCount < generalLimit(s, ME) ? tile(`general:${hall.id}`, '♛', 'Hire a general here', { wood: 0, food: 0, gold: gCost }, ` · ELO ${recruitElo(s, ME)} · eats ${amount('food', GENERAL_UPKEEP_FOOD)}/turn`) : ''}
@@ -458,10 +463,10 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
         const out = RESOURCE_OUTPUT[b.kind];
         parts.push(`<div class="card"><div class="row"><b class="withico">${iconSvg(b.kind, 20)}${BUILDING_NAME[b.kind]} · level ${b.level}</b><span>${(['food', 'wood', 'gold'] as const).filter((r) => buildingOutput(s, ME, cell)[r]).map((r) => `+${amount(r, buildingOutput(s, ME, cell)[r])}`).join(' ')} per turn</span></div>
           ${b.level < top ? `<div class="acts">${(busy ? `<p class="muted withico">${iconSvg('clock', 15)}${job ? `Upgrading to level ${job.level} · ${left(job.finish)}` : 'Upgrade queued — starts when a builder is free'}</p>${qi >= 0 ? btn(`unqueue:${qi}`, 'Cancel the queued upgrade', 'resources are returned') : ''}${job ? btn(`canceljob:${p.jobs.indexOf(job)}`, 'Cancel the upgrade', 'resources are returned') : ''}` : btn(`up:${k}`, `Upgrade → ${b.level + 1}`, `${cost(resourceCost(s, ME, b.kind, b.level + 1))} · ${BUILD_TURNS[b.level]} turn${BUILD_TURNS[b.level] > 1 ? 's' : ''} · +${amount(RES_OF[b.kind], out[b.level] - out[b.level - 1])}/turn`))}</div>` : '<p class="muted">Top level</p>'}
-          ${busy ? '' : `<div class="acts">${btn(`demolish:${k}`, 'Demolish', 'frees the slot; nothing is returned').replace('class="act"', 'class="act danger"')}</div>`}</div>`);
+          ${busy ? '' : `<div class="acts">${btn(`demolish:${k}`, 'Demolish', `frees the slot · returns ${cost(demolishRefund(s, cell.hex))}`).replace('class="act"', 'class="act danger"')}</div>`}</div>`);
       } else if (cell.tower) {
         parts.push(`<div class="card"><div class="row"><b>♜ Watchtower</b><span class="muted">sees ${TOWER.sight} cells around</span></div>
-          <div class="acts">${btn(`demolish:${k}`, 'Demolish', 'frees the slot; nothing is returned').replace('class="act"', 'class="act danger"')}</div></div>`);
+          <div class="acts">${btn(`demolish:${k}`, 'Demolish', `frees the slot · returns ${cost(demolishRefund(s, cell.hex))}`).replace('class="act"', 'class="act danger"')}</div></div>`);
       } else if (cell.reserved) {
         const job = p.jobs.find((j) => (j.kind === 'resource' || j.kind === 'tower') && key(j.hex) === k);
         const qi = (p.queue ?? []).findIndex((q) => q.job.kind === 'resource' && key(q.job.hex) === k);
@@ -504,12 +509,15 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
     else if (a === 'settler') { const r = hireSettler(s, ME, x); act(r); if (r.ok) toast('A settler is ready in the city. He can move next turn.'); }
     else if (a === 'unqueue') act(cancelQueued(s, ME, Number(x)));
     else if (a === 'canceljob') act(cancelJob(s, ME, Number(x)));
-    else if (a === 'demolish') { modal(`<h2>Demolish?</h2><p>The building is torn down and its slot is free again. Nothing is returned.</p><div class="acts">${btn('yes', 'Demolish', '')}${btn('no', 'Keep it', '')}</div>`); const yes = (await ask()) === 'yes'; modal(null); if (yes) act(demolish(s, ME, hex(x))); }
+    else if (a === 'demolish') { modal(`<h2>Demolish?</h2><p>The building is torn down and its slot is free again. Half of what it cost is returned: ${cost(demolishRefund(s, hex(x)))}.</p><div class="acts">${btn('yes', 'Demolish', '')}${btn('no', 'Keep it', '')}</div>`); const yes = (await ask()) === 'yes'; modal(null); if (yes) act(demolish(s, ME, hex(x))); }
+    else if (a === 'pillage') { const r = pillage(s, x); act(r); if (r.ok) chestOpen('common'); }
     else if (a === 'walls') act(buildWalls(s, ME, x));
     else if (a === 'market') act(upgradeMarket(s, ME, x));
     else if (a === 'tower') act(buildTower(s, ME, hex(x)));
     else if (a === 'trade') await tradeMenu();
     else if (a === 'road') await roadMenu(x);
+    else if (a === 'wonders') await wondersMenu();
+    else if (a === 'searoute') await seaMenu(x);
     else if (a === 'move') doMove();
     else if (a === 'goto') {
       const g = s.generals[sel.gid!];
@@ -531,7 +539,7 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
     for (;;) {
       const p = s.players[ME];
       const opts = [10, 50, 100, p.res[from]].filter((n, i, a) => n > 0 && n <= p.res[from] && a.indexOf(n) === i);
-      modal(`<h2>⚖ Market</h2><p class="muted">${MARKET[marketLevel(s, ME) as 1 | 2 | 3].rate}:1 · gold is worth 3 wood or food. A better market gives a better rate.</p>
+      modal(`<h2>⚖ Market</h2><p class="muted">${tradeRate(s, ME)}:1 · gold is worth 3 wood or food. A better market gives a better rate.</p>
         <div class="tradepick"><span>Give</span><div class="seg">${R.map((r) => `<button data-a="from:${r}" class="${r === from ? 'on' : ''}">${iconSvg(r, 16)} ${p.res[r]}</button>`).join('')}</div></div>
         <div class="tradepick"><span>Get</span><div class="seg">${R.map((r) => `<button data-a="to:${r}" class="${r === to ? 'on' : ''}" ${r === from ? 'disabled' : ''}>${iconSvg(r, 16)}</button>`).join('')}</div></div>
         <div class="acts">${opts.map((n) => btn(`deal:${n}`, `${n} → ${tradeQuote(s, ME, from, to, n)}`, `${iconSvg(from, 13)} → ${iconSvg(to, 13)}`)).join('') || '<p class="muted">Nothing to trade.</p>'}${btn('close', 'Close', '')}</div>`);
@@ -551,6 +559,37 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
     const c = await ask();
     modal(null);
     if (c.startsWith('to:')) act(buildRoad(s, ME, hallId, c.slice(3)));
+  };
+
+  /** Чудеса света: что построено, что строится, что можно начать. */
+  const wondersMenu = async () => {
+    for (;;) {
+      const p = s.players[ME];
+      const rows = WONDER_IDS.map((id) => {
+        const w = WONDERS[id], st = wonderStatus(s, id);
+        const who = (pid: string) => pid === ME ? 'you' : esc(ownerName(s, pid));
+        const status = st.built ? `<span class="wst built">${st.built.owner === ME ? 'yours' : `${who(st.built.owner)} · ${esc(s.halls[st.built.hallId]?.name ?? '')}`}</span>`
+          : st.building.length ? `<span class="wst race">building: ${st.building.map(who).join(', ')}</span>` : '<span class="wst free">nobody yet</span>';
+        const why = wonderBlocked(s, ME, id);
+        const can = !st.built && !(p.wonder);
+        return `<div class="wrow ${st.built ? 'done' : ''}"><span class="wico">${w.icon}</span><span class="wtext"><b>${w.name}</b><small>${w.text}</small>${status}</span>
+          ${can ? `<button class="ghost upb ${why ? 'off' : ''}" data-a="wonder:${id}">Build<small>${cost(WONDER.cost)}</small></button>` : ''}</div>`;
+      }).join('');
+      modal(`<h2>✦ Wonders of the world</h2><p class="muted">Each wonder exists once on the map. You can build one per game, in a level ${WONDER.cityLevel} capital, in ${WONDER.turns} turns. Everyone sees who builds what: if a rival finishes first, half of your investment returns. Whoever holds the city holds the wonder.</p>
+        <div class="wlist">${rows}</div><div class="acts">${btn('close', 'Close', '')}</div>`);
+      const c = await ask();
+      if (c.startsWith('wonder:')) { const r = startWonder(s, ME, c.slice(7) as WonderId); if (!r.ok) { toast(r.reason); continue; } tap(); saveGame(s); }
+      modal(null); refresh(); return;
+    }
+  };
+  /** Морской торговый путь из города hallId. */
+  const seaMenu = async (hallId: string) => {
+    const list = seaRouteTargets(s, ME, hallId);
+    modal(`<h2>⛵ Sea route from ${esc(s.halls[hallId].name)}</h2><p class="muted">Two of your coastal cities linked by sea bring gold every turn while both are yours. The farther the voyage, the richer the trade. Up to ${SEA_ROUTE.perCity} routes per city.</p>
+      <div class="acts">${list.map((x) => btn(`to:${x.hallId}`, `To ${esc(s.halls[x.hallId].name)}`, x.blocked ? x.blocked : `${x.cells} sea cells · ${amount('wood', x.cells * SEA_ROUTE.woodPerCell)} · +${amount('gold', seaRouteGold(x.cells))}/turn`).replace('class="act"', `class="act${x.blocked ? ' off' : ''}"`)).join('') || '<p class="muted">None of your other cities can be reached by sea.</p>'}${btn('close', 'Close', '')}</div>`);
+    const c = await ask();
+    modal(null);
+    if (c.startsWith('to:')) act(buildSeaRoute(s, ME, hallId, c.slice(3)));
   };
 
   const construct = async (order: QueueOrder, label: string) => { // label — надпись кнопки
@@ -748,8 +787,12 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
         ${ht < 4 ? up(`tavern:${h.id}`, ht ? `→ ${ht + 1}` : 'Build', tavernCost(s, ME, (ht + 1) as 1 | 2 | 3 | 4), state((j) => j.kind === 'tavern' && j.hallId === h.id)) : '<span class="bstate">top level</span>'}</div>`,
       `<div class="brow"><span class="bico">▥</span><span class="bname"><b>Walls</b> · ${h.walls ? 'built' : 'none'}</span><span class="bout">sieges last a turn longer</span>
         ${h.walls ? '<span class="bstate">✓</span>' : up(`walls:${h.id}`, 'Build', WALLS.cost, state((j) => j.kind === 'walls' && j.hallId === h.id))}</div>`,
-      `<div class="brow"><span class="bico">⚖</span><span class="bname"><b>Market</b> · ${h.market ? `level ${h.market}` : 'none'}</span><span class="bout">${marketLevel(s, ME) ? `<button class="ghost tradeb" data-a="trade">⇄ Trade · ${MARKET[marketLevel(s, ME) as 1 | 2 | 3].rate}:1</button>` : 'trade resources'}</span>
+      `<div class="brow"><span class="bico">⚖</span><span class="bname"><b>Market</b> · ${h.market ? `level ${h.market}` : 'none'}</span><span class="bout">${tradeRate(s, ME) ? `<button class="ghost tradeb" data-a="trade">⇄ Trade · ${tradeRate(s, ME)}:1</button>` : 'trade resources'}</span>
         ${(h.market ?? 0) < 3 ? up(`market:${h.id}`, h.market ? `→ ${h.market + 1}` : 'Build', MARKET[((h.market ?? 0) + 1) as 1 | 2 | 3].cost, state((j) => j.kind === 'market' && j.hallId === h.id)) : '<span class="bstate">top level</span>'}</div>`,
+      ...(isCapital(s, h) ? [`<div class="brow"><span class="bico">✦</span><span class="bname"><b>Wonder of the world</b> · ${Object.entries(s.wonders ?? {}).filter(([, w]) => w.hallId === h.id).map(([id]) => WONDERS[id as WonderId].name).join(', ') || (p.wonder ? `building the ${WONDERS[p.wonder as WonderId].name}` : 'none')}</span><span class="bout">one per game, in the capital</span>
+        <button class="ghost upb" data-a="wonders">All wonders</button></div>`] : []),
+      ...(coastal(s, h.id) ? [`<div class="brow"><span class="bico">⛵</span><span class="bname"><b>Sea routes</b> · ${routesOf(s, h.id).length}/${SEA_ROUTE.perCity}</span><span class="bout">${routesOf(s, h.id).map((r) => `${esc(s.halls[r.a === h.id ? r.b : r.a]?.name ?? '')} +${seaRouteGold(r.cells.length)}`).join(' · ') || 'gold from trade by sea'}</span>
+        ${routesOf(s, h.id).length < SEA_ROUTE.perCity ? `<button class="ghost upb" data-a="searoute:${h.id}">New</button>` : '<span class="bstate">✓</span>'}</div>`] : []),
       ...cells.map((c) => {
         const k = key(c.hex);
         if (!c.building) return `<div class="brow"><span class="bico">${iconSvg('clock', 22)}</span><span class="bname"><b>Construction</b></span><span class="bout">${state((j) => j.kind === 'resource' && key(j.hex) === k) || 'in progress'}</span></div>`;
@@ -906,6 +949,7 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
     modal(null);
     if (iWon && out.chest) await chestScreen(out.chest);
     const left2 = mine ? PIECES.reduce((n, x) => n + mine.army[x], 0) + 1 : 0; // +1 — король
+    note(s, ME, { battle: { won: iWon, lost: out.winner !== null && !iWon, generalLost: !s.generals[mineId] } });
     achieve({ won: iWon, myBefore, foeBefore, myPieces: left2, lost: lost ?? 99, vsBandits, epic: out.chest?.rarity === 'epic' });
   };
 
@@ -1003,9 +1047,52 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
   };
 
   const checkEnd = () => {
+    if (s.campaign) { // глава кампании: своя цель и срок
+      const v = verdict(s, ME);
+      if (v) void finishChapter(v);
+      else goalPill();
+      return;
+    }
     const w = winner(s);
     if (!s.players[ME].alive) void finish('defeat');
     else if (w === ME) void finish('victory');
+  };
+
+  // ---------- кампания «Хроники империй» ----------
+  const goalPill = () => {
+    const el = app.querySelector<HTMLButtonElement>('#goalpill')!;
+    const ch = chapterOf(s);
+    el.hidden = !ch;
+    if (!ch) return;
+    const limit = ch.goal.kind === 'hold' || ch.goal.kind === 'strongest' ? '' : ` · turn ${s.turn}/${ch.limit}`;
+    el.innerHTML = `🎯 ${esc(ch.goalText)} · <b>${esc(progress(s, ME))}</b>${limit}`;
+  };
+  const briefing = async (again = false) => {
+    const ch = chapterOf(s);
+    if (!ch) return;
+    modal(`<div class="brief"><p class="muted">Chapter ${ch.id} · ${esc(ch.era)}</p><h2>${esc(ch.name)}</h2><span class="chflag">${flagSvg(ch.nation, 64)}</span>
+      <p class="chstory">${esc(ch.story)}</p>
+      <div class="goalbox"><span>🎯 <b>${esc(ch.goalText)}</b>${ch.goal.kind === 'hold' || ch.goal.kind === 'strongest' ? '' : ` — by turn ${ch.limit}`}</span>
+        <span>Progress: <b>${esc(progress(s, ME))}</b></span>
+        <span>★ the goal · ★★ ${esc(ch.star2.text)} · ★★★ never lose a city${s.campaign?.lostCity ? ' (already lost)' : ''}</span></div></div>
+      <div class="acts">${btn('close', again ? 'Back to the map' : 'To battle!', '')}${again ? btn('quit', 'Abandon the chapter', 'the game ends without stars') : ''}</div>`);
+    const c = await ask();
+    modal(null);
+    if (!again && s.campaign) { s.campaign.briefed = true; saveGame(s); }
+    if (c === 'quit') void finishChapter('lost');
+  };
+  const finishChapter = async (v: 'won' | 'lost') => {
+    busy = true;
+    modal(null);
+    clearSave();
+    if (s.history?.at(-1)?.turn !== s.turn) recordHistory(s);
+    const ch = chapterOf(s)!;
+    const res = v === 'won' ? completeChapter(s, ME) : null;
+    const xp = finishCampaign(s, ME, 'end', res?.lines ?? []);
+    await showSummary(app, s, ME, 'end', xp, v === 'won'
+      ? { head: `${ch.name}: ${'★'.repeat(res!.stars)}${'☆'.repeat(3 - res!.stars)}`, sub: `Chapter ${ch.id} complete on turn ${s.turn}.${res!.special ? ' A special feat is yours!' : ''}${ch.id < 8 ? ` Chapter ${ch.id + 1} is open.` : ' The Chronicles are complete.'}` }
+      : { head: `${ch.name}: defeat`, sub: s.players[ME].alive ? `The goal was not reached in time (turn ${s.turn}). Try the chapter again.` : `Your realm fell on turn ${s.turn}. Try the chapter again.` });
+    exit();
   };
 
   // ---------- ход ----------
@@ -1228,7 +1315,9 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
     if (capital) view.centerOn(capital.hex); else if (g0) view.centerOn(g0.hex);
     draw();
     checkEnd();
-    void eventCard().then(offerCard).then(annexPrompt);
+    const brief = s.campaign && !s.campaign.briefed ? briefing() : Promise.resolve();
+    void brief.then(eventCard).then(offerCard).then(annexPrompt);
   });
-  (window as unknown as { __cc?: unknown }).__cc = { view, state: s, chest: chestScreen }; // для автотестов в браузере
+  app.querySelector<HTMLButtonElement>('#goalpill')!.onclick = () => { if (!busy) { tap(); void briefing(true); } };
+  (window as unknown as { __cc?: unknown }).__cc = { view, state: s, chest: chestScreen, api: { seaRouteTargets, buildSeaRoute, refresh: () => refresh() } }; // для автотестов в браузере
 };

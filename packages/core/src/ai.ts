@@ -10,6 +10,8 @@ import {
 } from './economy.ts';
 import { key } from './hex.ts';
 import { difficultyOf } from './difficulty.ts';
+import { next } from './rng.ts';
+import { WONDER, WONDER_IDS, buildSeaRoute, seaRouteTargets, startWonder, wonderBlocked, wonderStatus } from './wonders.ts';
 import { BUILDING_TERRAIN, type GameState } from './state.ts';
 
 export const FULL_ARMY: Record<Piece, number> = { p: 8, n: 2, b: 2, r: 2, q: 1 };
@@ -49,6 +51,14 @@ export const aiEconomyTurn = (s: GameState, pid: string): void => {
     const c = cityUpgradeCost(s, pid, (h.level + 1) as 2 | 3);
     if (p.res.wood - c.wood >= reserve.wood && p.res.food - c.food >= reserve.food) upgradeTownHall(s, pid, h.id);
   }
+  // чудо света: богатая столица 3-го уровня берётся за свободное чудо (одно за партию)
+  if (capital.level >= WONDER.cityLevel && !p.wonder && s.turn >= 15) {
+    const free = WONDER_IDS.filter((id) => !wonderBlocked(s, pid, id) && !wonderStatus(s, id).building.length);
+    const c = WONDER.cost;
+    if (free.length && p.res.wood >= c.wood + 80 && p.res.food >= c.food + 60 && p.res.gold >= c.gold + 60) startWonder(s, pid, free[Math.floor(next(s.rng) * free.length)]);
+  }
+  // морской торговый путь между своими приморскими городами, когда дерева с запасом
+  if (p.res.wood >= 220) for (const h of playerHalls(s, pid)) { const t = seaRouteTargets(s, pid, h.id).find((x) => !x.blocked); if (t) { buildSeaRoute(s, pid, h.id, t.hallId); break; } }
   const halls = new Set(Object.values(s.halls).map((h) => key(h.hex)));
   for (let guard = 0; guard < 6 && freeBuilders(s, pid) > 0; guard++) {
     const foodNet = income(s, pid).food - upkeep(s, pid);

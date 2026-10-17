@@ -9,6 +9,7 @@ import { rollEvent } from './events.ts';
 import { checkRebellion, payOverlord } from './vassals.ts';
 import { recordHistory } from './stats.ts';
 import { autoDevelop } from './autodev.ts';
+import { wonderTick } from './wonders.ts';
 import { type GameState, createGame, say } from './state.ts';
 
 export const currentPlayer = (s: GameState): string => s.order[s.current];
@@ -16,6 +17,7 @@ export const currentPlayer = (s: GameState): string => s.order[s.current];
 export const startTurn = (s: GameState): void => {
   const pid = currentPlayer(s);
   completeJobs(s, pid);
+  wonderTick(s, pid);
   if (s.turn > 1) settleEconomy(s, pid); // в 1-й ход доходов ещё нет
   if (s.turn > 1 && s.players[pid]?.overlord) payOverlord(s, pid); // вассал отдаёт четверть дохода
   checkRebellion(s, pid);

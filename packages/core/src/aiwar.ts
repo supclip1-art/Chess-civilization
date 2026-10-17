@@ -14,6 +14,7 @@ import { type Hex, distance, key, neighbors } from './hex.ts';
 import { next } from './rng.ts';
 import { move, reachable } from './map.ts';
 import { aiDiplomacy, atWar } from './diplomacy.ts';
+import { canPillage, pillage } from './extras.ts';
 import { type Aggression } from './nations.ts';
 import { type GameState, type General, PASSABLE } from './state.ts';
 
@@ -291,6 +292,8 @@ export const aiMilitaryTurn = (s: GameState, pid: string): AiAttack[] => {
     // возвращаемся домой набирать армию
     if (capital && distance(g.hex, capital.hex) > 0 && !strongEnough) stepToward(s, g, capital.hex, false);
   }
+  // кто стоит на чужом здании страны, с которой война, и не идёт в бой — грабит его
+  for (const g of gens) if (!attacks.some((a) => a.gid === g.id) && canPillage(s, g.id).ok) pillage(s, g.id);
   // новые города основывают поселенцы: нанимаем одного в столице и ведём к хорошему месту
   const settlers = playerSettlers(s, pid);
   const cost = settlerCost(s, pid);

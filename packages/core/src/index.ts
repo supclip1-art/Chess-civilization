@@ -29,3 +29,4 @@ export * from './heroes.ts';
 export * from './autodev.ts';
 export * from './difficulty.ts';
 export * from './extras.ts';
+export * from './wonders.ts';

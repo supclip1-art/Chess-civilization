@@ -285,3 +285,78 @@ test('стены, рынок, башня, отмена и снос', async () =>
   assert.ok(!tc.tower);
   void build;
 });
+
+test('снос возвращает половину, грабёж даёт треть и разрушает здание', async () => {
+  const { build, endTurn, demolish, pillage, canPillage, buildingValue, playerHalls, key: k } = await import('../src/index.ts');
+  const { war } = await import('./helpers.ts');
+  const s = game();
+  s.players.p1.res = { wood: 999, food: 999, gold: 999 };
+  const h = playerHalls(s, 'p1')[0];
+  const f = Object.values(s.cells).find((c) => c.hall === h.id && c.terrain === 'field' && k(c.hex) !== k(h.hex))!;
+  assert.ok(build(s, 'p1', f.hex, 'farm').ok);
+  for (let i = 0; i < 2; i++) endTurn(s);
+  assert.ok(f.building);
+  const val = buildingValue(s, f.hex);
+  const w0 = s.players.p1.res.wood;
+  assert.ok(demolish(s, 'p1', f.hex).ok);
+  assert.equal(s.players.p1.res.wood - w0, Math.floor(val.wood / 2));
+  // грабёж: генерал p2 на ферме p1 во время войны
+  assert.ok(build(s, 'p1', f.hex, 'farm').ok);
+  for (let i = 0; i < 2; i++) endTurn(s);
+  const raider = Object.values(s.generals).find((g) => g.owner === 'p2')!;
+  raider.hex = { ...f.hex }; raider.attacked = false;
+  assert.ok(!canPillage(s, raider.id).ok, 'в мирное время грабить нельзя');
+  war(s);
+  const loot = buildingValue(s, f.hex);
+  const r0 = { ...s.players.p2.res };
+  assert.ok(pillage(s, raider.id).ok);
+  assert.ok(!f.building);
+  assert.equal(s.players.p2.res.wood - r0.wood, Math.floor(loot.wood / 3));
+  assert.equal(raider.moveLeft, 0);
+});
+
+test('чудо света: одно на карту, одно за партию, гонка и бонус хозяину города', async () => {
+  const { startWonder, wonderBlocked, endTurn, playerHalls, freeBuilders, hasWonder, WONDER, capture } = await import('../src/index.ts');
+  const s = game();
+  for (const pid of ['p1', 'p2']) { s.players[pid].res = { wood: 2000, food: 2000, gold: 2000 }; const c = playerHalls(s, pid)[0]; c.level = 3; c.builders = 3; }
+  const cap1 = playerHalls(s, 'p1')[0], cap2 = playerHalls(s, 'p2')[0];
+  assert.ok(startWonder(s, 'p1', 'pyramids').ok);
+  assert.ok(wonderBlocked(s, 'p1', 'oracle'), 'второе чудо одновременно нельзя');
+  // p2 начинает то же чудо на ход позже — проигрывает гонку
+  endTurn(s);
+  const g2 = s.players.p2.res.gold;
+  assert.ok(startWonder(s, 'p2', 'pyramids').ok);
+  for (let i = 0; i < 14 && !s.wonders?.pyramids; i++) endTurn(s);
+  assert.ok(hasWonder(s, 'p1', 'pyramids'));
+  assert.equal(s.players.p2.wonder, undefined);
+  assert.ok(s.players.p2.res.gold >= g2 - WONDER.cost.gold / 2, 'проигравшему вернули половину');
+  assert.ok(wonderBlocked(s, 'p1', 'oracle'), 'одно чудо за партию');
+  assert.ok(!wonderBlocked(s, 'p2', 'oracle'), 'проигравший может взяться за другое');
+  // «Пирамиды»: +1 строитель
+  s.players.p1.jobs = []; s.players.p1.queue = [];
+  assert.equal(freeBuilders(s, 'p1', cap1.id), 4);
+  // захват столицы — чудо переходит
+  capture(s, cap1.id, 'p2');
+  assert.ok(hasWonder(s, 'p2', 'pyramids') && !hasWonder(s, 'p1', 'pyramids'));
+  void cap2;
+});
+
+test('морской торговый путь приносит золото, пока оба города у одного хозяина', async () => {
+  const { coastal, seaPath, buildSeaRoute, endTurn, income, recomputeTerritory, seaRouteGold, capture } = await import('../src/index.ts');
+  const s = game();
+  const halls = Object.values(s.halls).filter((h) => coastal(s, h.id));
+  let pair: [string, string] | null = null;
+  for (const a of halls) for (const b of halls) if (!pair && a.id !== b.id) { const p = seaPath(s, a.id, b.id); if (p && p.length <= 24) pair = [a.id, b.id]; }
+  assert.ok(pair, 'на карте есть два приморских города, связанных морем');
+  const [a, b] = pair!;
+  s.halls[a].owner = 'p1'; s.halls[b].owner = 'p1'; s.halls[a].builders = 2; recomputeTerritory(s);
+  s.players.p1.res.wood = 999;
+  const g0 = income(s, 'p1').gold;
+  assert.ok(buildSeaRoute(s, 'p1', a, b).ok);
+  assert.ok(!buildSeaRoute(s, 'p1', a, b).ok, 'второй раз тот же путь нельзя');
+  for (let i = 0; i < 12 && !s.seaRoutes?.length; i++) endTurn(s);
+  assert.equal(s.seaRoutes?.length, 1);
+  assert.equal(income(s, 'p1').gold - g0, seaRouteGold(s.seaRoutes![0].cells.length));
+  capture(s, b, 'p2');
+  assert.equal(income(s, 'p1').gold < g0 + seaRouteGold(s.seaRoutes![0].cells.length), true);
+});

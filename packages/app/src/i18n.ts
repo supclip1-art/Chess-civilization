@@ -43,6 +43,7 @@ const NUMBER_RULES: Record<Exclude<Lang, 'en'>, [RegExp, (n: number) => string][
     [/(\d+) pieces?(?![A-Za-z])/g, (n) => `${n} ${plural(n, 'фигура', 'фигуры', 'фигур')}`],
     [/(\d+) pawns?(?![A-Za-z])/g, (n) => `${n} ${plural(n, 'пешка', 'пешки', 'пешек')}`],
     [/(\d+) nations?(?![A-Za-z])/g, (n) => `${n} ${plural(n, 'страна', 'страны', 'стран')}`],
+    [/(\d+) rivals?(?![A-Za-z])/g, (n) => `${n} ${plural(n, 'соперник', 'соперника', 'соперников')}`],
     [/(\d+)(?:st|nd|rd|th)(?![A-Za-z])/g, (n) => `${n}-е`],
   ],
   es: [
@@ -54,6 +55,7 @@ const NUMBER_RULES: Record<Exclude<Lang, 'en'>, [RegExp, (n: number) => string][
     [/(\d+) pieces?(?![A-Za-z])/g, (n) => `${n} ${n === 1 ? 'pieza' : 'piezas'}`],
     [/(\d+) pawns?(?![A-Za-z])/g, (n) => `${n} ${n === 1 ? 'peón' : 'peones'}`],
     [/(\d+) nations?(?![A-Za-z])/g, (n) => `${n} ${n === 1 ? 'nación' : 'naciones'}`],
+    [/(\d+) rivals?(?![A-Za-z])/g, (n) => `${n} ${n === 1 ? 'rival' : 'rivales'}`],
     [/(\d+)(?:st|nd|rd|th)(?![A-Za-z])/g, (n) => `${n}.º`],
   ],
 };
