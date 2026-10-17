@@ -66,7 +66,7 @@ export const hireGeneral = (s: GameState, pid: string, hallId?: string): Result 
   if (count >= generalLimit(s, pid)) return no('upgrade a tavern first');
   const spot = freeCellNear(s, h.hex, pid);
   if (!spot) return no(`no free cell next to ${h.name} for a new army`);
-  const gold = Math.max(0, GENERAL_HIRE_GOLD[(count + 1) as 2 | 3 | 4 | 5] - (mods(s, pid).generalHireDiscount ?? 0));
+  const gold = Math.max(0, GENERAL_HIRE_GOLD[(count + 1) as 1 | 2 | 3 | 4 | 5] - (mods(s, pid).generalHireDiscount ?? 0));
   if (p.res.gold < gold) return no('not enough gold');
   p.res.gold -= gold;
   const g = makeGeneral(s, pid, spot, recruitElo(s, pid), emptyArmy(), generalName(s, pid));
@@ -220,18 +220,11 @@ export const applyBattle = (s: GameState, attackerId: string, defenderId: string
   return out;
 };
 
-/** Разбитый генерал погибает. Если он у игрока последний — остаётся жив и отступает в столицу.
+/** Разбитый генерал погибает — даже последний: нового нанимают в таверне (первый стоит 10 золота).
  *  Гарнизон нейтрала погибает всегда. */
 export const defeat = (s: GameState, gid: string): void => {
   const g = s.generals[gid];
-  if (!s.players[g.owner] || playerGenerals(s, g.owner).length > 1) {
-    delete s.generals[gid];
-    say(s, `a general fell in battle`, g.owner);
-    return;
-  }
-  const capital = playerHalls(s, g.owner).sort((a, b) => a.order - b.order)[0];
-  const spot = capital && freeCellNear(s, capital.hex, g.owner, g.id);
-  if (spot) g.hex = spot;
-  g.moveLeft = 0;
-  say(s, `the defeated general retreated to the capital`, g.owner);
+  delete s.generals[gid];
+  say(s, `a general fell in battle`, g.owner);
+  if (s.players[g.owner] && !playerGenerals(s, g.owner).length) say(s, 'you have no generals left: hire a new one in a tavern', g.owner);
 };

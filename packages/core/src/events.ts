@@ -56,7 +56,7 @@ const describe = (s: GameState, kind: EventKind, hallId?: string): PendingEvent 
       { id: 'feast', label: `Feast: +${ELO_PER_RESEARCH} ELO`, text: 'to every general, for the rest of the game' }] };
     case 'plague': return { kind, hallId, title: `Plague in ${city}`, text: `A sickness spreads through ${city}. Close the gates, or carry on and hope?`, choices: [
       { id: 'quarantine', label: 'Quarantine', text: `${city} builds nothing for ${HALT_TURNS} turns` },
-      { id: 'risk', label: 'Take the risk', text: 'half a chance that a building there loses a level' }] };
+      { id: 'risk', label: 'Take the risk', text: 'half a chance that two buildings there are destroyed' }] };
     case 'revolt': return { kind, hallId, title: `Unrest in ${city}`, text: `The people of ${city} have not accepted your rule.`, choices: [
       { id: 'suppress', label: 'Suppress', text: 'an army in or next to the city stays there for 2 turns' },
       { id: 'discontent', label: 'Let it simmer', text: `${city} builds nothing for ${HALT_TURNS} turns` }] };
@@ -120,6 +120,20 @@ export const resolveEvent = (s: GameState, pid: string, ev: PendingEvent, choice
     if (c.building!.level > 1) c.building!.level--; else c.building = undefined;
     return `a ${kind} was damaged`;
   };
+  /** Чума: n зданий города рушатся целиком (сам город устоит). */
+  const ruin = (hallId: string, n: number): string => {
+    const gone: string[] = [];
+    for (let i = 0; i < n; i++) {
+      const b = buildingsOf(s, hallId);
+      if (!b.length) break;
+      const c = b[int(s.rng, 0, b.length - 1)];
+      gone.push(c.building!.kind);
+      c.building = undefined;
+      p.jobs = p.jobs.filter((j) => !(j.kind === 'resource' && key(j.hex) === key(c.hex)));
+      p.queue = p.queue?.filter((q) => !(q.job.kind === 'resource' && key(q.job.hex) === key(c.hex)));
+    }
+    return gone.length ? `${gone.length === 1 ? 'a building was' : `${gone.length} buildings were`} destroyed (${gone.join(', ')})` : 'nothing was destroyed';
+  };
   let res = '';
   switch (ev.kind) {
     case 'harvest':
@@ -128,7 +142,7 @@ export const resolveEvent = (s: GameState, pid: string, ev: PendingEvent, choice
       break;
     case 'plague':
       if (choice === 'quarantine') { h!.haltUntil = s.turn + HALT_TURNS; h!.haltWhy = 'quarantine'; res = `${h!.name} is in quarantine`; }
-      else res = next(s.rng) < 0.5 ? `the plague passed: ${damage(h!.id)}` : 'the plague passed without harm';
+      else res = next(s.rng) < 0.5 ? `the plague passed: ${ruin(h!.id, 2)}` : 'the plague passed without harm';
       break;
     case 'revolt':
       if (choice === 'suppress' && canSuppress(s, pid, h!.id)) {

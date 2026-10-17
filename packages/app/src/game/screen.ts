@@ -316,6 +316,11 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
   /** Компактная команда генерала: значок и короткая подпись, пояснение — во всплывающей подсказке. */
   const cmd = (id: string, ico: string, label: string, hint: string, cls = '') =>
     `<button class="gcmd ${cls}" data-a="${id}" title="${esc(hint)}"><span class="gci">${ico}</span><b>${label}</b></button>`;
+  /** Можно ли охотиться на армию или город этого владельца: разбойники, нейтралы или страна, с которой война. */
+  const huntable = (owner: string) => owner !== ME && (owner === 'bandits' || !s.players[owner] || (!s.players[owner].overlord && relation(s, ME, owner).state === 'war'));
+  const huntRow = (kind: 'chase' | 'assault', id: string) => `<div class="gcmds hunt">${kind === 'chase'
+    ? cmd(`hunt:chase:${id}`, '🎯', 'Pursue', 'a general of yours follows this army while it is in sight and attacks when he catches it', 'war')
+    : cmd(`hunt:assault:${id}`, '🏰', 'Assault', 'a general of yours marches on this city and attacks or besieges it', 'war')}</div>`;
   const traitMini = (g: { traits?: TraitId[] }) => (g.traits ?? []).map((t) => `<span class="tmini" title="${esc(TRAITS[t].text)}">${esc(TRAITS[t].name)}</span>`).join('');
 
   /** Карточка поселенца: где он, основание города, приказы. */
@@ -360,7 +365,11 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
     } else if (sel.gid && sel.target === 'goto') {
       const path = findPath(s, sel.gid, sel.hex);
       const mv = armyMove(s, ME);
-      parts.push(path && path.length > 1
+      const prey = Object.values(s.generals).find((x) => key(x.hex) === k && x.owner !== ME && !x.settler && huntable(x.owner));
+      const fort = Object.values(s.halls).find((h) => key(h.hex) === k && huntable(h.owner));
+      if (prey && s.generals[sel.gid].owner === ME) parts.push(bigAct(`hunt:chase:${prey.id}`, '🎯', 'Pursue this army', 'follows it while it is in sight and attacks when he catches it', 'war'));
+      else if (fort && s.generals[sel.gid].owner === ME) parts.push(bigAct(`hunt:assault:${fort.id}`, '🏰', `Assault ${esc(fort.name)}`, 'marches on the city and attacks or besieges it', 'war'));
+      if (!prey && !fort) parts.push(path && path.length > 1
         ? bigAct('goto', '⚑', 'March here', `${path.length - 1} cells · ~${Math.ceil((path.length - 1) / mv)} turn${Math.ceil((path.length - 1) / mv) > 1 ? 's' : ''} · the general walks on his own`)
         : '<p class="muted">Your general cannot find a way there.</p>');
     } else if (sel.gid && sel.target === 'attack') {
@@ -394,13 +403,13 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
       const pic = nat ? portraitSvg(nat, g.name, 54) : '<span class="genglyph">⚔</span>';
       const o = mine ? g.order : undefined;
       const where = o?.kind === 'goto' ? (Object.values(s.halls).find((h) => key(h.hex) === key(o.to))?.name ?? 'far away') : '';
-      const status = !o ? '' : `<span class="chip gold">${o.kind === 'goto' ? `➜ ${esc(where)}` : o.kind === 'explore' ? '🧭 exploring' : o.kind === 'patrol' ? `🛡 ${o.cities.map((id) => esc(s.halls[id]?.name ?? '')).join(', ')}` : '⛨ holding'}</span>`;
+      const status = !o ? '' : `<span class="chip gold">${o.kind === 'goto' ? `➜ ${esc(where)}` : o.kind === 'explore' ? '🧭 exploring' : o.kind === 'patrol' ? `🛡 ${o.cities.map((id) => esc(s.halls[id]?.name ?? '')).join(', ')}` : o.kind === 'chase' ? `🎯 ${esc(ownerName(s, s.generals[o.target]?.owner ?? ''))}` : o.kind === 'assault' ? `🏰 ${esc(s.halls[o.hall]?.name ?? '')}` : '⛨ holding'}</span>`;
       const meta = `<span class="elo">ELO ${g.elo}</span>${g.stars ? `<span class="gstars">${'★'.repeat(g.stars)}</span>` : ''}${mine ? '' : `<span>${esc(ownerName(s, g.owner))}</span>`}${status}`;
       let html = `<div class="gencard compact ${mine ? '' : 'foe'}">${unitHead(pic, mine ? esc(g.name) : esc(g.name), color, meta, mine ? movePips(g) : s.players[g.owner] ? nationBtn(g.owner) : '')}
-        <div class="garow">${armyTokens(g.army, mine)}${traitMini(g)}</div>`;
+        <div class="garow">${armyTokens(g.army, mine)}${traitMini(g)}</div>${!mine && !g.settler && huntable(g.owner) && !(sel.gid && s.generals[sel.gid]?.owner === ME) ? huntRow('chase', g.id) : ''}`;
       if (mine) {
         const tr = trainingFor(s, g.id);
-        html += `<div class="gcmds">${o?.kind === 'goto' || o?.kind === 'patrol' ? cmd(`order:${g.id}:none`, '✋', 'Stop', 'cancel the order') : ''}
+        html += `<div class="gcmds">${o?.kind === 'goto' || o?.kind === 'patrol' || o?.kind === 'chase' || o?.kind === 'assault' ? cmd(`order:${g.id}:none`, '✋', 'Stop', 'cancel the order') : ''}
             ${cmd(`order:${g.id}:${o?.kind === 'explore' ? 'none' : 'explore'}`, '🧭', o?.kind === 'explore' ? 'Stop' : 'Explore', 'walks into the unknown by himself every turn', o?.kind === 'explore' ? 'on' : '')}
             ${cmd(`order:${g.id}:${o?.kind === 'hold' ? 'none' : 'hold'}`, '⛨', o?.kind === 'hold' ? 'Release' : 'Hold', 'stays put; no end-of-turn reminder', o?.kind === 'hold' ? 'on' : '')}
             ${cmd(`patrol:${g.id}`, '🛡', 'Patrol', `guards your cities: attacks any enemy within ${PATROL_RADIUS} cells of them`, o?.kind === 'patrol' ? 'on' : '')}
@@ -437,7 +446,7 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
       const barNext = hb < 5 ? BARRACKS[(hb + 1) as 1 | 2 | 3 | 4 | 5] : null;
       const tavNext = ht < 4 ? TAVERN[(ht + 1) as 1 | 2 | 3 | 4] : null;
       const gCount = playerGenerals(s, ME).length;
-      const gCost = gCount < 5 ? Math.max(0, GENERAL_HIRE_GOLD[(gCount + 1) as 2 | 3 | 4 | 5] - (NATIONS[p.nation].mods.generalHireDiscount ?? 0)) : 0;
+      const gCost = gCount < 5 ? Math.max(0, GENERAL_HIRE_GOLD[(gCount + 1) as 1 | 2 | 3 | 4 | 5] - (NATIONS[p.nation].mods.generalHireDiscount ?? 0)) : 0;
       const free = freeBuilders(s, ME, hall.id), total = hallBuilders(hall);
       const sl = citySlots(s, hall.id);
       // плитка действия: значок, название, цена; если не хватает ресурсов — бледная
@@ -467,7 +476,7 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
         ${queue.length ? `<p class="muted cqhead">Queued — start when a builder is free:</p><div class="cjobs">${queue.map(({ q, i }) => `<span class="cjob queued">${esc(jobName(q.job))}<button class="cx" data-a="unqueue:${i}" aria-label="Cancel">×</button></span>`).join('')}</div>` : ''}
       </div>`);
     } else if (hall) {
-      parts.push(`<div class="card"><div class="row"><b>${esc(hall.name)} · city level ${hall.level}</b>${s.players[hall.owner] ? nationBtn(hall.owner) : ''}</div><p class="muted">${esc(ownerName(s, hall.owner))}${hall.siege ? ' · under siege' : ''}${hall.barracks ? ` · barracks ${hall.barracks}` : ''}${hall.tavern ? ` · tavern ${hall.tavern}` : ''}</p></div>`);
+      parts.push(`<div class="card"><div class="row"><b>${esc(hall.name)} · city level ${hall.level}</b>${s.players[hall.owner] ? nationBtn(hall.owner) : ''}</div><p class="muted">${esc(ownerName(s, hall.owner))}${hall.siege ? ' · under siege' : ''}${hall.barracks ? ` · barracks ${hall.barracks}` : ''}${hall.tavern ? ` · tavern ${hall.tavern}` : ''}</p>${huntable(hall.owner) && !(sel.gid && s.generals[sel.gid]?.owner === ME) ? huntRow('assault', hall.id) : ''}</div>`);
     }
 
     // ресурсное здание (если выбран свой генерал на этой клетке — сначала только он)
@@ -575,6 +584,7 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
       refresh();
     }
     else if (a === 'patrol') await patrolMenu(x);
+    else if (a === 'hunt') await huntOrder(x as 'chase' | 'assault', y);
     else if (a === 'order') { const g = s.generals[x]; g.order = y === 'none' ? undefined : y === 'explore' ? { kind: 'explore' } : { kind: 'hold' }; sel = y === 'none' ? { hex: g.hex, gid: g.id } : {}; saveGame(s); refresh(); }
     else if (a === 'attack') doAttack();
     else if (a === 'train') { const r = trainGeneral(s, ME, x); act(r); if (r.ok) toast(`${s.generals[x].name} is retrained: ELO ${s.generals[x].elo}.`); }
@@ -638,6 +648,33 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
     const c = await ask();
     modal(null);
     if (c.startsWith('to:')) act(buildSeaRoute(s, ME, hallId, c.slice(3)));
+  };
+
+  /** Погоня или штурм: выбранному генералу — сразу, иначе выбрать генерала из списка (ближние первыми). */
+  const huntOrder = async (kind: 'chase' | 'assault', id: string) => {
+    const goal = kind === 'chase' ? s.generals[id]?.hex : s.halls[id]?.hex;
+    if (!goal) return;
+    const set = (gid: string) => {
+      const g = s.generals[gid];
+      g.order = kind === 'chase' ? { kind: 'chase', target: id } : { kind: 'assault', hall: id };
+      saveGame(s);
+      toast(kind === 'chase' ? 'The pursuit begins when you end your turn.' : 'The march on the city begins when you end your turn.');
+      sel = { hex: g.hex, gid: g.id };
+      refresh();
+    };
+    const picked = sel.gid && s.generals[sel.gid]?.owner === ME && !s.generals[sel.gid].settler ? sel.gid : undefined;
+    if (picked) { set(picked); return; }
+    const mine = playerGenerals(s, ME).filter((g) => !g.settler && armyValue(g.army) > 0).sort((a, b) => distance(a.hex, goal) - distance(b.hex, goal));
+    if (!mine.length) { toast('You have no army to send.'); return; }
+    const nat = s.players[ME].nation;
+    modal(`<h2>${kind === 'chase' ? '🎯 Pursue' : '🏰 Assault'}</h2><p class="muted">Who goes? The order runs when you end your turn.</p>
+      <div class="glist">${mine.map((g) => `<button class="grow" data-a="pick:${g.id}"><span class="gport">${portraitSvg(nat, g.name, 44)}</span>
+        <span class="gname"><b>${esc(g.name)}</b><small><span class="elo">ELO ${g.elo}</span></small></span>
+        <span class="garmy">${PIECES.filter((x) => g.army[x]).map((x) => `<span class="mtok">${pieceHtml(true, x)}${g.army[x] > 1 ? `<i>${g.army[x]}</i>` : ''}</span>`).join('')}</span>
+        <span class="gmoves">${distance(g.hex, goal)} cells</span></button>`).join('')}</div><div class="acts">${btn('close', 'Cancel', '')}</div>`);
+    const c = await ask();
+    modal(null);
+    if (c.startsWith('pick:')) set(c.slice(5));
   };
 
   /** Патруль: выбрать города, которые генерал охраняет (по умолчанию — столицу). */
@@ -825,7 +862,7 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
     .map((x) => `${{ p: '♟', n: '♞', b: '♝', r: '♜', q: '♛' }[x]}\uFE0E${a[x] > 1 ? a[x] : ''}`).join(' ') || 'no pieces';
   const generalsMenu = async () => {
     const mine = Object.values(s.generals).filter((g) => g.owner === ME).sort((a, b) => Number(!!a.settler) - Number(!!b.settler) || Number(a.id.slice(1)) - Number(b.id.slice(1)));
-    const status = (g: typeof mine[number]) => g.order?.kind === 'goto' ? 'marching' : g.order?.kind === 'explore' ? 'exploring' : g.order?.kind === 'hold' ? 'holding' : g.order?.kind === 'patrol' ? 'patrolling'
+    const status = (g: typeof mine[number]) => g.order?.kind === 'goto' ? 'marching' : g.order?.kind === 'explore' ? 'exploring' : g.order?.kind === 'hold' ? 'holding' : g.order?.kind === 'patrol' ? 'patrolling' : g.order?.kind === 'chase' ? 'pursuing' : g.order?.kind === 'assault' ? 'assaulting'
       : g.attacked ? 'done this turn' : g.moveLeft > 0 ? `${g.moveLeft} move${g.moveLeft > 1 ? 's' : ''} left` : 'no moves left';
     const nat = s.players[ME].nation;
     modal(`<h2>Your generals</h2><div class="glist">${mine.map((g) => {
@@ -1324,14 +1361,15 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
       glideTo(g.hex);
       sel = { hex: g.hex, gid: g.id };
       refresh();
-      const foe = Object.values(s.generals).find((x) => key(x.hex) === key(m.attack!) && x.owner !== ME);
       const near = playerHalls(s, ME).sort((a, b) => distance(a.hex, m.attack!) - distance(b.hex, m.attack!))[0];
-      toast(`🛡 General ${g.name} intercepts the enemy${near ? ` near ${near.name}` : ''}!`);
-      void foe;
+      const kind = g.order?.kind;
+      toast(kind === 'patrol' ? `🛡 General ${g.name} intercepts the enemy${near ? ` near ${near.name}` : ''}!` : `${kind === 'assault' ? '🏰' : '🎯'} General ${g.name} ${m.text}!`);
       await sleep(600);
       const r = attack(s, g.id, m.attack);
       if (r.kind === 'battle') { await fightBattle(r.attacker, r.defender, false); await annexPrompt(); refresh(); }
       else if (r.kind === 'killed') { saveGame(s); toast('The enemy settler is killed.'); refresh(); }
+      else if (r.kind === 'siege') { saveGame(s); toast('Siege begins: the city falls at the start of your next turn unless reinforcements arrive.'); refresh(); }
+      else if (r.kind === 'error') { if (kind === 'chase' || kind === 'assault') g.order = undefined; toast(`General ${g.name}: ${r.reason}`); refresh(); }
       if (!s.players[ME].alive || winner(s)) return;
     }
   };

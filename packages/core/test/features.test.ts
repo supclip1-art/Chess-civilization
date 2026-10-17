@@ -420,3 +420,52 @@ test('авторазвитие бережёт места под рудники, 
   const road = s.players.p1.jobs.find((j) => j.kind === 'road');
   assert.ok(road, 'столица строит дорогу');
 });
+
+test('погоня: генерал идёт за армией на виду и готов бить; штурм ведёт к городу', async () => {
+  const { runOrders, playerHalls, key: k, distance, PASSABLE } = await import('../src/index.ts');
+  const { war } = await import('./helpers.ts');
+  const s = game();
+  war(s);
+  const cap = playerHalls(s, 'p1')[0];
+  const g = Object.values(s.generals).find((x) => x.owner === 'p1')!;
+  const foe = Object.values(s.generals).find((x) => x.owner === 'p2')!;
+  const free = (h: { q: number; r: number }) => PASSABLE[s.cells[k(h)]?.terrain] && !Object.values(s.generals).some((x) => k(x.hex) === k(h)) && !Object.values(s.halls).some((x) => k(x.hex) === k(h));
+  g.hex = { ...cap.hex }; g.moveLeft = 2; g.attacked = false;
+  const spot = Object.values(s.cells).find((c) => distance(c.hex, cap.hex) === 3 && free(c.hex))!;
+  foe.hex = { ...spot.hex };
+  g.order = { kind: 'chase', target: foe.id };
+  const ev = runOrders(s, 'p1');
+  assert.ok(distance(g.hex, foe.hex) <= 2, 'приблизился');
+  if (distance(g.hex, foe.hex) === 1) assert.ok(ev.some((e) => e.attack), 'догнал — бьёт');
+  // цель скрылась из виду — погоня окончена
+  foe.hex = { ...Object.values(s.cells).find((c) => distance(c.hex, g.hex) >= 9 && free(c.hex))!.hex };
+  g.moveLeft = 2;
+  const ev2 = runOrders(s, 'p1');
+  assert.equal(g.order, undefined);
+  assert.ok(ev2.some((e) => /lost sight/.test(e.text)));
+  // штурм вражеской столицы
+  const enemyCap = playerHalls(s, 'p2')[0];
+  g.order = { kind: 'assault', hall: enemyCap.id };
+  const d0 = distance(g.hex, enemyCap.hex);
+  g.moveLeft = 2;
+  runOrders(s, 'p1');
+  assert.ok(distance(g.hex, enemyCap.hex) < d0, 'идёт к городу');
+});
+
+test('осаждавший разбит — осада снимается сразу, кольца у города нет', async () => {
+  const { resolveBattle, playerHalls, key: k, distance, PASSABLE } = await import('../src/index.ts');
+  const { war } = await import('./helpers.ts');
+  const s = game();
+  war(s);
+  const cap = playerHalls(s, 'p1')[0];
+  const foe = Object.values(s.generals).find((x) => x.owner === 'p2')!;
+  const mine = Object.values(s.generals).find((x) => x.owner === 'p1')!;
+  const free = (h: { q: number; r: number }) => PASSABLE[s.cells[k(h)]?.terrain] && !Object.values(s.generals).some((x) => k(x.hex) === k(h)) && !Object.values(s.halls).some((x) => k(x.hex) === k(h));
+  foe.hex = { ...Object.values(s.cells).find((c) => distance(c.hex, cap.hex) === 1 && free(c.hex))!.hex };
+  mine.hex = { ...Object.values(s.cells).find((c) => distance(c.hex, foe.hex) === 1 && free(c.hex))!.hex };
+  cap.siege = { by: foe.id, since: s.turn };
+  mine.attacked = false;
+  resolveBattle(s, mine.id, foe.id, { end: 'mate', mateWinner: 'white', white: { ...mine.army }, black: { p: 0, n: 0, b: 0, r: 0, q: 0 } });
+  assert.equal(s.generals[foe.id], undefined);
+  assert.equal(cap.siege, undefined, 'осада снята сразу');
+});

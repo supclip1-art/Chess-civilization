@@ -83,7 +83,9 @@ export type General = {
 };
 
 /** Приказ генерала. patrol — охрана своих городов: нападает на любую вражескую армию в PATROL_RADIUS клетках от них. */
-export type GeneralOrder = { kind: 'goto'; to: Hex } | { kind: 'explore' } | { kind: 'hold' } | { kind: 'patrol'; cities: string[] };
+/** chase — преследовать армию, пока она на виду, и атаковать, догнав; assault — идти на город и штурмовать (осадить). */
+export type GeneralOrder = { kind: 'goto'; to: Hex } | { kind: 'explore' } | { kind: 'hold' } | { kind: 'patrol'; cities: string[] }
+  | { kind: 'chase'; target: string } | { kind: 'assault'; hall: string };
 
 export type Job =
   | { kind: 'resource'; hex: Hex; building: ResourceBuilding; level: number; finish: number }

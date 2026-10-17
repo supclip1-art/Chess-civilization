@@ -131,10 +131,12 @@ export const aiEconomyTurn = (s: GameState, pid: string): void => {
   // таверна — рано: генералов нужно по одному на город плюс полевая армия (не больше 4)
   const cities = playerHalls(s, pid).length;
   const want = Math.min(5, cities + (p.ai?.aggression === 'warlike' ? 2 : 1)); // у воинственного — две полевые армии
-  if ((capital.barracks ?? 0) >= 1 && s.turn >= 4 && generalLimit(s, pid) < want && !p.jobs.some((j) => j.kind === 'tavern')) upgradeTavern(s, pid, capital.id);
+  const noGeneral = byAge().length === 0; // последний генерал пал — нужна таверна и новый генерал
+  if (((capital.barracks ?? 0) >= 1 && s.turn >= 4 && generalLimit(s, pid) < want || (noGeneral && !playerHalls(s, pid).some((h) => h.tavern)))
+    && !p.jobs.some((j) => j.kind === 'tavern')) upgradeTavern(s, pid, capital.id);
   // новый генерал ест еду — нанимаем, только если доход еды это выдержит
-  if (byAge().length < Math.min(want, generalLimit(s, pid)) && p.res.gold >= 50 && income(s, pid).food - upkeep(s, pid) >= GENERAL_UPKEEP_FOOD + 3) {
-    if (hireGeneral(s, pid, capital.id).ok) { const fresh = byAge().slice(-1)[0]; feed(fresh.id, MIN_GUARD); }
+  if (noGeneral || (byAge().length < Math.min(want, generalLimit(s, pid)) && p.res.gold >= 50 && income(s, pid).food - upkeep(s, pid) >= GENERAL_UPKEEP_FOOD + 3)) {
+    if (hireGeneral(s, pid).ok) { const fresh = byAge().slice(-1)[0]; feed(fresh.id, MIN_GUARD); }
   }
   if (p.res.gold >= 50) startResearch(s, pid);
   // технологии: по порядку, когда хватает золота с запасом на армию

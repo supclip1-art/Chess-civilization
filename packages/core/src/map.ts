@@ -214,12 +214,45 @@ const patrolStep = (s: GameState, g: General): { text?: string; attack?: Hex } =
   return {};
 };
 
+/** Подойти вплотную к цели по кратчайшему пути (к любой соседней с ней клетке). */
+const approach = (s: GameState, g: General, goal: Hex): void => {
+  if (distance(g.hex, goal) <= 1) return;
+  let best: Hex[] | null = null;
+  for (const n of neighbors(goal)) { const p = findPath(s, g.id, n); if (p && (!best || p.length < best.length)) best = p; }
+  if (best && best.length > 1) stepAlong(s, g.id, best);
+};
+/** Погоня и штурм: идти к армии (пока она на виду) или к городу и бить, когда рядом. */
+const huntStep = (s: GameState, g: General, pid: string): { text?: string; attack?: Hex } => {
+  const o = g.order;
+  let goal: Hex;
+  if (o?.kind === 'chase') {
+    const t = s.generals[o.target];
+    if (!t) { g.order = undefined; return { text: 'the enemy is gone — the pursuit is over' }; }
+    if (!visible(s, pid).has(key(t.hex))) { g.order = undefined; return { text: 'lost sight of the enemy — the pursuit is over' }; }
+    goal = t.hex;
+  } else if (o?.kind === 'assault') {
+    const h = s.halls[o.hall];
+    if (!h || h.owner === pid) { g.order = undefined; return { text: 'the city is ours — the assault is over' }; }
+    if (h.siege?.by === g.id && distance(g.hex, h.hex) === 1) return {}; // уже осаждает — ждёт
+    goal = h.hex;
+  } else return {};
+  approach(s, g, goal);
+  if (distance(g.hex, goal) === 1 && armyValue(g.army) > 0) return { text: o.kind === 'chase' ? 'catches up with the enemy' : 'reaches the city walls', attack: { ...goal } };
+  return {};
+};
+
 /** Выполнить приказы генералов игрока (в начале его хода). Возвращает, что произошло, — для уведомлений;
  *  attack — патрульный стоит рядом с врагом и готов к бою (бой начинает интерфейс). */
 export const runOrders = (s: GameState, pid: string): { gid: string; text: string; attack?: Hex }[] => {
   const out: { gid: string; text: string; attack?: Hex }[] = [];
   for (const g of Object.values(s.generals)) {
     if (g.owner !== pid || !g.order || g.order.kind === 'hold' || g.attacked || g.moveLeft <= 0) continue;
+    if (g.order.kind === 'chase' || g.order.kind === 'assault') {
+      const r = huntStep(s, g, pid);
+      remember(s, pid);
+      if (r.text) out.push({ gid: g.id, text: r.text, ...(r.attack ? { attack: r.attack } : {}) });
+      continue;
+    }
     if (g.order.kind === 'patrol') {
       const r = patrolStep(s, g);
       remember(s, pid);
@@ -340,11 +373,21 @@ export const attack = (s: GameState, gid: string, target: Hex): AttackStart => {
 
 /** Итог боя на карте: армии по правилам боя; при победе над гарнизоном нейтрала — сразу захват,
  *  при победе над армией у вражеской ратуши — начинается осада. */
+/** Снять осады, которые больше некому держать: осаждавшего нет в живых или он отошёл от города. */
+export const liftStaleSieges = (s: GameState): void => {
+  for (const h of Object.values(s.halls)) {
+    if (!h.siege) continue;
+    const g = s.generals[h.siege.by];
+    if (!g || g.owner === h.owner || distance(g.hex, h.hex) > 1) { h.siege = undefined; if (!g) say(s, `the siege of ${h.name} is lifted`, h.owner); }
+  }
+};
+
 export const resolveBattle = (s: GameState, attackerId: string, defenderId: string, report: BattleReport): BattleOutcome => {
   const att = s.generals[attackerId];
   const def = s.generals[defenderId];
   const defHex = { ...def.hex };
   const out = applyBattle(s, attackerId, defenderId, report);
+  liftStaleSieges(s); // осаждавший разбит — осада снята сразу
   if (out.winner !== 'attacker') return out;
   const h = hallAt(s, defHex);
   if (!h || h.owner === att.owner) return out;

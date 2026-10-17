@@ -85,7 +85,8 @@ export const TAVERN: Record<1 | 2 | 3 | 4, { cost: Res; turns: number }> = {
 };
 /** Таверна ур. N позволяет держать N+1 генералов. */
 export const MAX_GENERALS = 5;
-export const GENERAL_HIRE_GOLD: Record<2 | 3 | 4 | 5, number> = { 2: 40, 3: 60, 4: 70, 5: 90 };
+/** Цена найма генерала по счёту: первый (если прежний пал) — 10 золота. */
+export const GENERAL_HIRE_GOLD: Record<1 | 2 | 3 | 4 | 5, number> = { 1: 10, 2: 40, 3: 60, 4: 70, 5: 90 };
 export const GENERAL_UPKEEP_FOOD = 10; // за каждого нанятого, стартовый бесплатный
 export const ELO_PER_WIN = 15;
 export const MAX_STARS = 5;

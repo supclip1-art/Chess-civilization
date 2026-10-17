@@ -271,14 +271,12 @@ export class MapView {
       }
     }
     if (anyRoad) {
+      // спокойная утоптанная дорога: мягкая тень, песочно-серая полоса и редкие светлые камешки по краю — видно, но не кричит
       c.save();
       c.lineCap = 'round'; c.lineJoin = 'round';
-      c.strokeStyle = 'rgba(25,27,30,.5)'; c.lineWidth = Math.max(4, S * 0.42); c.stroke(road); // тень и бордюр
-      c.strokeStyle = '#7d8187'; c.lineWidth = Math.max(3, S * 0.34); c.stroke(road); // швы между камнями
-      // булыжники: круглые камни в шахматном порядке, светлые и чуть темнее
-      c.strokeStyle = '#b3b6ba'; c.lineWidth = Math.max(2, S * 0.17); c.setLineDash([0.01, S * 0.15]); c.stroke(road);
-      c.strokeStyle = '#a2a5aa'; c.lineWidth = Math.max(1.5, S * 0.12); c.lineDashOffset = S * 0.075; c.stroke(road);
-      c.strokeStyle = 'rgba(235,238,242,.5)'; c.lineWidth = Math.max(1, S * 0.05); c.lineDashOffset = S * 0.02; c.stroke(road); // блики
+      c.strokeStyle = 'rgba(40,32,22,.22)'; c.lineWidth = Math.max(3, S * 0.2); c.stroke(road);
+      c.strokeStyle = 'rgba(196,182,152,.78)'; c.lineWidth = Math.max(2, S * 0.13); c.stroke(road);
+      c.strokeStyle = 'rgba(150,136,108,.55)'; c.lineWidth = Math.max(1, S * 0.035); c.setLineDash([S * 0.05, S * 0.14]); c.stroke(road);
       c.restore();
     }
     // морские торговые пути: пунктир по воде от города к городу, по нему плывёт кораблик

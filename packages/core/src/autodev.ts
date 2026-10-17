@@ -1,13 +1,14 @@
 // Авторазвитие города игрока: в начале хода город сам нанимает строителей, строит и улучшает здания и растёт.
 //   economy — ресурсы: фермы, лесопилки, рудники поровну, с упором на то, чего не хватает;
-//   army    — под армию: казарма (до 3-го уровня), рудники на золото, фермы на содержание.
+//   army    — под армию: прежде всего казарма (до 5-го уровня) и таверна (до 4-го), затем рудники на золото;
+//             фермы — только когда еды не хватает на содержание.
 // Запаса не оставляет: тратит всё, на что хватает.
 // Места под рудники бережёт: пока на земле города есть свободные месторождения, столько мест не занимает ничем другим.
 // Столица на авторазвитии ещё и прокладывает дороги к своим городам, когда хватает дерева.
 
 import { BUILDER_HIRE_FOOD, RESOURCE_OUTPUT, type Res, type ResourceBuilding } from './config.ts';
 import {
-  barracksCost, build, buildOptions, citySlots, cityUpgradeCost, freeBuilders, hireBuilder, income, maxBuilders, mods, resourceCost,
+  barracksCost, tavernCost, upgradeTavern, build, buildOptions, citySlots, cityUpgradeCost, freeBuilders, hireBuilder, income, maxBuilders, mods, resourceCost,
   upgrade, upgradeBarracks, upgradeTownHall, upkeep,
 } from './economy.ts';
 import { distance, key } from './hex.ts';
@@ -49,8 +50,12 @@ export const autoDevelop = (s: GameState, pid: string): string[] => {
     }
     // казарма — для армейского курса
     const bar = h.barracks ?? 0;
-    if (focus === 'army' && bar < 3 && freeBuilders(s, pid, h.id) > 0 && !p.jobs.some((j) => j.kind === 'barracks' && j.hallId === h.id)
-      && affordable(p.res, barracksCost(s, pid, (bar + 1) as 1 | 2 | 3)) && upgradeBarracks(s, pid, h.id).ok) done.push(`${h.name}: barracks ${bar + 1}`);
+    if (focus === 'army' && bar < 5 && freeBuilders(s, pid, h.id) > 0 && !p.jobs.some((j) => j.kind === 'barracks' && j.hallId === h.id)
+      && affordable(p.res, barracksCost(s, pid, (bar + 1) as 1 | 2 | 3 | 4 | 5)) && upgradeBarracks(s, pid, h.id).ok) done.push(`${h.name}: barracks ${bar + 1}`);
+    // таверна — для армейского курса: больше генералов
+    const tav = h.tavern ?? 0;
+    if (focus === 'army' && tav < 4 && freeBuilders(s, pid, h.id) > 0 && !p.jobs.some((j) => j.kind === 'tavern' && j.hallId === h.id)
+      && affordable(p.res, tavernCost(s, pid, (tav + 1) as 1 | 2 | 3 | 4)) && upgradeTavern(s, pid, h.id).ok) done.push(`${h.name}: tavern ${tav + 1}`);
     // дороги: столица ведёт дорогу к ближайшему своему городу без дороги, если дерева хватает с запасом
     if (isCapital(s, h) && freeBuilders(s, pid, h.id) > 0 && !p.jobs.some((j) => j.kind === 'road' && j.hallId === h.id)) {
       const targets = Object.values(s.halls).filter((x) => x.owner === pid && x.id !== h.id).sort((a, b) => distance(a.hex, h.hex) - distance(b.hex, h.hex));
@@ -66,8 +71,8 @@ export const autoDevelop = (s: GameState, pid: string): string[] => {
       const foodNet = income(s, pid).food - upkeep(s, pid);
       const weight = (k: ResourceBuilding): number => {
         const food = k === 'farm' || k === 'fishery';
+        if (focus === 'army') return food ? (foodNet < 0 ? 3 : foodNet < 6 ? 0.8 : 0.25) : k === 'mine' ? 2.4 : 0.8; // армия: золото, еда — лишь бы хватало
         if (food && foodNet < 5) return 3; // голод — сначала еда
-        if (focus === 'army') return k === 'mine' ? 2 : food ? 1.4 : 0.7;
         const low = (r: keyof Res) => p.res[r] < 80;
         return k === 'mine' ? (low('gold') ? 2 : 1.3) : food ? (low('food') ? 1.6 : 1) : low('wood') ? 1.6 : 1;
       };

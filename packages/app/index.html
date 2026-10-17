@@ -671,6 +671,9 @@
     .demref { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; padding: 9px 12px; border-radius: 14px; font-size: 13px; font-weight: 600;
       background: color-mix(in srgb, #f6cf6a 16%, var(--card)); border: 1px solid color-mix(in srgb, #c99b2e 40%, var(--line)); }
     .dembox .ctiles { width: 100%; }
+    button.gcmd.war { border-color: color-mix(in srgb, var(--bad) 50%, var(--line)); background: linear-gradient(180deg, color-mix(in srgb, #f08a6c 18%, var(--bg)), var(--bg)); }
+    button.gcmd.war b { color: var(--bad); }
+    .gcmds.hunt { grid-template-columns: minmax(0, 160px); margin-top: 6px; } .gcmds.hunt button.gcmd { grid-template-columns: auto auto; justify-content: center; gap: 6px; padding: 7px 10px; }
   </style>
   <script>
     // Автообновление: если вышла новая версия, а Telegram показал старую страницу из кеша — перезагрузить

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
-  armiesFromFen, canForceMate, insufficientMaterial, attack, emptyArmy, endTurn, formationOk, hireGeneral, hirePiece, judge, move, newGame, playerHalls,
+  armiesFromFen, canForceMate, insufficientMaterial, attack, emptyArmy, endTurn, formationOk, hireGeneral, hirePiece, judge, move, newGame, playerHalls, playerGenerals,
   reachable, resolveBattle, returning, promotions, visible, winner, key, upgradeBarracks, type GameState, type Army,
 } from '../src/index.ts';
 import { NEUTRAL, SPAWN_A, SPAWN_B, testMap , war } from './helpers.ts';
@@ -187,7 +187,7 @@ test('армия, защищавшая город, разбита — город
   assert.equal(s.players.p2.alive, false, 'это был единственный город p2');
 });
 
-test('разбитый генерал погибает, а последний генерал игрока отступает в столицу', () => {
+test('разбитый генерал погибает — даже последний; нового нанимают в таверне за 10 золота', () => {
   const s = game();
   const a = gen(s, 'p1');
   const d = gen(s, 'p2');
@@ -203,9 +203,12 @@ test('разбитый генерал погибает, а последний г
   last.hex = { q: 0, r: 2 }; last.army = army({ p: 4 });
   a.attacked = false;
   resolveBattle(s, a.id, last.id, lose);
-  assert.ok(s.generals[last.id], 'последний генерал жив');
-  assert.deepEqual(last.hex, SPAWN_B);
-  assert.deepEqual(last.army, emptyArmy());
+  assert.equal(s.generals[last.id], undefined, 'последний генерал тоже погиб');
+  assert.equal(playerGenerals(s, 'p2').length, 0);
+  const gold = s.players.p2.res.gold;
+  assert.ok(hireGeneral(s, 'p2').ok, 'новый генерал в таверне 1-го уровня');
+  assert.ok(gold - s.players.p2.res.gold <= 10, 'первый генерал — 10 золота (со скидкой нации — меньше)');
+  void emptyArmy;
 });
 
 test('осада снимается, если защитник привёл армию к ратуше', () => {
