@@ -77,10 +77,12 @@ export const autoDevelop = (s: GameState, pid: string): string[] => {
       if (!best || !best.run()) break;
       done.push(best.what);
     }
-    // город растёт, когда места под здания кончились
+    // город растёт: как только места под здания почти кончились, а если ресурсов с запасом — и раньше
     const sl = citySlots(s, h.id);
-    if (h.level < 3 && sl.used >= sl.max && !p.jobs.some((j) => j.kind === 'townhall' && j.hallId === h.id)
-      && affordable(p.res, cityUpgradeCost(s, pid, (h.level + 1) as 2 | 3)) && upgradeTownHall(s, pid, h.id).ok) done.push(`${h.name}: grows to level ${h.level + 1}`);
+    const growCost = h.level < 3 ? cityUpgradeCost(s, pid, (h.level + 1) as 2 | 3) : null;
+    const rich = growCost && (['wood', 'food'] as const).every((r) => p.res[r] >= growCost[r] * 2 + RESERVE[r]);
+    if (growCost && (sl.used >= sl.max - 1 || rich) && !p.jobs.some((j) => j.kind === 'townhall' && j.hallId === h.id)
+      && affordable(p.res, growCost) && upgradeTownHall(s, pid, h.id).ok) done.push(`${h.name}: grows to level ${h.level + 1}`);
   }
   if (done.length) say(s, `auto-development: ${done.length} order${done.length > 1 ? 's' : ''} in your cities`, pid);
   return done;

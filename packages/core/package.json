@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Rules core of Chess Civilization: economy, armies, map, turns. No UI, deterministic, no runtime dependencies.",
+  "description": "Rules core of Checkmate Empires: economy, armies, map, turns. No UI, deterministic, no runtime dependencies.",
   "main": "src/index.ts",
   "engines": { "node": ">=22.18" },
   "scripts": {

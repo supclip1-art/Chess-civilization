@@ -45,7 +45,7 @@ const home = () => {
   })() : '';
   render(`
     <div class="hero"><canvas id="herocv" aria-hidden="true"></canvas>
-      <div class="herotext"><h1 class="wordmark">Chess<br>Civilization</h1><p>Build an empire. Every war is a real game of chess.</p></div></div>
+      <div class="herotext"><h1 class="wordmark">Checkmate<br>Empires</h1><p>Build an empire. Every war is a real game of chess.</p></div></div>
     <div class="homebody">
       ${name ? `<p class="hello">Welcome, ${esc(name)}.</p>` : ''}
       ${cont}

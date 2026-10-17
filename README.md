@@ -1,4 +1,6 @@
-# Chess Civilization
+# Checkmate Empires
+
+(раньше — Chess Civilization)
 
 Пошаговая стратегия для Telegram, где бои между странами — настоящие шахматные партии.
 Дизайн — в документе «Chess Civilization — дизайн-документ игры для Telegram», план — в «Chess Civilization — план MVP».

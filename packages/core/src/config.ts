@@ -39,7 +39,7 @@ export const CITY_WOOD = 5;
 /** Улучшение ратуши до ур.2 и ур.3. */
 export const TOWN_HALL_UPGRADE: Record<2 | 3, { cost: Res; turns: number }> = {
   2: { cost: res(40, 30), turns: 1 },
-  3: { cost: res(100, 80), turns: 1 },
+  3: { cost: res(100, 80), turns: 2 }, // 3-й уровень строится 2 хода
 };
 /** Основание новой ратуши на клетке, где стоит генерал. */
 export const TOWN_HALL_FOUND = { cost: res(100, 80), turns: 2 };

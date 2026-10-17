@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Chess Civilization Telegram Mini App",
+  "description": "Checkmate Empires Telegram Mini App",
   "scripts": {
     "build": "node build.mjs",
     "typecheck": "tsc -p ."
