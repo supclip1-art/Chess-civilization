@@ -46,6 +46,7 @@ const NUMBER_RULES: Record<Exclude<Lang, 'en'>, [RegExp, (n: number) => string][
     [/(\d+) rivals?(?![A-Za-z])/g, (n) => `${n} ${plural(n, 'соперник', 'соперника', 'соперников')}`],
     [/(\d+) moves? left/g, (n) => `${plural(n, 'остался', 'осталось', 'осталось')} ${n} ${plural(n, 'шаг', 'шага', 'шагов')}`],
     [/(\d+) moves?(?![A-Za-z])/g, (n) => `${n} ${plural(n, 'шаг', 'шага', 'шагов')}`],
+    [/(\d+) cells?(?![A-Za-z])/g, (n) => `${n} ${plural(n, 'клетка', 'клетки', 'клеток')}`],
     [/(\d+)(?:st|nd|rd|th)(?![A-Za-z])/g, (n) => `${n}-е`],
   ],
   es: [
@@ -60,6 +61,7 @@ const NUMBER_RULES: Record<Exclude<Lang, 'en'>, [RegExp, (n: number) => string][
     [/(\d+) rivals?(?![A-Za-z])/g, (n) => `${n} ${n === 1 ? 'rival' : 'rivales'}`],
     [/(\d+) moves? left/g, (n) => (n === 1 ? 'queda 1 paso' : `quedan ${n} pasos`)],
     [/(\d+) moves?(?![A-Za-z])/g, (n) => `${n} ${n === 1 ? 'paso' : 'pasos'}`],
+    [/(\d+) cells?(?![A-Za-z])/g, (n) => `${n} ${n === 1 ? 'casilla' : 'casillas'}`],
     [/(\d+)(?:st|nd|rd|th)(?![A-Za-z])/g, (n) => `${n}.º`],
   ],
 };

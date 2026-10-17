@@ -180,11 +180,52 @@ const stepAlong = (s: GameState, gid: string, path: Hex[]): boolean => {
 const enemyNear = (s: GameState, g: General): General | undefined =>
   Object.values(s.generals).find((x) => x.owner !== g.owner && (s.players[x.owner] || x.owner === 'bandits') && armyValue(x.army) > 0 && distance(x.hex, g.hex) <= 2);
 
-/** Выполнить приказы генералов игрока (в начале его хода). Возвращает, что произошло, — для уведомлений. */
-export const runOrders = (s: GameState, pid: string): { gid: string; text: string }[] => {
-  const out: { gid: string; text: string }[] = [];
+/** Патруль: на сколько клеток от охраняемого города генерал замечает врага. */
+export const PATROL_RADIUS = 2;
+/** Враги у охраняемых городов: армии стран, с которыми война, разбойники и вражеские поселенцы — ближайший к генералу первым. */
+export const patrolThreats = (s: GameState, gid: string): General[] => {
+  const g = s.generals[gid];
+  if (!g || g.order?.kind !== 'patrol') return [];
+  const cities = g.order.cities.map((id) => s.halls[id]).filter((h) => h && h.owner === g.owner);
+  return Object.values(s.generals)
+    .filter((x) => x.owner !== g.owner && (x.owner === 'bandits' || (s.players[x.owner] && atWar(s, g.owner, x.owner))) && (x.settler || armyValue(x.army) > 0)
+      && cities.some((h) => distance(h.hex, x.hex) <= PATROL_RADIUS))
+    .sort((a, b) => distance(a.hex, g.hex) - distance(b.hex, g.hex));
+};
+
+/** Ход патрульного: подойти к ближайшему врагу у охраняемых городов и сообщить, что можно бить; врагов нет — вернуться к городам. */
+const patrolStep = (s: GameState, g: General): { text?: string; attack?: Hex } => {
+  if (g.order?.kind !== 'patrol') return {};
+  const cities = g.order.cities.map((id) => s.halls[id]).filter((h) => h && h.owner === g.owner);
+  if (!cities.length) { g.order = undefined; return { text: 'has no city left to guard — the patrol is over' }; }
+  if (armyValue(g.army) === 0) return {};
+  for (const foe of patrolThreats(s, g.id)) {
+    if (distance(g.hex, foe.hex) > 1) {
+      // кратчайший путь к любой клетке рядом с врагом
+      let best: Hex[] | null = null;
+      for (const n of neighbors(foe.hex)) { const p = findPath(s, g.id, n); if (p && (!best || p.length < best.length)) best = p; }
+      if (best && best.length > 1) stepAlong(s, g.id, best);
+    }
+    if (distance(g.hex, foe.hex) === 1) return { text: 'intercepts an enemy near your city', attack: { ...foe.hex } };
+  }
+  // врагов рядом нет: держимся у охраняемых городов
+  const home = cities.sort((a, b) => distance(a.hex, g.hex) - distance(b.hex, g.hex))[0];
+  if (distance(home.hex, g.hex) > 1) { const p = findPath(s, g.id, home.hex); if (p && p.length > 1) stepAlong(s, g.id, p); }
+  return {};
+};
+
+/** Выполнить приказы генералов игрока (в начале его хода). Возвращает, что произошло, — для уведомлений;
+ *  attack — патрульный стоит рядом с врагом и готов к бою (бой начинает интерфейс). */
+export const runOrders = (s: GameState, pid: string): { gid: string; text: string; attack?: Hex }[] => {
+  const out: { gid: string; text: string; attack?: Hex }[] = [];
   for (const g of Object.values(s.generals)) {
     if (g.owner !== pid || !g.order || g.order.kind === 'hold' || g.attacked || g.moveLeft <= 0) continue;
+    if (g.order.kind === 'patrol') {
+      const r = patrolStep(s, g);
+      remember(s, pid);
+      if (r.text) out.push({ gid: g.id, text: r.text, ...(r.attack ? { attack: r.attack } : {}) });
+      continue;
+    }
     if (g.order.kind === 'goto') {
       const to = g.order.to;
       const path = findPath(s, g.id, to);

@@ -360,3 +360,34 @@ test('морской торговый путь приносит золото, п
   capture(s, b, 'p2');
   assert.equal(income(s, 'p1').gold < g0 + seaRouteGold(s.seaRoutes![0].cells.length), true);
 });
+
+test('патруль: генерал перехватывает врага у охраняемого города и возвращается домой', async () => {
+  const { runOrders, playerHalls, key: k, distance, neighbors, PASSABLE, patrolThreats } = await import('../src/index.ts');
+  const { war } = await import('./helpers.ts');
+  const s = game();
+  const cap = playerHalls(s, 'p1')[0];
+  const g = Object.values(s.generals).find((x) => x.owner === 'p1')!;
+  const foe = Object.values(s.generals).find((x) => x.owner === 'p2')!;
+  const free = (h: { q: number; r: number }) => PASSABLE[s.cells[k(h)]?.terrain] && !Object.values(s.generals).some((x) => k(x.hex) === k(h)) && !Object.values(s.halls).some((x) => k(x.hex) === k(h));
+  const ring2 = Object.values(s.cells).filter((c) => distance(c.hex, cap.hex) === 2 && free(c.hex) && neighbors(c.hex).some((n) => free(n)));
+  foe.hex = { ...ring2[0].hex };
+  g.hex = { ...cap.hex };
+  g.order = { kind: 'patrol', cities: [cap.id] };
+  g.moveLeft = 2; g.attacked = false;
+  assert.equal(patrolThreats(s, g.id).length, 0, 'в мирное время врагов нет');
+  assert.deepEqual(runOrders(s, 'p1').filter((e) => e.attack), []);
+  war(s);
+  const ev = runOrders(s, 'p1');
+  const a = ev.find((e) => e.attack);
+  assert.ok(a, 'патрульный готов атаковать');
+  assert.equal(distance(g.hex, foe.hex), 1);
+  assert.equal(k(a!.attack!), k(foe.hex));
+  assert.equal(g.order?.kind, 'patrol', 'приказ не снимается из-за врага рядом');
+  // врага нет — генерал возвращается к городу
+  delete s.generals[foe.id];
+  g.hex = { ...ring2[0].hex }; g.moveLeft = 2;
+  const far = Object.values(s.cells).find((c) => distance(c.hex, cap.hex) === 3 && free(c.hex))!;
+  g.hex = { ...far.hex };
+  runOrders(s, 'p1');
+  assert.ok(distance(g.hex, cap.hex) <= 1, 'вернулся к столице');
+});

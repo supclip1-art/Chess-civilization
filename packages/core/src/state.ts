@@ -82,7 +82,8 @@ export type General = {
   traits?: import('./heroes.ts').TraitId[];
 };
 
-export type GeneralOrder = { kind: 'goto'; to: Hex } | { kind: 'explore' } | { kind: 'hold' };
+/** Приказ генерала. patrol — охрана своих городов: нападает на любую вражескую армию в PATROL_RADIUS клетках от них. */
+export type GeneralOrder = { kind: 'goto'; to: Hex } | { kind: 'explore' } | { kind: 'hold' } | { kind: 'patrol'; cities: string[] };
 
 export type Job =
   | { kind: 'resource'; hex: Hex; building: ResourceBuilding; level: number; finish: number }
