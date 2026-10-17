@@ -1,7 +1,6 @@
 // Экономика: стройка и улучшения, ратуши, строители, казарма, таверна, исследования,
 // доход, содержание и голод.
 
-import { DIFFICULTY } from './difficulty.ts';
 import {
   ARMY_MOVE, ARMY_MOVE_MARCH, TECHS, type TechId, ARMY_UPKEEP_RATE, BARRACKS, BUILDING_SLOTS, CITY_WOOD, BUILDER_HIRE_FOOD, BUILDER_UPKEEP_FOOD, BUILD_TURNS, ELO_PER_RESEARCH,
   GENERAL_UPKEEP_FOOD, MAX_RESOURCE_LEVEL, PAWNS_REQUIRED, PIECE_PRICE, RESEARCH, RESOURCE_COST, RESOURCE_OF, TRAIN_GOLD_PER_STEP,
@@ -540,9 +539,7 @@ export const completeJobs = (s: GameState, pid: string): void => {
 /** Конец хода игрока: доход минус содержание; при нехватке еды — голод. */
 export const settleEconomy = (s: GameState, pid: string): void => {
   const p = s.players[pid];
-  const inc = { ...income(s, pid) };
-  // сложность: доход ИИ больше или меньше
-  if (p.ai) { const m = DIFFICULTY[s.settings.difficulty ?? 'club'].income; for (const r of ['wood', 'food', 'gold'] as const) inc[r] = Math.round(inc[r] * m); }
+  const inc = income(s, pid);
   p.res.wood += inc.wood;
   p.res.gold += inc.gold;
   // шайка разбойника без города кормится грабежом — содержания нет

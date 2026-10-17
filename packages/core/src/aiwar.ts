@@ -38,7 +38,7 @@ type Character = {
 export const characterOf = (s: GameState, pid: string): Character => {
   const lvl = difficultyOf(s);
   const base = CHARACTER[shiftAggression(s.players[pid].ai!.aggression, lvl.shift)];
-  return { ...base, vsNeutral: base.vsNeutral + lvl.vs / 2, vsPlayer: base.vsPlayer + lvl.vs, playersFrom: Math.max(4, base.playersFrom + lvl.war), wantCities: Math.max(2, base.wantCities + lvl.cities) };
+  return { ...base, vsNeutral: base.vsNeutral + lvl.vs / 2, vsPlayer: base.vsPlayer + lvl.vs, playersFrom: Math.max(4, base.playersFrom + lvl.war), wantCities: Math.max(2, base.wantCities + lvl.cities), minArmy: base.minArmy + lvl.army };
 };
 
 export const CHARACTER: Record<Aggression, Character> = {

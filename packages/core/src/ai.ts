@@ -9,6 +9,7 @@ import {
   upgradeTavern, upgradeTownHall, upkeep, citySlots, cityUpgradeCost, startTech, trainGeneral, trainingFor,
 } from './economy.ts';
 import { key } from './hex.ts';
+import { difficultyOf } from './difficulty.ts';
 import { BUILDING_TERRAIN, type GameState } from './state.ts';
 
 export const FULL_ARMY: Record<Piece, number> = { p: 8, n: 2, b: 2, r: 2, q: 1 };
@@ -127,6 +128,7 @@ export const aiEconomyTurn = (s: GameState, pid: string): void => {
   }
   if (p.res.gold >= 50) startResearch(s, pid);
   // технологии: по порядку, когда хватает золота с запасом на армию
+  if (!difficultyOf(s).techs) return; // «Новичок» технологий не учит и генералов не переобучает
   if (p.res.gold >= 90) for (const id of ['militia', 'march', 'quartermaster', 'fortify', 'guilds', 'veterans', 'academy'] as const) if (startTech(s, pid, id).ok || p.research.tech) break;
   // «Военная академия»: переобучаем генералов, когда золота с запасом
   for (const g of playerGenerals(s, pid)) { const tr = trainingFor(s, g.id); if (tr.steps && p.res.gold >= tr.gold + 120) trainGeneral(s, pid, g.id); }

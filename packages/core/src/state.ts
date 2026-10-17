@@ -231,8 +231,7 @@ export const generalName = (s: GameState, owner: string): string => {
 
 /** Потолок ELO генерала: не выше стартового ELO партии + 200, как ни копи бонусы (Тактика, победы, академия, события). */
 export const ELO_CAP_BONUS = 200;
-export const eloCap = (s: GameState, pid?: string): number =>
-  s.settings.elo + ELO_CAP_BONUS + (pid && s.players[pid]?.ai ? DIFFICULTY[s.settings.difficulty ?? 'club'].elo : 0); // у ИИ потолок сдвинут сложностью
+export const eloCap = (s: GameState, _pid?: string): number => s.settings.elo + ELO_CAP_BONUS;
 /** Прибавить генералу ELO с учётом потолка. */
 export const addElo = (s: GameState, g: General, d: number): void => { g.elo = Math.max(g.elo, Math.min(eloCap(s, g.owner), g.elo + d)); };
 
@@ -346,17 +345,9 @@ export const createGame = (map: MapDef, setup: PlayerSetup[], opts: { elo: numbe
   pickNeutrals(s, map, [...spawnOf.filter((i) => i >= 0).map((i) => map.spawns[i]), ...freeSpawns]).forEach((h) => addNeutral(s, h, map.names?.[key(h)]));
   recomputeTerritory(s);
   setup.forEach((p, i) => { if (p.outlaw) placeOutlaw(s, `p${i + 1}`, opts.elo); });
-  // сложность: ИИ получает стартовые ресурсы, фигуры и ELO
+  // сложность: ИИ получает стартовые ресурсы (ELO и армию сложность не трогает)
   const lvl = DIFFICULTY[opts.difficulty ?? 'club'];
-  for (const p of Object.values(s.players)) {
-    if (!p.ai) continue;
-    for (const r of ['wood', 'food', 'gold'] as const) p.res[r] += lvl.res[r];
-    for (const g of Object.values(s.generals)) {
-      if (g.owner !== p.id) continue;
-      g.elo = Math.max(600, g.elo + lvl.elo);
-      for (const [k, n] of Object.entries(lvl.army) as [Piece, number][]) g.army[k] += n;
-    }
-  }
+  for (const p of Object.values(s.players)) if (p.ai) for (const r of ['wood', 'food', 'gold'] as const) p.res[r] += lvl.res[r];
   return s;
 };
 

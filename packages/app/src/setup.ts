@@ -129,7 +129,7 @@ export const openSetup = (app: HTMLElement, back: () => void, start: (s: GameSta
     <div class="rules">
       <div class="stepper"><span>Rivals</span><button class="ghost stepb" data-s="players:-1" aria-label="Fewer">−</button><b id="playersv"></b><button class="ghost stepb" data-s="players:1" aria-label="More">+</button></div>
       <div class="stepper"><span>Generals' ELO</span><button class="ghost stepb" data-s="elo:-1" aria-label="Lower">−</button><b id="elov"></b><button class="ghost stepb" data-s="elo:1" aria-label="Higher">+</button></div>
-      <p class="muted">Base ELO of every general; rivals' strength adds to or takes from the AI's.</p>
+      <p class="muted">One ELO for every general in the game, yours and the AI's.</p>
       <div class="stepper toggle"><span>Random start bonuses</span><button class="pill" id="bonus" aria-pressed="false"></button></div>
       <p class="muted" id="bonusnote"></p>
     </div>
