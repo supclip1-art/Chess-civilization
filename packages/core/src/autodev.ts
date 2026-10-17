@@ -2,17 +2,23 @@
 //   economy — ресурсы: фермы, лесопилки, рудники поровну, с упором на то, чего не хватает;
 //   army    — под армию: казарма (до 3-го уровня), рудники на золото, фермы на содержание.
 // Запаса не оставляет: тратит всё, на что хватает.
+// Места под рудники бережёт: пока на земле города есть свободные месторождения, столько мест не занимает ничем другим.
+// Столица на авторазвитии ещё и прокладывает дороги к своим городам, когда хватает дерева.
 
 import { BUILDER_HIRE_FOOD, RESOURCE_OUTPUT, type Res, type ResourceBuilding } from './config.ts';
 import {
   barracksCost, build, buildOptions, citySlots, cityUpgradeCost, freeBuilders, hireBuilder, income, maxBuilders, mods, resourceCost,
   upgrade, upgradeBarracks, upgradeTownHall, upkeep,
 } from './economy.ts';
-import { key } from './hex.ts';
+import { distance, key } from './hex.ts';
+import { buildRoad, roadCost, roadPath } from './extras.ts';
+import { isCapital } from './map.ts';
 import { type GameState, say } from './state.ts';
 
 export type AutoFocus = 'economy' | 'army';
-const RESERVE: Res = { wood: 0, food: 0, gold: 0 }; // неприкосновенного запаса нет: город тратит всё, что может
+const RESERVE: Res = { wood: 0, food: 0, gold: 0 };
+/** Сколько дерева должно остаться после дороги — на здания. */
+const ROAD_SPARE = 60; // неприкосновенного запаса нет: город тратит всё, что может
 
 /** Хватает ли, не залезая в запас (запас проверяем только по тем ресурсам, что тратятся). */
 const affordable = (have: Res, cost: Partial<Res>) =>
@@ -45,6 +51,16 @@ export const autoDevelop = (s: GameState, pid: string): string[] => {
     const bar = h.barracks ?? 0;
     if (focus === 'army' && bar < 3 && freeBuilders(s, pid, h.id) > 0 && !p.jobs.some((j) => j.kind === 'barracks' && j.hallId === h.id)
       && affordable(p.res, barracksCost(s, pid, (bar + 1) as 1 | 2 | 3)) && upgradeBarracks(s, pid, h.id).ok) done.push(`${h.name}: barracks ${bar + 1}`);
+    // дороги: столица ведёт дорогу к ближайшему своему городу без дороги, если дерева хватает с запасом
+    if (isCapital(s, h) && freeBuilders(s, pid, h.id) > 0 && !p.jobs.some((j) => j.kind === 'road' && j.hallId === h.id)) {
+      const targets = Object.values(s.halls).filter((x) => x.owner === pid && x.id !== h.id).sort((a, b) => distance(a.hex, h.hex) - distance(b.hex, h.hex));
+      for (const t of targets) {
+        const path = roadPath(s, pid, h.id, t.id);
+        if (!path || path.every((c) => s.cells[key(c)].road)) continue;
+        if (p.res.wood - roadCost(s, path).wood < ROAD_SPARE) break; // ближайшая дорога пока не по карману — ждём
+        if (buildRoad(s, pid, h.id, t.id).ok) { done.push(`${h.name}: road to ${t.name}`); break; }
+      }
+    }
     // здания: лучшая выгода на единицу цены, пока есть свободные строители
     for (let guard = 0; guard < 4 && freeBuilders(s, pid, h.id) > 0; guard++) {
       const foodNet = income(s, pid).food - upkeep(s, pid);
@@ -56,6 +72,10 @@ export const autoDevelop = (s: GameState, pid: string): string[] => {
         return k === 'mine' ? (low('gold') ? 2 : 1.3) : food ? (low('food') ? 1.6 : 1) : low('wood') ? 1.6 : 1;
       };
       const slots = citySlots(s, h.id);
+      // свободные месторождения: под каждое держим место, рудник там рано или поздно встанет
+      const deposits = Object.values(s.cells).filter((c) => c.hall === h.id && c.owner === pid && !c.building && !c.reserved && !c.tower
+        && c.terrain === 'deposit' && key(c.hex) !== key(h.hex)).length;
+      const keepForMines = slots.max - slots.used - 1 < deposits;
       let best: { score: number; run: () => boolean; what: string } | null = null;
       for (const c of Object.values(s.cells)) {
         if (c.hall !== h.id || c.owner !== pid || c.reserved || key(c.hex) === key(h.hex)) continue;
@@ -64,6 +84,8 @@ export const autoDevelop = (s: GameState, pid: string): string[] => {
         for (const { kind, maxLevel } of buildOptions(s, pid, c)) {
           const level = c.building ? (c.building.kind === kind ? c.building.level + 1 : 0) : 1;
           if (!level || level > maxLevel) continue;
+          // новое здание не на месторождении занимает место, отложенное под рудник (кроме фермы в голод)
+          if (level === 1 && kind !== 'mine' && keepForMines && !((kind === 'farm' || kind === 'fishery') && income(s, pid).food - upkeep(s, pid) < 5)) continue;
           const cost = resourceCost(s, pid, kind, level);
           if (!affordable(p.res, cost)) continue;
           const gain = RESOURCE_OUTPUT[kind][level - 1] - (RESOURCE_OUTPUT[kind][level - 2] ?? 0);

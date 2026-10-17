@@ -123,11 +123,6 @@ SPAWNS = [  # нация, город, долгота, широта
 HOME_EXTRA = {'Rome': {'forest1': 2}, 'Athens': {'deposit': 3}, 'London': {'deposit': 3}, 'Warsaw': {'field1': 4}, 'Budapest': {'field1': 4}, 'Paris': {'field1': 4}}
 
 
-def NO_BANDITS(lon, lat):
-    """Греция: разбойники сюда не ходят — Афинам и так тесно на полуострове."""
-    return (lat < 41.2 and lon >= 20.7) or (lat < 40.0 and lon >= 20.0)
-
-
 NEUTRALS = [
     ('Lisbon', -9.1, 38.7), ('London', -0.1, 51.5), ('Amsterdam', 4.9, 52.4), ('Copenhagen', 12.4, 55.7),
     ('Prague', 14.4, 50.1), ('Vienna', 16.4, 48.2), ('Warsaw', 21.0, 52.2), ('Budapest', 19.0, 47.5),

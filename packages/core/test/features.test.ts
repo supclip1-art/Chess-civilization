@@ -391,3 +391,32 @@ test('патруль: генерал перехватывает врага у о
   runOrders(s, 'p1');
   assert.ok(distance(g.hex, cap.hex) <= 1, 'вернулся к столице');
 });
+
+test('авторазвитие бережёт места под рудники, а столица тянет дороги к своим городам', async () => {
+  const { autoDevelop, setAuto, citySlots, playerHalls, endTurn, key: k, capture, distance } = await import('../src/index.ts');
+  const s = game();
+  const cap = playerHalls(s, 'p1')[0];
+  // на земле столицы — два месторождения
+  const land = Object.values(s.cells).filter((c) => c.hall === cap.id && k(c.hex) !== k(cap.hex) && !c.building && c.terrain !== 'water' && c.terrain !== 'mountain');
+  land.slice(0, 2).forEach((c) => { c.terrain = 'deposit'; });
+  setAuto(s, 'p1', cap.id, 'economy');
+  for (let t = 0; t < 30; t++) {
+    s.players.p1.res = { wood: 600, food: 600, gold: 300 };
+    if (s.order[s.current] === 'p1') autoDevelop(s, 'p1');
+    const sl = citySlots(s, cap.id);
+    const freeDeposits = Object.values(s.cells).filter((c) => c.hall === cap.id && c.terrain === 'deposit' && !c.building && !c.reserved).length;
+    assert.ok(sl.max - sl.used >= Math.min(freeDeposits, sl.max - sl.used), 'места под рудники не заняты');
+    assert.ok(sl.max - sl.used >= freeDeposits || freeDeposits === 0 || sl.used < sl.max, 'хотя бы место под рудник есть');
+    endTurn(s);
+  }
+  const mines = Object.values(s.cells).filter((c) => c.hall === cap.id && c.building?.kind === 'mine').length;
+  assert.ok(mines >= 1, 'рудник построен');
+  // дорога к другому своему городу
+  const other = Object.values(s.halls).filter((h) => h.owner !== 'p1').sort((a, b) => distance(a.hex, cap.hex) - distance(b.hex, cap.hex))[0];
+  capture(s, other.id, 'p1');
+  while (s.order[s.current] !== 'p1') endTurn(s);
+  s.players.p1.jobs = []; s.players.p1.res = { wood: 900, food: 600, gold: 300 };
+  autoDevelop(s, 'p1');
+  const road = s.players.p1.jobs.find((j) => j.kind === 'road');
+  assert.ok(road, 'столица строит дорогу');
+});

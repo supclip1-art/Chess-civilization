@@ -131,22 +131,17 @@ test('два генерала не встают на одну клетку: ск
   assert.equal(distance(path[path.length - 1], g.hex) <= 1, true, 'приказ ведёт к соседней клетке');
 });
 
-test('разбойники не появляются у Афин и не заходят в Грецию; малоразвитый город им милее', async () => {
-  const { bandits, spawnBandits, reachable, banditsTurn } = await import('../src/index.ts');
+test('в Греции тоже бродят разбойники: шайка появляется у Афин', async () => {
+  const { bandits, spawnBandits } = await import('../src/index.ts');
   const m = europeMap();
   m.randomSpawns = false;
   m.spawnNations = ['italy', 'germany', 'france', 'spain', 'britain', 'poland', 'turkey', 'russia']; // Афины — турки
   const s = newGame(m, [{ nation: 'turkey' }, { nation: 'italy' }], { elo: 1200, seed: 5, bandits: 6 });
   const athens = playerHalls(s, 'p1')[0];
   assert.equal(key(athens.hex), key(m.spawns[6]));
-  assert.ok(s.cells[key(athens.hex)].noBandits);
+  assert.ok(!s.cells[key(athens.hex)].noBandits);
   for (let i = 0; i < 5; i++) spawnBandits(s);
-  for (const b of bandits(s)) {
-    assert.ok(distance(b.hex, athens.hex) > 7, 'шайки не у Афин');
-    b.moveLeft = 30;
-    for (const k of reachable(s, b.id).keys()) assert.ok(!s.cells[k].noBandits, 'в Грецию не пройти');
-  }
-  void banditsTurn;
+  assert.ok(bandits(s).some((b) => distance(b.hex, athens.hex) <= 8), 'шайка у Афин');
 });
 
 test('разбойники, разбившие армию в городе, забирают его — и столицу тоже', async () => {

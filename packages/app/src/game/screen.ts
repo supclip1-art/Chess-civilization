@@ -313,6 +313,11 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
     return `<div class="genmoves"><span class="pips">${Array.from({ length: max }, (_, i) => `<i class="${i < g.moveLeft ? 'on' : ''}"></i>`).join('')}</span><small>${g.attacked ? 'acted' : `${g.moveLeft} move${g.moveLeft === 1 ? '' : 's'}`}</small></div>`;
   };
 
+  /** Компактная команда генерала: значок и короткая подпись, пояснение — во всплывающей подсказке. */
+  const cmd = (id: string, ico: string, label: string, hint: string, cls = '') =>
+    `<button class="gcmd ${cls}" data-a="${id}" title="${esc(hint)}"><span class="gci">${ico}</span><b>${label}</b></button>`;
+  const traitMini = (g: { traits?: TraitId[] }) => (g.traits ?? []).map((t) => `<span class="tmini" title="${esc(TRAITS[t].text)}">${esc(TRAITS[t].name)}</span>`).join('');
+
   /** Карточка поселенца: где он, основание города, приказы. */
   const settlerCard = (g: typeof s.generals[string], cell: typeof s.cells[string]): string => {
     const mine = g.owner === ME;
@@ -324,14 +329,12 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
     const turns = m.townHallFoundTurns ?? TOWN_HALL_FOUND.turns;
     const o = g.order;
     const canFound = !cell.owner && cell.terrain !== 'water' && cell.terrain !== 'mountain';
-    return `<div class="gencard">${unitHead('<span class="genglyph">⛺</span>', 'Your settler', color, 'founds a new city', founding ? '' : movePips(g))}
-      ${sel.gid !== g.id ? '<p class="muted"><b>Tap this cell again</b> to command the settler.</p>' : ''}
-      ${founding ? `<div class="cjobs"><span class="cjob">${iconSvg('clock', 14)}Founding a city · ${left(founding.finish)}</span></div>` : `
-      ${o ? `<div class="chips"><span class="chip gold">${o.kind === 'goto' ? '➜ marching' : '⛨ holding position'}</span></div>` : ''}
-      <div class="ctiles">${canFound ? ctile(`found:${g.id}`, '🏰', 'Found a city here', null, `${turns} turn${turns > 1 ? 's' : ''} · the settler becomes the city`, 'ctop') : ''}
-        ${o?.kind === 'goto' ? ctile(`order:${g.id}:none`, '✋', 'Stop the march', null, 'he waits for orders') : ''}
-        ${ctile(`order:${g.id}:${o?.kind === 'hold' ? 'none' : 'hold'}`, '⛨', o?.kind === 'hold' ? 'Stop holding' : 'Hold position', null, o?.kind === 'hold' ? 'remind me about him again' : 'stays put; no end-of-turn reminder')}</div>
-      <p class="muted">Unarmed: an enemy army next to him can kill him. ${canFound ? '' : 'Cities are founded on unclaimed land. Tap a far cell to send him there.'}</p>`}</div>`;
+    const status = founding ? `<span class="chip gold">🏰 founding · ${left(founding.finish)}</span>` : o ? `<span class="chip gold">${o.kind === 'goto' ? '➜ marching' : '⛨ holding'}</span>` : '';
+    return `<div class="gencard compact">${unitHead('<span class="genglyph">⛺</span>', 'Your settler', color, `${status || '<span>founds a new city</span>'}`, founding ? '' : movePips(g))}
+      ${founding ? '' : `<div class="gcmds">${canFound ? cmd(`found:${g.id}`, '🏰', 'Found city', `${turns} turn${turns > 1 ? 's' : ''} · the settler becomes the city`, 'top') : ''}
+        ${o?.kind === 'goto' ? cmd(`order:${g.id}:none`, '✋', 'Stop', 'he waits for orders') : ''}
+        ${cmd(`order:${g.id}:${o?.kind === 'hold' ? 'none' : 'hold'}`, '⛨', o?.kind === 'hold' ? 'Release' : 'Hold', o?.kind === 'hold' ? 'remind me about him again' : 'stays put; no end-of-turn reminder')}</div>`}
+      ${sel.gid !== g.id ? '<p class="muted gtip">Tap the cell again to command him.</p>' : !founding && !canFound ? '<p class="muted gtip">Tap free land far away to send him there.</p>' : ''}</div>`;
   };
 
   const sheet = () => {
@@ -389,37 +392,32 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
       const color = ownerColor(s, g.owner) ?? '#888';
       const nat = s.players[g.owner]?.nation;
       const pic = nat ? portraitSvg(nat, g.name, 54) : '<span class="genglyph">⚔</span>';
-      const meta = `<span class="elo">ELO ${g.elo}</span>${g.stars ? `<span class="gstars">${'★'.repeat(g.stars)}</span>` : ''}${mine ? '' : `<span>${esc(ownerName(s, g.owner))}</span>`}`;
-      let html = `<div class="gencard ${mine ? '' : 'foe'}">${unitHead(pic, mine ? `General ${esc(g.name)}` : esc(g.name), color, meta, mine ? movePips(g) : s.players[g.owner] ? nationBtn(g.owner) : '')}
-        ${armyTokens(g.army, mine)}${traitChips(g)}`;
+      const o = mine ? g.order : undefined;
+      const where = o?.kind === 'goto' ? (Object.values(s.halls).find((h) => key(h.hex) === key(o.to))?.name ?? 'far away') : '';
+      const status = !o ? '' : `<span class="chip gold">${o.kind === 'goto' ? `➜ ${esc(where)}` : o.kind === 'explore' ? '🧭 exploring' : o.kind === 'patrol' ? `🛡 ${o.cities.map((id) => esc(s.halls[id]?.name ?? '')).join(', ')}` : '⛨ holding'}</span>`;
+      const meta = `<span class="elo">ELO ${g.elo}</span>${g.stars ? `<span class="gstars">${'★'.repeat(g.stars)}</span>` : ''}${mine ? '' : `<span>${esc(ownerName(s, g.owner))}</span>`}${status}`;
+      let html = `<div class="gencard compact ${mine ? '' : 'foe'}">${unitHead(pic, mine ? esc(g.name) : esc(g.name), color, meta, mine ? movePips(g) : s.players[g.owner] ? nationBtn(g.owner) : '')}
+        <div class="garow">${armyTokens(g.army, mine)}${traitMini(g)}</div>`;
       if (mine) {
-        const o = g.order;
-        const where = o?.kind === 'goto' ? (Object.values(s.halls).find((h) => key(h.hex) === key(o.to))?.name ?? `${TERRAIN_NAME[s.cells[key(o.to)].terrain].toLowerCase()} far away`) : '';
         const tr = trainingFor(s, g.id);
-        html += `${o ? `<div class="chips"><span class="chip gold">${o.kind === 'goto' ? `➜ marching to ${esc(where)}` : o.kind === 'explore' ? '🧭 exploring' : o.kind === 'patrol' ? `🛡 patrolling: ${o.cities.map((id) => esc(s.halls[id]?.name ?? '')).join(', ')}` : '⛨ holding position'}</span></div>` : ''}
-          <div class="genbook"><span>📖</span><span>White: <b>${esc(g.white)}</b> · vs 1.e4: <b>${esc(g.vsE4)}</b> · vs 1.d4: <b>${esc(g.vsD4)}</b></span></div>
-          <div class="ctiles">${o?.kind === 'goto' ? ctile(`order:${g.id}:none`, '✋', 'Stop the march', null, 'the general waits for orders') : ''}
-            ${ctile(`order:${g.id}:${o?.kind === 'explore' ? 'none' : 'explore'}`, '🧭', o?.kind === 'explore' ? 'Stop exploring' : 'Explore', null, o?.kind === 'explore' ? 'back to your orders' : 'walks into the unknown by himself every turn')}
-            ${ctile(`order:${g.id}:${o?.kind === 'hold' ? 'none' : 'hold'}`, '⛨', o?.kind === 'hold' ? 'Stop holding' : 'Hold position', null, o?.kind === 'hold' ? 'remind me about him again' : 'stays put; no end-of-turn reminder')}
-            ${o?.kind === 'patrol' ? ctile(`order:${g.id}:none`, '✋', 'Stop patrolling', null, 'back to your orders') : ''}${ctile(`patrol:${g.id}`, '🛡', o?.kind === 'patrol' ? 'Change the patrol' : 'Patrol', null, o?.kind === 'patrol' ? 'pick other cities to guard' : `guards your cities: attacks any enemy within ${PATROL_RADIUS} cells of them`)}
-            ${canPillage(s, g.id).ok ? ctile(`pillage:${g.id}`, '🔥', `Pillage the ${cell.building ? BUILDING_NAME[cell.building.kind].toLowerCase() : 'watchtower'}`, null, `destroys it · you get ${cost(pillageLoot(s, g.hex))} · ends his turn`, 'danger') : ''}
-            ${tr.steps && hasTech(s, ME, 'academy') ? ctile(`train:${g.id}`, '🎓', `Retrain: +${tr.steps * ELO_PER_RESEARCH} ELO`, { wood: 0, food: 0, gold: tr.gold }, ' · catches up with your Tactics') : ''}</div>
-          ${tr.steps && !hasTech(s, ME, 'academy') ? `<p class="muted">New generals are ${tr.steps * ELO_PER_RESEARCH} ELO stronger than him. The Military academy can retrain him.</p>` : ''}
-          <p class="muted">${o?.kind === 'goto' ? 'To change the route, stop the march and tap a new cell.' : 'Tip: tap any far cell to send this general marching there.'}${hallOnCell ? '' : ' Tap his cell again to see the land under him.'}</p>`;
+        html += `<div class="gcmds">${o?.kind === 'goto' || o?.kind === 'patrol' ? cmd(`order:${g.id}:none`, '✋', 'Stop', 'cancel the order') : ''}
+            ${cmd(`order:${g.id}:${o?.kind === 'explore' ? 'none' : 'explore'}`, '🧭', o?.kind === 'explore' ? 'Stop' : 'Explore', 'walks into the unknown by himself every turn', o?.kind === 'explore' ? 'on' : '')}
+            ${cmd(`order:${g.id}:${o?.kind === 'hold' ? 'none' : 'hold'}`, '⛨', o?.kind === 'hold' ? 'Release' : 'Hold', 'stays put; no end-of-turn reminder', o?.kind === 'hold' ? 'on' : '')}
+            ${cmd(`patrol:${g.id}`, '🛡', 'Patrol', `guards your cities: attacks any enemy within ${PATROL_RADIUS} cells of them`, o?.kind === 'patrol' ? 'on' : '')}
+            ${canPillage(s, g.id).ok ? cmd(`pillage:${g.id}`, '🔥', 'Pillage', `destroys the building · you get ${pillageLoot(s, g.hex).wood} wood, ${pillageLoot(s, g.hex).food} food, ${pillageLoot(s, g.hex).gold} gold · ends his turn`, 'danger') : ''}
+            ${tr.steps && hasTech(s, ME, 'academy') ? cmd(`train:${g.id}`, '🎓', `+${tr.steps * ELO_PER_RESEARCH} ELO`, `retrain for ${tr.gold} gold`) : ''}</div>`;
         const home = cell.owner === ME && cell.hall ? s.halls[cell.hall] : undefined;
         if (home) {
           // найм — по казарме города, на чьей земле стоит генерал; кнопки не отключаем: нажатие объясняет, чего не хватает
           const bar = home.barracks ?? 0;
-          html += `<div class="hirebox"><div class="hirehead"><span class="cico">⚔</span><span>Hire pieces · barracks of <b>${esc(home.name)}</b>: ${bar ? `level ${bar}` : 'none yet — build them in this city'}</span></div>
-            <div class="hiregrid">${PIECES.map((x) => {
+          html += `<div class="hiregrid mini">${PIECES.map((x) => {
               const price = Math.round(piecePrice(s, ME, x) * (g.traits?.includes('recruiter') ? 0.8 : 1));
               const full = g.army[x] >= ARMY_MAX[x], locked = bar < HIRE_LEVEL[x];
               const ok = !locked && !full && p.res.gold >= price;
-              return `<button class="hpiece ${ok ? '' : 'off'}" data-a="hire:${g.id}:${x}">${pieceHtml(true, x)}<b>${PIECE_NAME[x]}</b><small>${locked ? `🔒 ${HIRE_LEVEL[x]}` : amount('gold', price)}</small><span class="hcount">${g.army[x]}/${ARMY_MAX[x]}</span></button>`;
-            }).join('')}</div></div>`;
-        } else if (cell.owner === ME) {
-          html += '<p class="muted hirehead">Pieces are hired on the land of a city with barracks.</p>';
+              return `<button class="hpiece ${ok ? '' : 'off'}" data-a="hire:${g.id}:${x}" title="${PIECE_NAME[x]} · ${g.army[x]}/${ARMY_MAX[x]}">${pieceHtml(true, x)}<b>${PIECE_NAME[x]}</b><small>${locked ? `🔒 ${HIRE_LEVEL[x]}` : amount('gold', price)}</small><span class="hcount">${g.army[x]}/${ARMY_MAX[x]}</span></button>`;
+            }).join('')}</div>`;
         }
+        html += `<p class="muted gtip">${o?.kind === 'goto' ? 'Marching on at the end of your turn.' : o ? 'Orders run when you end your turn.' : 'Tap a far cell to send him marching.'}</p>`;
       }
       parts.push(html + '</div>');
     }
@@ -548,7 +546,17 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
     else if (a === 'settler') { const r = hireSettler(s, ME, x); act(r); if (r.ok) toast('A settler is ready in the city. He can move next turn.'); }
     else if (a === 'unqueue') act(cancelQueued(s, ME, Number(x)));
     else if (a === 'canceljob') act(cancelJob(s, ME, Number(x)));
-    else if (a === 'demolish') { modal(`<h2>Demolish?</h2><p>The building is torn down and its slot is free again. Half of what it cost is returned: ${cost(demolishRefund(s, hex(x)))}.</p><div class="acts">${btn('yes', 'Demolish', '')}${btn('no', 'Keep it', '')}</div>`); const yes = (await ask()) === 'yes'; modal(null); if (yes) act(demolish(s, ME, hex(x))); }
+    else if (a === 'demolish') {
+      const c = s.cells[x]; const b = c?.building;
+      const ico = b ? iconSvg(b.kind, 46) : iconSvg('tower', 52);
+      const name = b ? BUILDING_NAME[b.kind] : 'Watchtower';
+      const r = demolishRefund(s, hex(x));
+      modal(`<div class="dembox"><span class="demico">${ico}<i>⛏</i></span><h2>Demolish?</h2>
+        <p><b>${name}</b>${b ? ` · level ${b.level}` : ''}</p><p class="muted">the slot becomes free for another building</p>
+        <div class="demref"><span>Half of the cost returns</span><div class="chips">${(['wood', 'food', 'gold'] as const).filter((k) => r[k]).map((k) => `<span class="chip ok">+${amount(k, r[k])}</span>`).join('') || '<span class="chip">nothing</span>'}</div></div>
+        <div class="ctiles">${ctile('yes', '⛏', 'Demolish', null, 'cannot be undone', 'danger')}${ctile('no', '✋', 'Keep it', null, 'leave it standing', 'ctop')}</div></div>`);
+      const yes = (await ask()) === 'yes'; modal(null); if (yes) act(demolish(s, ME, hex(x)));
+    }
     else if (a === 'pillage') { const r = pillage(s, x); act(r); if (r.ok) chestOpen('common'); }
     else if (a === 'walls') act(buildWalls(s, ME, x));
     else if (a === 'market') act(upgradeMarket(s, ME, x));
@@ -561,13 +569,13 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
     else if (a === 'goto') {
       const g = s.generals[sel.gid!];
       g.order = { kind: 'goto', to: { ...sel.hex! } };
-      void followOrders();
+      saveGame(s);
       sel = {}; // приказ отдан — генерал больше не выбран, касания карты маршрут не трогают
-      if (s.generals[g.id]?.order) toast('The general is marching. Tap him to see the route or stop the march.');
+      toast('The general sets off when you end your turn. Until then you can move him yourself.');
       refresh();
     }
     else if (a === 'patrol') await patrolMenu(x);
-    else if (a === 'order') { const g = s.generals[x]; g.order = y === 'none' ? undefined : y === 'explore' ? { kind: 'explore' } : { kind: 'hold' }; if (y === 'explore') void followOrders(); sel = y === 'none' ? { hex: g.hex, gid: g.id } : {}; saveGame(s); refresh(); }
+    else if (a === 'order') { const g = s.generals[x]; g.order = y === 'none' ? undefined : y === 'explore' ? { kind: 'explore' } : { kind: 'hold' }; sel = y === 'none' ? { hex: g.hex, gid: g.id } : {}; saveGame(s); refresh(); }
     else if (a === 'attack') doAttack();
     else if (a === 'train') { const r = trainGeneral(s, ME, x); act(r); if (r.ok) toast(`${s.generals[x].name} is retrained: ELO ${s.generals[x].elo}.`); }
   };
@@ -649,7 +657,7 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
       if (c !== 'pgo') return;
       g.order = { kind: 'patrol', cities: [...picked] };
       saveGame(s);
-      await followOrders();
+      toast('The patrol starts when you end your turn.');
       sel = { hex: g.hex, gid: g.id };
       refresh();
       return;
@@ -1210,6 +1218,14 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
     const from = s.log.length;
     sel = {};
     refresh();
+    // приказы генералов (поход, разведка, патруль) выполняются сейчас — после того как игрок сходил сам
+    const was = new Map(Object.values(s.generals).filter((g) => g.owner === ME).map((g) => [g.id, { ...g.hex }]));
+    const marched = runOrders(s, ME);
+    for (const [id, h] of was) { const g = s.generals[id]; if (g && key(g.hex) !== key(h)) view.slide(id, [h, g.hex]); }
+    saveGame(s);
+    if (marched.length) { draw(); await sleep(450); }
+    await interceptions(marched);
+    if (!s.players[ME].alive || winner(s)) { busy = false; refresh(); checkEnd(); return; }
     endTurn(s);
     try {
       while (s.order[s.current] !== ME && s.players[ME].alive && !winner(s)) {
@@ -1236,9 +1252,6 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
     }
     veil(false);
     busy = false;
-    const was = new Map(Object.values(s.generals).filter((g) => g.owner === ME).map((g) => [g.id, { ...g.hex }]));
-    const marched = s.players[ME].alive ? runOrders(s, ME) : [];
-    for (const [id, h] of was) { const g = s.generals[id]; if (g && key(g.hex) !== key(h)) view.slide(id, [h, g.hex]); }
     saveGame(s);
     const news = s.log.slice(from).filter((e) => e.player === ME || /captured|out of the game|siege of/.test(e.text));
     const notes = [...news.map((e) => `${e.player && e.player !== ME ? (hasMet(s, ME, e.player) ? ownerName(s, e.player) : 'An unknown nation') + ': ' : ''}${e.text[0].toUpperCase()}${e.text.slice(1)}`), ...marched.map((m) => `General ${m.text}`)];
@@ -1248,7 +1261,7 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
     sel = { hex: sel.hex, gid: sel.gid && s.generals[sel.gid] ? sel.gid : undefined };
     refresh();
     checkEnd();
-    void interceptions(marched).then(eventCard).then(offerCard).then(annexPrompt);
+    void eventCard().then(offerCard).then(annexPrompt);
   });
 
   /** Событие хода: карточка с рисунком и вариантами. Беды без выбора — просто сообщение. */
@@ -1303,17 +1316,6 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
     refresh();
   };
 
-  /** Выполнить приказы сразу (поход, разведка и патруль начинаются в тот же ход). */
-  const followOrders = async () => {
-    const before = new Map(Object.values(s.generals).filter((g) => g.owner === ME).map((g) => [g.id, { ...g.hex }]));
-    const ev = runOrders(s, ME);
-    for (const [id, h] of before) { const g = s.generals[id]; if (g && key(g.hex) !== key(h)) view.slide(id, [h, g.hex]); }
-    const plain = ev.filter((m) => !m.attack);
-    if (plain.length) toast(plain.map((m) => `General ${m.text}`).join(' · '));
-    saveGame(s);
-    await interceptions(ev);
-  };
-
   /** Патрульные, что подошли к врагу у своих городов, — по очереди в бой. */
   const interceptions = async (ev: { gid: string; text: string; attack?: Hex }[]) => {
     for (const m of ev) {
@@ -1328,8 +1330,9 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
       void foe;
       await sleep(600);
       const r = attack(s, g.id, m.attack);
-      if (r.kind === 'battle') await startBattle(r.attacker, r.defender);
+      if (r.kind === 'battle') { await fightBattle(r.attacker, r.defender, false); await annexPrompt(); refresh(); }
       else if (r.kind === 'killed') { saveGame(s); toast('The enemy settler is killed.'); refresh(); }
+      if (!s.players[ME].alive || winner(s)) return;
     }
   };
 
@@ -1338,7 +1341,7 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
     const path = findPath(s, gid, h);
     const r = move(s, gid, h);
     if (r.ok && path) view.slide(gid, path);
-    if (r.ok) { if (s.generals[gid].order?.kind !== 'hold') s.generals[gid].order = undefined; sel = { hex: h, gid }; saveGame(s); } else toast((r as { reason: string }).reason);
+    if (r.ok) { const ok = s.generals[gid].order?.kind; if (ok !== 'hold' && ok !== 'patrol') s.generals[gid].order = undefined; sel = { hex: h, gid }; saveGame(s); } else toast((r as { reason: string }).reason);
     refresh();
   };
 
