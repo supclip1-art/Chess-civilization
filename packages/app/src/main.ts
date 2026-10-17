@@ -1,19 +1,20 @@
 // Mini App: главное меню, новая партия, партия на карте (этап 3) и замер Stockfish.
 
 import {
-  BANDIT_COUNT, NATIONS, NATION_ORDER, armiesFromFen, asiaMap, europeMap, insufficientMaterial, newGame, type Aggression, type NationId,
+  NATIONS, armiesFromFen, insufficientMaterial, type NationId,
 } from '../../core/src/index.ts';
 import { Engine, profile } from './engine.ts';
 import { openGame } from './game/screen.ts';
 import { flagSvg } from './game/flags.ts';
 import { drawHero } from './hero.ts';
+import { openSetup } from './setup.ts';
 import { resetTutorial } from './game/tutorial.ts';
 import { clearSave, loadGame, saveGame } from './game/save.ts';
 import { MUSIC_STYLES, audioPrefs, initAudio, page, setMusic, setMusicStyle, setSfx } from './audio.ts';
 import { LANGS, initI18n, lang, setLang } from './i18n.ts';
 import { initTelegram, platformLabel, setBack, tap, userName } from './tg.ts';
-import { applyLook, applyStartBonus, choose, dynasty, level, mapLevel, nationLevel, syncDynasty } from './dynasty.ts';
-import { bonusOptions, dynastyButton, openDynasty } from './dynastyScreen.ts';
+import { applyLook, syncDynasty } from './dynasty.ts';
+import { dynastyButton, openDynasty } from './dynastyScreen.ts';
 
 declare const __BUILD__: string; // подставляет сборка: короткий хеш коммита
 
@@ -88,136 +89,9 @@ const home = () => {
 
 // ---------- Новая партия ----------
 
-// Карты: любая из 26 наций, места на карте игроки получают случайно.
-const MAPS = { europe: europeMap, asia: asiaMap } as const;
-type MapId = keyof typeof MAPS;
-const AGGR: Aggression[] = ['warlike', 'moderate', 'peaceful'];
-
 const setup = () => {
   onHome = false;
-  setBack(home);
-  let nation: NationId = 'russia';
-  const ABC = [...NATION_ORDER].sort((a, b) => NATIONS[a].name.localeCompare(NATIONS[b].name, 'en'));
-  let mapId: MapId = 'europe';
-  let players = 0;
-  let elo = 1200;
-  try {
-    const m = localStorage.getItem('chessciv.map') as MapId | null;
-    if (m && MAPS[m]) mapId = m;
-    players = Number(localStorage.getItem('chessciv.players')) || 0;
-    elo = Number(localStorage.getItem('chessciv.elo')) || 1200;
-    const last = localStorage.getItem('chessciv.nation') as NationId | null;
-    if (last && NATIONS[last]) nation = last;
-  } catch { /* ничего */ }
-  let outlaw = false;
-  try { outlaw = localStorage.getItem('chessciv.outlaw') === '1'; } catch { /* ничего */ }
-  const lv = level();
-  if (mapLevel(mapId) > lv) mapId = 'europe';
-  if (nationLevel(nation) > lv) nation = 'russia';
-  const bonuses = bonusOptions();
-  const spawnsOf = (id: MapId) => MAPS[id]().spawns.length;
-  const playerOptions = () => {
-    const n = spawnsOf(mapId);
-    const want = players >= 2 && players <= n ? players : n;
-    return Array.from({ length: n - 1 }, (_, i) => i + 2).map((k) => `<option ${k === want ? 'selected' : ''}>${k}</option>`).join('');
-  };
-  render(`
-    <h1>New game</h1>
-    <div class="card">
-      <div class="row"><span>Map</span><div class="seg" id="maps">${(Object.keys(MAPS) as MapId[]).map((id) =>
-        `<button class="${id === mapId ? 'on' : ''}" data-m="${id}" ${mapLevel(id) > lv ? 'disabled' : ''}>${mapLevel(id) > lv ? '🔒 ' : ''}${esc(MAPS[id]().name)}</button>`).join('')}</div></div>
-      <p class="muted" id="mapnote" style="margin-top:6px"></p>
-      <div class="row" style="margin-top:10px"><span>Players</span><select id="players">${playerOptions()}</select></div>
-      <div class="row" style="margin-top:10px"><span>Play as</span><div class="seg" id="mode"><button data-o="0" class="${outlaw ? '' : 'on'}">Nation</button><button data-o="1" class="${outlaw ? 'on' : ''}">Outlaws</button></div></div>
-      <p class="muted" id="modenote" style="margin-top:6px"></p>
-      <div class="row" style="margin-top:10px"><span>Generals' ELO</span><select id="elo">${[800, 1000, 1200, 1400, 1600, 1800, 2000].map((e) => `<option ${e === elo ? 'selected' : ''}>${e}</option>`).join('')}</select></div>
-      <p class="muted" style="margin-top:10px">One ELO for every general in the game, yours and the AI's.</p>
-      <div class="row" style="margin-top:10px"><span>Start bonus</span><select id="bonus">${bonuses.filter((b) => b.open).map((b) => `<option value="${b.id}" ${b.id === dynasty().bonus ? 'selected' : ''}>${esc(b.name)}</option>`).join('')}</select></div>
-      <p class="muted" id="bonusnote" style="margin-top:6px"></p>
-    </div>
-    <h2 class="pick">Your nation <span class="muted" id="picked"></span></h2>
-    <div class="nations" id="nations">
-      ${ABC.map((id) => `<button class="nation ${id === nation ? 'on' : ''} ${nationLevel(id) > lv ? 'locked' : ''}" data-n="${id}">
-        ${flagSvg(id, 72)}<b>${esc(NATIONS[id].name)}</b><span>${esc(NATIONS[id].bonus)}</span><small>${esc(NATIONS[id].effect)}</small>${nationLevel(id) > lv ? `<em class="lock">🔒 Dynasty level ${nationLevel(id)}</em>` : ''}</button>`).join('')}
-    </div>
-    <div class="nav"><button class="ghost" id="prevN" aria-label="Previous nation">‹</button><span id="countN"></span><button class="ghost" id="nextN" aria-label="Next nation">›</button></div>
-    <button id="start">Start</button>`);
-  const playersSel = document.getElementById('players') as HTMLSelectElement;
-  const showMode = () => {
-    document.getElementById('modenote')!.textContent = outlaw
-      ? 'You start as a bandit band with no city. Seize one to found your kingdom — but no crown will recognise you: eternal war with every nation, no peace or trade. Vassals are still possible.'
-      : 'Rule a nation from its capital, with diplomacy, trade and alliances.';
-    for (const b of document.querySelectorAll<HTMLButtonElement>('#mode button')) b.classList.toggle('on', (b.dataset.o === '1') === outlaw);
-    document.querySelector('h2.pick')!.firstChild!.textContent = outlaw ? 'Your banner ' : 'Your nation ';
-  };
-  for (const b of document.querySelectorAll<HTMLButtonElement>('#mode button')) b.addEventListener('click', () => { tap(); outlaw = b.dataset.o === '1'; showMode(); });
-  const bonusSel = document.getElementById('bonus') as HTMLSelectElement;
-  const showBonus = () => { document.getElementById('bonusnote')!.textContent = bonuses.find((b) => b.id === bonusSel.value)?.text ?? ''; };
-  showBonus();
-  bonusSel.addEventListener('change', () => { choose('bonus', bonusSel.value); showBonus(); });
-  const showMap = () => {
-    document.getElementById('mapnote')!.textContent = `${MAPS[mapId]().name}: up to ${spawnsOf(mapId)} nations · starting places are random`;
-    for (const b of document.querySelectorAll<HTMLButtonElement>('#maps button')) b.classList.toggle('on', b.dataset.m === mapId);
-  };
-  showMap();
-  for (const b of document.querySelectorAll<HTMLButtonElement>('#maps button')) {
-    b.addEventListener('click', () => {
-      tap(); mapId = b.dataset.m as MapId; players = Number(playersSel.value);
-      playersSel.innerHTML = playerOptions(); showMap();
-    });
-  }
-  showMode();
-  const strip = document.getElementById('nations')!;
-  const cards = [...strip.querySelectorAll<HTMLButtonElement>('.nation')];
-  const select = (i: number) => {
-    nation = ABC[i];
-    cards.forEach((x, j) => x.classList.toggle('on', j === i));
-    document.getElementById('picked')!.textContent = `· ${NATIONS[nation].name}`;
-    document.getElementById('countN')!.textContent = `${i + 1} / ${ABC.length}`;
-    const startBtn = document.getElementById('start') as HTMLButtonElement | null;
-    if (startBtn) startBtn.disabled = nationLevel(nation) > lv;
-  };
-  const goTo = (i: number, smooth = true) => {
-    i = (i + ABC.length) % ABC.length;
-    strip.scrollTo({ left: i * strip.clientWidth, behavior: smooth ? 'smooth' : 'auto' });
-    select(i);
-  };
-  goTo(ABC.indexOf(nation), false);
-  // выбранная нация — та, что сейчас в окне карусели
-  let t = 0;
-  strip.addEventListener('scroll', () => {
-    clearTimeout(t);
-    t = window.setTimeout(() => {
-      const i = Math.round(strip.scrollLeft / strip.clientWidth);
-      if (ABC[i] && ABC[i] !== nation) { tap(); select(i); }
-    }, 80);
-  }, { passive: true });
-  on('prevN', () => { goTo(ABC.indexOf(nation) - 1); });
-  on('nextN', () => { goTo(ABC.indexOf(nation) + 1); });
-  on('start', async () => {
-    if (nationLevel(nation) > lv) return;
-    players = Number(playersSel.value);
-    elo = Number((document.getElementById('elo') as HTMLSelectElement).value);
-    const seed = Math.floor(Math.random() * 1e9);
-    const others = NATION_ORDER.filter((n) => n !== nation).sort(() => Math.random() - 0.5).slice(0, players - 1);
-    const s = newGame(MAPS[mapId](), [
-      { nation, ...(outlaw ? { outlaw: true } : {}) },
-      ...others.map((n) => {
-        const aggression = AGGR[Math.floor(Math.random() * 3)];
-        return { nation: n, ai: { aggression, ruler: NATIONS[n].rulers[aggression] } };
-      }),
-    ], { elo, seed, bandits: BANDIT_COUNT });
-    choose('bonus', bonusSel.value);
-    applyStartBonus(s, 'p1');
-    clearSave();
-    saveGame(s);
-    try {
-      localStorage.setItem('chessciv.nation', nation); localStorage.setItem('chessciv.map', mapId);
-      localStorage.setItem('chessciv.players', String(players)); localStorage.setItem('chessciv.elo', String(elo));
-      localStorage.setItem('chessciv.outlaw', outlaw ? '1' : '0');
-    } catch { /* ничего */ }
-    openGame(app, s, home);
-  });
+  openSetup(app, home, (s) => { clearSave(); saveGame(s); openGame(app, s, home); });
 };
 
 // ---------- Замер движка ----------

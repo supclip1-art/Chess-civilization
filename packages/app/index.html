@@ -55,6 +55,57 @@
     .autorow { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin: 4px 0 6px; font-size: 14px; font-weight: 600; }
     .autorow .seg button { width: auto; padding: 7px 10px; font-size: 13px; }
     .autonote { margin: 0 0 8px; font-size: 12px; }
+    /* ---------- новая игра ---------- */
+    .sethero { position: relative; margin: -16px -16px 2px; padding: calc(24px + env(safe-area-inset-top, 0px)) 22px 26px; border-radius: 0 0 26px 26px; color: #fbf3e2;
+      background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='48' viewBox='0 0 28 48'%3E%3Cpath d='M14 0l14 8v16l-14 8L0 24V8zM14 32v16' fill='none' stroke='%23fff3c4' stroke-opacity='.12' stroke-width='1'/%3E%3C/svg%3E"), linear-gradient(160deg, #1e2a52 0%, #4a3f6b 55%, #d98a52 100%); text-shadow: 0 2px 12px rgba(20, 18, 60, .5); }
+    .wordmark.small { font-size: 34px; margin-bottom: 6px; }
+    .sethero p { margin: 0; color: #f6e7c8; font-size: 14px; }
+    .sethead { font-family: 'Cinzel', Georgia, serif; font-size: 17px; letter-spacing: .03em; margin: 16px 2px 8px; }
+    .mapstrip { display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x mandatory; margin: 0 -16px; padding: 4px 16px 10px; scrollbar-width: none; }
+    .mapstrip::-webkit-scrollbar { display: none; }
+    button.mapcard { position: relative; flex: 0 0 152px; scroll-snap-align: center; display: flex; flex-direction: column; gap: 3px; padding: 6px 6px 10px; border-radius: 18px;
+      background: var(--card); color: var(--ink); border: 2px solid transparent; text-align: left; font-weight: 400; box-shadow: 0 6px 18px rgba(20, 20, 60, .14); }
+    .mapcard img { width: 100%; aspect-ratio: 300 / 190; border-radius: 12px; display: block; }
+    .mapcard b { font-size: 14px; padding: 2px 4px 0; } .mapcard small { font-size: 11.5px; line-height: 1.3; color: var(--muted); padding: 0 4px; }
+    .mapcard.on { border-color: #e2b04a; box-shadow: 0 0 0 3px rgba(226, 176, 74, .28), 0 8px 20px rgba(160, 105, 20, .28); }
+    .mapcard.on::after { content: '✓'; position: absolute; top: 12px; right: 12px; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center;
+      background: #e2b04a; color: #3a2604; font-size: 13px; font-weight: 800; box-shadow: 0 2px 6px rgba(0,0,0,.3); }
+    .mapcard.locked img { filter: grayscale(.85) brightness(.6); } button.mapcard:disabled { opacity: 1; }
+    .modes { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    button.modecard { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 12px 12px 13px; border-radius: 18px; text-align: left; font-weight: 400;
+      background: var(--card); color: var(--ink); border: 2px solid transparent; box-shadow: 0 6px 18px rgba(20, 20, 60, .12); }
+    .modecard.on { border-color: #e2b04a; background: linear-gradient(160deg, color-mix(in srgb, #f6cf6a 24%, var(--card)), var(--card)); }
+    .modeico { height: 40px; display: flex; align-items: center; font-size: 34px; line-height: 1; color: #c99b2e; } .modeico svg { display: block; border-radius: 4px; }
+    .modecard b { font-size: 15px; } .modecard small { font-size: 12px; line-height: 1.3; color: var(--muted); }
+    .modecard.locked { opacity: .6; } button.modecard:disabled { opacity: .6; }
+    #nations .nation { border-radius: 22px; border-width: 2px; padding: 18px 16px 20px; box-shadow: 0 8px 22px rgba(20, 20, 60, .14);
+      background: radial-gradient(120% 70% at 50% 0%, color-mix(in srgb, #f6cf6a 16%, var(--card)), var(--card) 70%); }
+    #nations .nation.on { border-color: #e2b04a; }
+    .ntop { display: flex; align-items: center; justify-content: center; gap: 16px; margin: 2px 0 10px; }
+    .nflag svg { display: block; border-radius: 7px; box-shadow: 0 4px 12px rgba(0, 0, 0, .28); margin: 0; }
+    .nruler svg { display: block; border-radius: 50%; box-shadow: 0 0 0 3px #e2b04a, 0 4px 12px rgba(0, 0, 0, .25); }
+    #nations .nation b { font-family: 'Cinzel', Georgia, serif; font-size: 22px; }
+    .nbonus { display: inline-block; align-self: center; margin: 6px 0 4px; padding: 4px 13px; border-radius: 999px; font-size: 12.5px; font-weight: 700;
+      background: linear-gradient(#f6cf6a, #d89e2c); color: #3a2604 !important; }
+    #nations .nation small { font-size: 13px; max-width: 26em; }
+    .outlawcard { display: flex; gap: 14px; align-items: flex-start; margin-top: 12px; padding: 16px; border-radius: 22px; color: #eee4d2;
+      background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='48' viewBox='0 0 28 48'%3E%3Cpath d='M14 0l14 8v16l-14 8L0 24V8zM14 32v16' fill='none' stroke='%23fff3c4' stroke-opacity='.12' stroke-width='1'/%3E%3C/svg%3E"), linear-gradient(160deg, #3a2f2a, #17130f); box-shadow: 0 8px 22px rgba(0, 0, 0, .3); }
+    .outlawcard[hidden] { display: none; }
+    .oflag svg { display: block; border-radius: 7px; box-shadow: 0 4px 12px rgba(0, 0, 0, .5); }
+    .outlawcard small { display: block; line-height: 1.4; }
+    .outlawcard b { display: block; font-family: 'Cinzel', Georgia, serif; font-size: 20px; } .outlawcard p { margin: 8px 0 6px; font-size: 13.5px; } .outlawcard small { color: #c9bca5; font-size: 12.5px; }
+    .rules { display: flex; flex-direction: column; gap: 10px; padding: 14px; border-radius: 20px; background: var(--card); box-shadow: 0 6px 18px rgba(20, 20, 60, .1); }
+    .rules p { margin: 0; }
+    .stepper { display: flex; align-items: center; gap: 10px; } .stepper span { flex: 1; font-weight: 600; }
+    button.stepb { width: 42px; height: 42px; padding: 0; border-radius: 13px; font-size: 22px; line-height: 1; }
+    .stepper b { min-width: 52px; text-align: center; font-size: 19px; font-variant-numeric: tabular-nums; }
+    .ruletitle { font-weight: 600; margin-top: 4px; }
+    .pills { display: flex; flex-wrap: wrap; gap: 7px; }
+    button.pill { width: auto; padding: 8px 13px; border-radius: 999px; font-size: 13px; font-weight: 500; background: transparent; color: var(--ink); border: 1.5px solid var(--line); }
+    button.pill.on { background: linear-gradient(#f6cf6a, #d89e2c); color: #3a2604; border-color: #b07b18; font-weight: 700; }
+    .startbar { position: sticky; bottom: calc(10px + env(safe-area-inset-bottom, 0px)); z-index: 5; margin-top: 10px; }
+    .startbar .playbtn { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 13px 16px; }
+    .startbar .playbtn small { font-family: -apple-system, system-ui, sans-serif; font-size: 12px; font-weight: 600; letter-spacing: 0; opacity: .8; }
     /* ---------- главный экран ---------- */
     .hero { position: relative; margin: -16px -16px 0; height: min(64vh, 420px); overflow: hidden; border-radius: 0 0 26px 26px; background: #2b2f5a; }
     .hero canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }

@@ -64,6 +64,10 @@ const FLAGS: Record<NationId, string> = {
   nigeria: v3('#008751', '#fff', '#008751'),
   mexico: `${v3('#006847', '#fff', '#ce1126')}<circle cx="15" cy="10" r="2.4" fill="#8c5a2b"/><path d="M12.8 11.6q2.2 1.6 4.4 0" stroke="#006847" stroke-width="0.7" fill="none"/>`,
   usa: usa(),
+  // разбойники: чёрное знамя, череп и скрещённые сабли
+  outlaws: `<rect width="30" height="20" fill="#1c1a1a"/><g stroke="#e9e3d4" stroke-width="1.3" stroke-linecap="round"><path d="M8 16L22 5M22 16L8 5"/></g>
+    <circle cx="15" cy="9" r="4.3" fill="#e9e3d4"/><rect x="12.6" y="11.6" width="4.8" height="2.8" rx="0.8" fill="#e9e3d4"/>
+    <circle cx="13.4" cy="8.8" r="1.2" fill="#1c1a1a"/><circle cx="16.6" cy="8.8" r="1.2" fill="#1c1a1a"/><path d="M15 10.4l-.6 1.1h1.2z" fill="#1c1a1a"/>`,
   brazil: `<rect width="30" height="20" fill="#009c3b"/><path d="M15 2L28 10L15 18L2 10Z" fill="#ffdf00"/><circle cx="15" cy="10" r="4.6" fill="#002776"/>
     <path d="M10.6 9.2q4.6-1.4 8.8 1.3" stroke="#fff" stroke-width="0.8" fill="none"/>`,
 };

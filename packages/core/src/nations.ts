@@ -6,7 +6,8 @@ import type { Terrain } from './state.ts';
 export type NationId =
   | 'russia' | 'ukraine' | 'poland' | 'germany' | 'france' | 'britain' | 'spain' | 'italy' | 'turkey'
   | 'egypt' | 'arabia' | 'persia' | 'uzbekistan' | 'kazakhstan' | 'pakistan' | 'india' | 'bangladesh'
-  | 'china' | 'korea' | 'japan' | 'vietnam' | 'indonesia' | 'nigeria' | 'mexico' | 'usa' | 'brazil';
+  | 'china' | 'korea' | 'japan' | 'vietnam' | 'indonesia' | 'nigeria' | 'mexico' | 'usa' | 'brazil'
+  | 'outlaws'; // разбойники — только для режима «Играть за разбойников»
 export type Aggression = 'warlike' | 'moderate' | 'peaceful';
 
 export type Nation = {
@@ -157,10 +158,14 @@ export const NATIONS: Record<NationId, Nation> = {
     ['Deodoro da Fonseca', 'Pedro I', 'Pedro II'],
     'Rio de Janeiro, Salvador, São Paulo, Brasília, Recife, Manaus, Belém, Ouro Preto, Fortaleza, Curitiba, Porto Alegre, Belo Horizonte',
     { output: [{ kind: 'sawmill', from: 2, to: 5, res: 'wood', amount: 10 }] }),
+  outlaws: N('outlaws', 'Outlaws', 'Loot and Pillage', 'Every battle you win brings 20 gold. Without a city the band needs no food.',
+    ['Ivo the Black', 'Margit Redhand', 'Old Grey Wolf'],
+    'Freehold, Ravenrock, Crowfield, Wolfden, Blackmoor, Cutthroat Ford, Gallows Hill, Smugglers Cove, Thornwood, Ashgate, Redwater, Hollow Keep',
+    { goldPerWin: 20 }),
 };
 
-/** Порядок наций на экране выбора. */
-export const NATION_ORDER = Object.keys(NATIONS) as NationId[];
+/** Порядок наций на экране выбора и для ИИ (разбойники — отдельный режим, в общий список не входят). */
+export const NATION_ORDER: NationId[] = (Object.keys(NATIONS) as NationId[]).filter((n) => n !== 'outlaws');
 
 /** Названия городов нейтральных государств. */
 export const NEUTRAL_CITIES: string[] = [
@@ -178,6 +183,7 @@ const COMMANDERS: Record<string, string[]> = {
   steppe: ['Subutai', 'Jebe', 'Bogenbay', 'Kabanbay', 'Raiymbek', 'Mukhali', 'Toktamysh', 'Edige', 'Shaybani', 'Nogai'],
   south_asia: ['Bajirao', 'Hari Singh', 'Tipu', 'Haidar', 'Raja Man Singh', 'Isa Khan', 'Shivaji', 'Prithviraj', 'Bairam Khan', 'Malik Ambar'],
   east_asia: ['Yue Fei', 'Han Xin', 'Qi Jiguang', 'Yi Sun-sin', 'Eulji', 'Kwon Yul', 'Takeda', 'Uesugi', 'Tran Hung Dao', 'Le Loi'],
+  outlaw: ['Scarface', 'Raven', 'Kestrel', 'One-Eye', 'Halfhand', 'the Fox', 'Black Jack', 'the Hound', 'Ironjaw', 'Slyboots'],
   far: ['Gajah Mada', 'Diponegoro', 'Moremi', 'Usman', 'Tlacaelel', 'Zaragoza', 'Grant', 'Lee', 'Caxias', 'Osório'],
 };
 const REGION: Record<NationId, keyof typeof COMMANDERS> = {
@@ -185,6 +191,6 @@ const REGION: Record<NationId, keyof typeof COMMANDERS> = {
   spain: 'southern', italy: 'southern', turkey: 'middle', egypt: 'middle', arabia: 'middle', persia: 'middle',
   uzbekistan: 'steppe', kazakhstan: 'steppe', pakistan: 'south_asia', india: 'south_asia', bangladesh: 'south_asia',
   china: 'east_asia', korea: 'east_asia', japan: 'east_asia', vietnam: 'east_asia', indonesia: 'far', nigeria: 'far',
-  mexico: 'southern', usa: 'far', brazil: 'far',
+  mexico: 'southern', usa: 'far', brazil: 'far', outlaws: 'outlaw',
 };
 export const commanderNames = (nation: NationId): string[] => COMMANDERS[REGION[nation]];
