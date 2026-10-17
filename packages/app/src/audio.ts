@@ -1,5 +1,5 @@
 // Звук без файлов: всё синтезируется на лету (Web Audio), поэтому нет ни лицензий, ни лишних загрузок.
-//  • Музыка — пять стилей: северный фолк, аравийский мотив, электроника, восточный сад, лоу-фай.
+//  • Музыка — семь стилей: северный фолк, аравийский мотив, электроника, восточный сад, лоу-фай, битва, нагорье.
 //    Струны — алгоритм Карплуса — Стронга, остальное — осцилляторы и шум. Аккорды и мелодия каждый раз складываются заново.
 //  • Звуки интерфейса — деревянный щелчок кнопки и шелест перелистываемой бумаги при открытии меню.
 // Браузер разрешает звук только после первого касания — до него всё молчит.
@@ -259,7 +259,60 @@ const gong = (t: number, freq: number, vol: number) => {
   }
 };
 
-type Voice = 'fiddle' | 'flute' | 'ney' | 'oud' | 'koto' | 'lead' | 'epiano' | 'rest';
+/** Медь: две пилы, фильтр резко раскрывается в начале ноты — «атака» трубы или валторны. */
+const brass = (t: number, freq: number, dur: number, vol: number) => {
+  const c = ctx!;
+  const g = c.createGain();
+  g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol, t + 0.04);
+  g.gain.setValueAtTime(vol * 0.85, t + Math.max(0.05, dur - 0.12)); g.gain.linearRampToValueAtTime(0, t + dur);
+  const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.Q.value = 1.2;
+  lp.frequency.setValueAtTime(freq * 1.2, t); lp.frequency.linearRampToValueAtTime(freq * 4, t + 0.07); lp.frequency.linearRampToValueAtTime(freq * 2.4, t + Math.min(dur, 0.5));
+  lp.connect(g); g.connect(musicBus);
+  for (const cents of [-6, 6]) {
+    const o = c.createOscillator(); o.type = 'sawtooth'; o.frequency.value = freq; o.detune.value = cents;
+    o.connect(lp); o.start(t); o.stop(t + dur + 0.05);
+  }
+};
+
+/** Волынка: гнусавая трость (квадрат и пила через полосовой фильтр) с коротким форшлагом сверху. */
+const pipes = (t: number, freq: number, dur: number, vol: number) => {
+  const c = ctx!;
+  const g = c.createGain();
+  g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol, t + 0.02);
+  g.gain.setValueAtTime(vol, t + Math.max(0.03, dur - 0.06)); g.gain.linearRampToValueAtTime(0, t + dur);
+  const bp = c.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = Math.min(1800, freq * 2.5); bp.Q.value = 0.9;
+  bp.connect(g); g.connect(musicBus);
+  for (const type of ['square', 'sawtooth'] as const) {
+    const o = c.createOscillator(); o.type = type;
+    o.frequency.setValueAtTime(freq * 2 ** (5 / 12), t); o.frequency.setValueAtTime(freq, t + Math.min(0.045, dur / 3)); // форшлаг на кварту выше
+    o.connect(bp); o.start(t); o.stop(t + dur + 0.05);
+  }
+};
+
+/** Короткий удар смычком (остинато струнных): быстрая атака и спад за долю. */
+const stab = (t: number, freq: number, len: number, vol: number) => {
+  const c = ctx!;
+  const g = c.createGain();
+  g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol, t + 0.012); g.gain.exponentialRampToValueAtTime(0.0001, t + len);
+  const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = Math.min(1400, freq * 6); lp.Q.value = 0.7;
+  lp.connect(g); g.connect(musicBus);
+  for (const cents of [-5, 5]) {
+    const o = c.createOscillator(); o.type = 'sawtooth'; o.frequency.value = freq; o.detune.value = cents;
+    o.connect(lp); o.start(t); o.stop(t + len + 0.03);
+  }
+};
+
+/** Литавры / тайко: низкий удар с долгим гулом. */
+const timpani = (t: number, freq: number, vol: number) => {
+  const c = ctx!;
+  const o = c.createOscillator(); o.type = 'sine';
+  o.frequency.setValueAtTime(freq * 1.6, t); o.frequency.exponentialRampToValueAtTime(freq, t + 0.06);
+  const g = c.createGain(); g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.9);
+  o.connect(g); g.connect(musicBus); o.start(t); o.stop(t + 0.95);
+  burst(musicBus, t, 0.08, vol * 0.35, 'lowpass', 500);
+};
+
+type Voice = 'fiddle' | 'flute' | 'ney' | 'oud' | 'koto' | 'lead' | 'epiano' | 'brass' | 'pipes' | 'rest';
 type Style = {
   id: number; name: string;
   chords: Record<string, number[]>; // звуки аккордов в малой октаве (MIDI)
@@ -352,6 +405,40 @@ export const MUSIC_STYLES: Style[] = [
       for (let i = 1; i < 8; i += 2) burst(musicBus, t + i * st.beat + swing, 0.04, 0.012, 'bandpass', 2000, 1800, 2);
     },
   },
+  { // 6. Битва: ре минор, гонящее остинато струнных, литавры и тайко, медь
+    id: 6, name: 'Battle',
+    chords: { Dm: [50, 53, 57], Bb: [46, 50, 53], C: [48, 52, 55], A: [45, 49, 52], Gm: [43, 46, 50] },
+    progs: [['Dm', 'Bb', 'C', 'A'], ['Dm', 'C', 'Bb', 'A'], ['Dm', 'Dm', 'Bb', 'C'], ['Gm', 'Dm', 'A', 'Dm']], tonic: 'Dm',
+    scale: [57, 58, 61, 62, 64, 65, 67, 69, 70, 73, 74],
+    beat: 0.17, beats: 8, rhythms: [[3, 3, 2], [2, 2, 4], [1, 1, 2, 4], [4, 4], [3, 1, 4], [2, 1, 1, 4]],
+    voices: ['brass', 'fiddle', 'brass', 'rest'],
+    accomp: (t, [r, th, fi], bar, st) => {
+      // остинато: восьмые в среднем регистре, акцент на 1 и 4
+      const pat = [r + 12, r + 12, th + 12, r + 12, fi, r + 12, th + 12, fi];
+      pat.forEach((n, i) => stab(t + i * st.beat, NOTE(n), st.beat * 0.9, i === 0 || i === 3 ? 0.06 : 0.035));
+      // барабаны: тайко на 1, 4 и 7, литавры на смену аккорда
+      timpani(t, 55, 0.22); timpani(t + 3 * st.beat, 55, 0.14); timpani(t + 6 * st.beat, 60, 0.16);
+      snare(t + 4 * st.beat, 0.07);
+      if (bar % 2 === 0) for (const n of [r + 12, fi + 12]) brass(t, NOTE(n), st.beat * 2, 0.03);
+    },
+  },
+  { // 7. Нагорье: ля минор, шотландский размах — летящее остинато, бурдон волынки, скрипка и волынка, литавры
+    id: 7, name: 'Highlands',
+    chords: { Am: [45, 48, 52], G: [43, 47, 50], F: [41, 45, 48], C: [48, 52, 55], Em: [52, 55, 59] },
+    progs: [['Am', 'G', 'F', 'G'], ['Am', 'F', 'C', 'G'], ['Am', 'G', 'Am', 'Em'], ['F', 'G', 'Am', 'Am']], tonic: 'Am',
+    scale: [57, 59, 60, 62, 64, 65, 67, 69, 71, 72, 74, 76],
+    beat: 0.19, beats: 6, rhythms: [[3, 1, 2], [2, 1, 3], [1, 1, 1, 3], [3, 3], [2, 2, 2], [6]],
+    voices: ['fiddle', 'pipes', 'fiddle', 'rest'],
+    accomp: (t, [r, th, fi], bar, st) => {
+      // струнные: непрерывные восьмые, качаются между корнем и квинтой
+      const pat = [r + 12, fi + 12, th + 12, r + 12, fi + 12, th + 24];
+      pat.forEach((n, i) => stab(t + i * st.beat, NOTE(n), st.beat * 0.95, i % 3 === 0 ? 0.05 : 0.032));
+      // бурдон волынки: ля и ми, на всю фразу
+      if (bar === 0) for (const n of [45, 52]) bowed(t, NOTE(n + 12), st.beat * st.beats * 8, 0.016, false, 1.2);
+      timpani(t, 55, bar % 4 === 0 ? 0.2 : 0.11);
+      if (bar % 2 === 1) timpani(t + 3 * st.beat, 55, 0.09);
+    },
+  },
 ];
 let styleNo = prefs.style || 1;
 const style = () => MUSIC_STYLES.find((x) => x.id === styleNo) ?? MUSIC_STYLES[0];
@@ -422,6 +509,8 @@ const scheduleBar = (t: number) => {
     else if (phrase.voice === 'koto') pluck(at, f, 0.12, 0.5);
     else if (phrase.voice === 'lead') synth(at, f, dur, 0.05, 'lead');
     else if (phrase.voice === 'epiano') epiano(at, f, 0.075, Math.max(1.5, dur + 0.8));
+    else if (phrase.voice === 'brass') brass(at, NOTE(x.n - 12), dur, 0.05);
+    else if (phrase.voice === 'pipes') pipes(at, f, dur, 0.05);
   }
 };
 

@@ -253,8 +253,8 @@ const addHall = (s: GameState, owner: string, hex: Hex, level: number, name?: st
   return h;
 };
 
-/** Великие вольные города (карта «Азия»): есть в каждой партии, второй уровень, крепкий гарнизон и богатая округа. */
-export const GREAT_CITIES = ['Constantinople', "Chang'an"];
+/** Великие вольные города в глубине Азии: есть в каждой партии, второй уровень, крепкий гарнизон и богатая округа. */
+export const GREAT_CITIES = ['Babylon', 'Karakorum'];
 
 const addNeutral = (s: GameState, hex: Hex, name?: string): void => {
   const id = newId(s, 'n');
@@ -266,7 +266,7 @@ const addNeutral = (s: GameState, hex: Hex, name?: string): void => {
     const land = (d: number) => range(hex, d).filter((h) => distance(h, hex) === d).map((h) => s.cells[key(h)]).filter((c) => c && c.terrain !== 'water');
     land(1).forEach((c, i) => { c.terrain = i < 2 ? 'deposit' : i === 2 ? 'forest' : 'field'; });
     land(2).forEach((c, i) => { if (i === 0) c.terrain = 'deposit'; else if (i % 3 === 1 && c.terrain === 'mountain') c.terrain = 'forest'; });
-    makeGeneral(s, id, hex, s.settings.elo + 100, { ...emptyArmy(), p: 5, n: 2, b: 1, r: 1 }, 'Garrison');
+    makeGeneral(s, id, hex, s.settings.elo + 100, { ...emptyArmy(), p: 6, n: 2, b: 2 }, 'Garrison');
     return;
   }
   makeGeneral(s, id, hex, s.settings.elo, rollGarrison(s.rng), 'Garrison');
