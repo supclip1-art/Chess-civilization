@@ -1,6 +1,7 @@
 // Экономика: стройка и улучшения, ратуши, строители, казарма, таверна, исследования,
 // доход, содержание и голод.
 
+import { completeExtra } from './extras.ts';
 import {
   ARMY_MOVE, ARMY_MOVE_MARCH, TECHS, type TechId, ARMY_UPKEEP_RATE, BARRACKS, BUILDING_SLOTS, CITY_WOOD, BUILDER_HIRE_FOOD, BUILDER_UPKEEP_FOOD, BUILD_TURNS, ELO_PER_RESEARCH,
   GENERAL_UPKEEP_FOOD, MAX_RESOURCE_LEVEL, PAWNS_REQUIRED, PIECE_PRICE, RESEARCH, RESOURCE_COST, RESOURCE_OF, TRAIN_GOLD_PER_STEP,
@@ -92,7 +93,7 @@ export const hallBuilders = (h: { builders?: number }): number => h.builders ?? 
 
 /** Город, чей строитель занят этой стройкой (основание города ведёт поселенец — строитель не нужен). */
 export const jobHall = (s: GameState, j: Job): string | undefined =>
-  j.kind === 'resource' ? s.cells[key(j.hex)]?.hall : j.kind === 'found' ? undefined : j.hallId;
+  j.kind === 'resource' || j.kind === 'tower' ? s.cells[key(j.hex)]?.hall : j.kind === 'found' ? undefined : j.hallId;
 
 export const busyBuilders = (s: GameState, pid: string, hallId: string): number =>
   s.players[pid].jobs.filter((j) => jobHall(s, j) === hallId).length;
@@ -147,7 +148,7 @@ const isHallCell = (s: GameState, hex: Hex): boolean =>
 /** Места под ресурсные здания у города: занято (здания и стройки на его земле) и всего (по уровню). */
 export const citySlots = (s: GameState, hallId: string): { used: number; max: number } => {
   const h = s.halls[hallId];
-  const used = Object.values(s.cells).filter((c) => c.hall === hallId && (c.building || c.reserved)).length;
+  const used = Object.values(s.cells).filter((c) => c.hall === hallId && (c.building || c.reserved || c.tower)).length;
   return { used, max: h ? BUILDING_SLOTS[Math.min(h.level, BUILDING_SLOTS.length) - 1] + (s.players[h.owner] && hasTech(s, h.owner, 'guilds') ? 1 : 0) : 0 };
 };
 
@@ -348,7 +349,7 @@ export type QueueOrder =
   | { kind: 'tavern'; hallId: string };
 
 const sameTarget = (a: Job, b: Job): boolean =>
-  a.kind === b.kind && (a.kind === 'resource' ? key(a.hex) === key((b as typeof a).hex)
+  a.kind === b.kind && (a.kind === 'resource' || a.kind === 'tower' ? key(a.hex) === key((b as typeof a).hex)
     : a.kind === 'found' ? false : a.hallId === (b as typeof a).hallId);
 
 const runOrder = (s: GameState, pid: string, o: QueueOrder): Result =>
@@ -524,6 +525,7 @@ export const completeJobs = (s: GameState, pid: string): void => {
       }
     } else if (j.kind === 'barracks') { const h = s.halls[j.hallId]; if (h?.owner === pid) { h.barracks = j.level; say(s, `barracks level ${j.level} ready in ${h.name}`, pid); } }
     else if (j.kind === 'tavern') { const h = s.halls[j.hallId]; if (h?.owner === pid) { h.tavern = j.level; say(s, `tavern level ${j.level} ready in ${h.name}`, pid); } }
+    else completeExtra(s, pid, j);
   }
   const r = p.research.active;
   if (r && r.finish <= s.turn) { p.research.done = r.step + 1; p.research.active = undefined; say(s, `Tactics ${p.research.done} researched: new generals +${ELO_PER_RESEARCH} ELO`, pid); }

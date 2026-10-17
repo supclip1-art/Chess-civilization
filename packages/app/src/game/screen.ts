@@ -6,7 +6,7 @@ import { flagSvg } from './flags.ts';
 import { portraitSvg } from './portraits.ts';
 import { startTutorial } from './tutorial.ts';
 import {
-  canAfford, armyValue, isOutlaw, setAuto, autoDevelop, type AutoFocus,   BARRACKS, BUILD_TURNS, BUILDING_TERRAIN, GENERAL_HIRE_GOLD, HIRE_LEVEL, NATIONS, PIECE_PRICE, RESEARCH, RESOURCE_COST,
+  canAfford, armyValue, WALLS, MARKET, TOWER, TOWER_TERRAIN, ROAD_WOOD_PER_CELL, ROAD_MAX, marketLevel, tradeQuote, trade, buildWalls, upgradeMarket, buildTower, roadPath, roadCost, buildRoad, cancelJob, demolish, isOutlaw, setAuto, autoDevelop, type AutoFocus,   BARRACKS, BUILD_TURNS, BUILDING_TERRAIN, GENERAL_HIRE_GOLD, HIRE_LEVEL, NATIONS, PIECE_PRICE, RESEARCH, RESOURCE_COST,
   RESOURCE_OUTPUT, TAVERN, TOWN_HALL_FOUND, TOWN_HALL_UPGRADE, BUILDER_HIRE_FOOD, BUILDER_UPKEEP_FOOD, GENERAL_UPKEEP_FOOD, cityUpgradeCost, tavernCost, PIECES, barracksCost, buildOptions, buildingOutput, maxLevelAt, piecePrice, researchCost, researchTurns, resourceCost, aiEconomyTurn, aiMilitaryTurn, attack, endTurn, say,
   foundTownHall, freeBuilders, hireBuilder, hireGeneral, hirePiece, income, key, maxBuilders, move, playerGenerals,
   reachable, recruitElo, resolveBattle, startResearch, upgrade, upgradeBarracks, upgradeTavern, upgradeTownHall,
@@ -146,8 +146,9 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
   const left = (finish: number) => { const n = Math.max(1, finish - s.turn); return `${n} turn${n > 1 ? 's' : ''} left`; };
   const ago = (turn: number) => { const n = s.turn - turn; return n <= 0 ? 'this turn' : `${n} turn${n > 1 ? 's' : ''} ago`; };
   const jobName = (j: Job) => j.kind === 'resource' ? `${BUILDING_NAME[j.building]}${j.level > 1 ? ` → ${j.level}` : ''}`
-    : j.kind === 'found' ? 'New city' : j.kind === 'townhall' ? `${s.halls[j.hallId]?.name ?? 'City'} → ${j.level}`
-      : `${s.halls[j.hallId]?.name ?? 'City'}: ${j.kind} → ${j.level}`;
+    : j.kind === 'found' ? 'New city' : j.kind === 'tower' ? 'Watchtower' : j.kind === 'townhall' ? `${s.halls[j.hallId]?.name ?? 'City'} → ${j.level}`
+      : j.kind === 'road' ? `Road to ${s.halls[j.to]?.name ?? 'a city'}` : j.kind === 'walls' ? 'Walls'
+        : `${s.halls[j.hallId]?.name ?? 'City'}: ${j.kind} → ${j.level}`;
 
   // ---------- верхняя панель ----------
   const bar = () => {
@@ -404,7 +405,7 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
       parts.push(`<p class="muted">Tap the cell again to open ${esc(hall.name)}.</p>`);
     } else if (hall && hall.owner === ME) {
       // стройки и очередь — только этого города (у каждого города свои строители)
-      const jobs = p.jobs.filter((j) => jobHall(s, j) === hall.id).map((j) => `${jobName(j)} (${left(j.finish)})`);
+      const jobs = p.jobs.map((j, i) => ({ j, i })).filter(({ j }) => jobHall(s, j) === hall.id);
       const queue = (p.queue ?? []).map((q, i) => ({ q, i })).filter(({ q }) => jobHall(s, q.job) === hall.id);
       const thUp = hall.level < 3 ? TOWN_HALL_UPGRADE[(hall.level + 1) as 2 | 3] : null;
       const nb = hallBuilders(hall) + 1;
@@ -423,16 +424,20 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
       parts.push(`<div class="citycard">
         <div class="cityrow">${crest(hall.level)}<div class="cityname"><b>${esc(hall.name)}</b>
           <span class="citystats">${pips(sl.used, sl.max)}<span>${sl.used}/${sl.max} slots</span><span class="hammers">${'⚒'.repeat(free)}<i>${'⚒'.repeat(Math.max(0, total - free))}</i></span><span>${free}/${total} builders</span></span></div></div>
-        <div class="chips">${hb ? `<span class="chip ok">⚔ Barracks ${hb}</span>` : '<span class="chip">⚔ no barracks</span>'}${ht ? `<span class="chip ok">♚ Tavern ${ht}</span>` : '<span class="chip">♚ no tavern</span>'}${hall.auto ? `<span class="chip gold">⟳ Auto: ${hall.auto === 'army' ? 'army' : 'economy'}</span>` : ''}</div>
+        <div class="chips">${hb ? `<span class="chip ok">⚔ Barracks ${hb}</span>` : '<span class="chip">⚔ no barracks</span>'}${ht ? `<span class="chip ok">♚ Tavern ${ht}</span>` : '<span class="chip">♚ no tavern</span>'}${hall.walls ? '<span class="chip ok">▥ Walls</span>' : ''}${hall.market ? `<span class="chip ok">⚖ Market ${hall.market}</span>` : ''}${hall.auto ? `<span class="chip gold">⟳ Auto: ${hall.auto === 'army' ? 'army' : 'economy'}</span>` : ''}</div>
         <div class="ctiles">
           ${thUp ? tile(`th:${hall.id}`, '🏰', `City → ${hall.level + 1}`, cityUpgradeCost(s, ME, (hall.level + 1) as 2 | 3), ` · ${thUp.turns} turn · ${BUILDING_SLOTS[hall.level]} slots, +1 builder, wider land`) : ''}
           ${nb <= maxBuilders(s, ME, hall.id) ? tile(`builder:${hall.id}`, '⚒', `Hire builder ${nb}`, NATIONS[p.nation].mods.freeBuilderHire ? null : { wood: 0, food: BUILDER_HIRE_FOOD[nb as 2 | 3], gold: 0 }, `${NATIONS[p.nation].mods.freeBuilderHire ? 'free' : ''} · ${NATIONS[p.nation].mods.freeBuilderUpkeep ? 'eats nothing' : `eats ${amount('food', BUILDER_UPKEEP_FOOD)}/turn`}`) : ''}
           ${barNext ? tile(`barracks:${hall.id}`, '⚔', hb ? `Barracks → ${hb + 1}` : 'Build barracks', barracksCost(s, ME, (hb + 1) as 1 | 2 | 3 | 4 | 5), ` · ${barNext.turns} turn${barNext.turns > 1 ? 's' : ''} · ${PIECE_NAME[PIECES[hb]].toLowerCase()}s here`) : ''}
           ${tavNext ? tile(`tavern:${hall.id}`, '♚', ht ? `Tavern → ${ht + 1}` : 'Build tavern', tavernCost(s, ME, (ht + 1) as 1 | 2 | 3 | 4), ` · ${tavNext.turns} turn${tavNext.turns > 1 ? 's' : ''} · up to ${Math.min(5, ht + 2)} generals`) : ''}
+          ${!hall.walls && !p.jobs.some((j) => j.kind === 'walls' && j.hallId === hall.id) ? tile(`walls:${hall.id}`, '▥', 'Build walls', WALLS.cost, ` · ${WALLS.turns} turns · sieges last a turn longer`) : ''}
+          ${(hall.market ?? 0) < 3 && !p.jobs.some((j) => j.kind === 'market' && j.hallId === hall.id) ? tile(`market:${hall.id}`, '⚖', hall.market ? `Market → ${hall.market + 1}` : 'Build a market', MARKET[((hall.market ?? 0) + 1) as 1 | 2 | 3].cost, ` · trade at ${MARKET[((hall.market ?? 0) + 1) as 1 | 2 | 3].rate}:1`) : ''}
+          ${marketLevel(s, ME) ? tile('trade', '⇄', 'Trade at the market', null, `rate ${MARKET[marketLevel(s, ME) as 1 | 2 | 3].rate}:1 · gold is worth 3`) : ''}
+          ${playerHalls(s, ME).length > 1 ? tile(`road:${hall.id}`, '⛙', 'Build a road', null, `to another city · ${ROAD_WOOD_PER_CELL} wood per cell · +1 move along it`) : ''}
           ${tile(`settler:${hall.id}`, '⛺', 'Train a settler', settlerCost(s, ME), ` · founds a new city · moves ${armyMove(s, ME)} cells`)}
           ${ht && gCount < generalLimit(s, ME) ? tile(`general:${hall.id}`, '♛', 'Hire a general here', { wood: 0, food: 0, gold: gCost }, ` · ELO ${recruitElo(s, ME)} · eats ${amount('food', GENERAL_UPKEEP_FOOD)}/turn`) : ''}
         </div>
-        ${jobs.length ? `<div class="cjobs">${jobs.map((j) => `<span class="cjob">${iconSvg('clock', 14)}${esc(j)}</span>`).join('')}</div>` : ''}
+        ${jobs.length ? `<div class="cjobs">${jobs.map(({ j, i }) => `<span class="cjob">${iconSvg('clock', 14)}${esc(`${jobName(j)} (${left(j.finish)})`)}${j.kind !== 'found' ? `<button class="cx" data-a="canceljob:${i}" aria-label="Cancel construction">×</button>` : ''}</span>`).join('')}</div>` : ''}
         ${queue.length ? `<p class="muted cqhead">Queued — start when a builder is free:</p><div class="cjobs">${queue.map(({ q, i }) => `<span class="cjob queued">${esc(jobName(q.job))}<button class="cx" data-a="unqueue:${i}" aria-label="Cancel">×</button></span>`).join('')}</div>` : ''}
       </div>`);
     } else if (hall) {
@@ -452,18 +457,22 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
         const busy = !!job || qi >= 0;
         const out = RESOURCE_OUTPUT[b.kind];
         parts.push(`<div class="card"><div class="row"><b class="withico">${iconSvg(b.kind, 20)}${BUILDING_NAME[b.kind]} · level ${b.level}</b><span>${(['food', 'wood', 'gold'] as const).filter((r) => buildingOutput(s, ME, cell)[r]).map((r) => `+${amount(r, buildingOutput(s, ME, cell)[r])}`).join(' ')} per turn</span></div>
-          ${b.level < top ? `<div class="acts">${(busy ? `<p class="muted withico">${iconSvg('clock', 15)}${job ? `Upgrading to level ${job.level} · ${left(job.finish)}` : 'Upgrade queued — starts when a builder is free'}</p>${qi >= 0 ? btn(`unqueue:${qi}`, 'Cancel the queued upgrade', 'resources are returned') : ''}` : btn(`up:${k}`, `Upgrade → ${b.level + 1}`, `${cost(resourceCost(s, ME, b.kind, b.level + 1))} · ${BUILD_TURNS[b.level]} turn${BUILD_TURNS[b.level] > 1 ? 's' : ''} · +${amount(RES_OF[b.kind], out[b.level] - out[b.level - 1])}/turn`))}</div>` : '<p class="muted">Top level</p>'}</div>`);
+          ${b.level < top ? `<div class="acts">${(busy ? `<p class="muted withico">${iconSvg('clock', 15)}${job ? `Upgrading to level ${job.level} · ${left(job.finish)}` : 'Upgrade queued — starts when a builder is free'}</p>${qi >= 0 ? btn(`unqueue:${qi}`, 'Cancel the queued upgrade', 'resources are returned') : ''}${job ? btn(`canceljob:${p.jobs.indexOf(job)}`, 'Cancel the upgrade', 'resources are returned') : ''}` : btn(`up:${k}`, `Upgrade → ${b.level + 1}`, `${cost(resourceCost(s, ME, b.kind, b.level + 1))} · ${BUILD_TURNS[b.level]} turn${BUILD_TURNS[b.level] > 1 ? 's' : ''} · +${amount(RES_OF[b.kind], out[b.level] - out[b.level - 1])}/turn`))}</div>` : '<p class="muted">Top level</p>'}
+          ${busy ? '' : `<div class="acts">${btn(`demolish:${k}`, 'Demolish', 'frees the slot; nothing is returned').replace('class="act"', 'class="act danger"')}</div>`}</div>`);
+      } else if (cell.tower) {
+        parts.push(`<div class="card"><div class="row"><b>♜ Watchtower</b><span class="muted">sees ${TOWER.sight} cells around</span></div>
+          <div class="acts">${btn(`demolish:${k}`, 'Demolish', 'frees the slot; nothing is returned').replace('class="act"', 'class="act danger"')}</div></div>`);
       } else if (cell.reserved) {
-        const job = p.jobs.find((j): j is Extract<Job, { kind: 'resource' }> => j.kind === 'resource' && key(j.hex) === k);
+        const job = p.jobs.find((j) => (j.kind === 'resource' || j.kind === 'tower') && key(j.hex) === k);
         const qi = (p.queue ?? []).findIndex((q) => q.job.kind === 'resource' && key(q.job.hex) === k);
         parts.push(`<div class="card"><p class="muted withico">${iconSvg('clock', 15)}${job ? `${esc(jobName(job))} · ${left(job.finish)}` : qi >= 0 ? `${esc(jobName(p.queue![qi].job))} queued — starts when a builder is free` : 'Construction in progress'}</p>
-          ${qi >= 0 ? `<div class="acts">${btn(`unqueue:${qi}`, 'Cancel', 'resources are returned')}</div>` : ''}</div>`);
-      } else if (kinds.length && cell.hall && citySlots(s, cell.hall).used >= citySlots(s, cell.hall).max) {
+          ${qi >= 0 ? `<div class="acts">${btn(`unqueue:${qi}`, 'Cancel', 'resources are returned')}</div>` : job ? `<div class="acts">${btn(`canceljob:${p.jobs.indexOf(job)}`, 'Cancel construction', 'resources are returned')}</div>` : ''}</div>`);
+      } else if ((kinds.length || TOWER_TERRAIN.includes(cell.terrain)) && cell.hall && citySlots(s, cell.hall).used >= citySlots(s, cell.hall).max) {
         const h = s.halls[cell.hall], sl = citySlots(s, cell.hall);
         parts.push(`<div class="card"><p><b>${esc(h.name)}</b> has no free building slots (${sl.used}/${sl.max}).</p><p class="muted">${h.level < 3 ? `Grow the city to level ${h.level + 1} for ${BUILDING_SLOTS[h.level]} slots, ` : ''}upgrade the buildings you have, or found a new city.</p></div>`);
-      } else if (kinds.length) {
+      } else if (kinds.length || (TOWER_TERRAIN.includes(cell.terrain) && cell.hall)) {
         if (cell.hall) { const sl = citySlots(s, cell.hall); parts.push(`<p class="muted">${esc(s.halls[cell.hall].name)}: ${sl.used}/${sl.max} building slots used</p>`); }
-        parts.push(`<div class="acts">${kinds.map((b) => btn(`build:${k}:${b}`, `Build ${BUILDING_NAME[b].toLowerCase()}`, `${cost(resourceCost(s, ME, b, 1))} · 1 turn · +${amount(RES_OF[b], RESOURCE_OUTPUT[b][0])}/turn`)).join('')}</div>`);
+        parts.push(`<div class="acts">${kinds.map((b) => btn(`build:${k}:${b}`, `Build ${BUILDING_NAME[b].toLowerCase()}`, `${cost(resourceCost(s, ME, b, 1))} · 1 turn · +${amount(RES_OF[b], RESOURCE_OUTPUT[b][0])}/turn`)).join('')}${TOWER_TERRAIN.includes(cell.terrain) ? btn(`tower:${k}`, 'Build a watchtower', `${cost(TOWER.cost)} · 1 turn · sees ${TOWER.sight} cells around`) : ''}</div>`);
       } else {
         parts.push(`<p class="muted">Nothing can be built on ${TERRAIN_NAME[cell.terrain].toLowerCase()}.</p>`);
       }
@@ -494,6 +503,13 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
     else if (a === 'general') act(hireGeneral(s, ME, x));
     else if (a === 'settler') { const r = hireSettler(s, ME, x); act(r); if (r.ok) toast('A settler is ready in the city. He can move next turn.'); }
     else if (a === 'unqueue') act(cancelQueued(s, ME, Number(x)));
+    else if (a === 'canceljob') act(cancelJob(s, ME, Number(x)));
+    else if (a === 'demolish') { modal(`<h2>Demolish?</h2><p>The building is torn down and its slot is free again. Nothing is returned.</p><div class="acts">${btn('yes', 'Demolish', '')}${btn('no', 'Keep it', '')}</div>`); const yes = (await ask()) === 'yes'; modal(null); if (yes) act(demolish(s, ME, hex(x))); }
+    else if (a === 'walls') act(buildWalls(s, ME, x));
+    else if (a === 'market') act(upgradeMarket(s, ME, x));
+    else if (a === 'tower') act(buildTower(s, ME, hex(x)));
+    else if (a === 'trade') await tradeMenu();
+    else if (a === 'road') await roadMenu(x);
     else if (a === 'move') doMove();
     else if (a === 'goto') {
       const g = s.generals[sel.gid!];
@@ -506,6 +522,35 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
     else if (a === 'order') { const g = s.generals[x]; g.order = y === 'none' ? undefined : y === 'explore' ? { kind: 'explore' } : { kind: 'hold' }; if (y === 'explore') followOrders(); sel = y === 'none' ? { hex: g.hex, gid: g.id } : {}; saveGame(s); refresh(); }
     else if (a === 'attack') doAttack();
     else if (a === 'train') { const r = trainGeneral(s, ME, x); act(r); if (r.ok) toast(`${s.generals[x].name} is retrained: ELO ${s.generals[x].elo}.`); }
+  };
+
+  /** Рынок: отдать один ресурс за другой по курсу лучшего рынка страны. */
+  const tradeMenu = async () => {
+    const R = ['wood', 'food', 'gold'] as const;
+    let from: typeof R[number] = 'wood', to: typeof R[number] = 'gold';
+    for (;;) {
+      const p = s.players[ME];
+      const opts = [10, 50, 100, p.res[from]].filter((n, i, a) => n > 0 && n <= p.res[from] && a.indexOf(n) === i);
+      modal(`<h2>⚖ Market</h2><p class="muted">${MARKET[marketLevel(s, ME) as 1 | 2 | 3].rate}:1 · gold is worth 3 wood or food. A better market gives a better rate.</p>
+        <div class="tradepick"><span>Give</span><div class="seg">${R.map((r) => `<button data-a="from:${r}" class="${r === from ? 'on' : ''}">${iconSvg(r, 16)} ${p.res[r]}</button>`).join('')}</div></div>
+        <div class="tradepick"><span>Get</span><div class="seg">${R.map((r) => `<button data-a="to:${r}" class="${r === to ? 'on' : ''}" ${r === from ? 'disabled' : ''}>${iconSvg(r, 16)}</button>`).join('')}</div></div>
+        <div class="acts">${opts.map((n) => btn(`deal:${n}`, `${n} → ${tradeQuote(s, ME, from, to, n)}`, `${iconSvg(from, 13)} → ${iconSvg(to, 13)}`)).join('') || '<p class="muted">Nothing to trade.</p>'}${btn('close', 'Close', '')}</div>`);
+      const c = await ask();
+      if (c.startsWith('from:')) { from = c.slice(5) as typeof from; if (to === from) to = R.find((r) => r !== from)!; continue; }
+      if (c.startsWith('to:')) { to = c.slice(3) as typeof to; continue; }
+      if (c.startsWith('deal:')) { const r = trade(s, ME, from, to, Number(c.slice(5))); if (!r.ok) toast(r.reason); else { tap(); saveGame(s); bar(); } continue; }
+      modal(null); refresh(); return;
+    }
+  };
+  /** Дорога из города hallId: выбрать, к какому своему городу. */
+  const roadMenu = async (hallId: string) => {
+    const others = playerHalls(s, ME).filter((h) => h.id !== hallId);
+    modal(`<h2>⛙ Road from ${esc(s.halls[hallId].name)}</h2><p class="muted">Armies on a road go one cell further each turn. The road runs over your land or free land.</p>
+      <div class="acts">${others.map((h) => { const path = roadPath(s, ME, hallId, h.id); const n = path ? path.length - 1 : 0;
+        return btn(`to:${h.id}`, `To ${esc(h.name)}`, !path ? 'no way through' : n > ROAD_MAX ? `${n} cells — too far` : path.every((x) => s.cells[key(x)].road) ? 'already connected' : `${n} cells · ${cost(roadCost(s, path))}`); }).join('')}${btn('close', 'Close', '')}</div>`);
+    const c = await ask();
+    modal(null);
+    if (c.startsWith('to:')) act(buildRoad(s, ME, hallId, c.slice(3)));
   };
 
   const construct = async (order: QueueOrder, label: string) => { // label — надпись кнопки
@@ -701,6 +746,10 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
         ${hb < 5 ? up(`barracks:${h.id}`, hb ? `→ ${hb + 1}` : 'Build', barracksCost(s, ME, (hb + 1) as 1 | 2 | 3 | 4 | 5), state((j) => j.kind === 'barracks' && j.hallId === h.id)) : '<span class="bstate">top level</span>'}</div>`,
       `<div class="brow"><span class="bico">♚</span><span class="bname"><b>Tavern</b> · ${ht ? `level ${ht}` : 'none'}</span><span class="bout">${ht ? `up to ${Math.min(5, ht + 1)} generals` : 'hires generals'}</span>
         ${ht < 4 ? up(`tavern:${h.id}`, ht ? `→ ${ht + 1}` : 'Build', tavernCost(s, ME, (ht + 1) as 1 | 2 | 3 | 4), state((j) => j.kind === 'tavern' && j.hallId === h.id)) : '<span class="bstate">top level</span>'}</div>`,
+      `<div class="brow"><span class="bico">▥</span><span class="bname"><b>Walls</b> · ${h.walls ? 'built' : 'none'}</span><span class="bout">sieges last a turn longer</span>
+        ${h.walls ? '<span class="bstate">✓</span>' : up(`walls:${h.id}`, 'Build', WALLS.cost, state((j) => j.kind === 'walls' && j.hallId === h.id))}</div>`,
+      `<div class="brow"><span class="bico">⚖</span><span class="bname"><b>Market</b> · ${h.market ? `level ${h.market}` : 'none'}</span><span class="bout">${marketLevel(s, ME) ? `<button class="ghost tradeb" data-a="trade">⇄ Trade · ${MARKET[marketLevel(s, ME) as 1 | 2 | 3].rate}:1</button>` : 'trade resources'}</span>
+        ${(h.market ?? 0) < 3 ? up(`market:${h.id}`, h.market ? `→ ${h.market + 1}` : 'Build', MARKET[((h.market ?? 0) + 1) as 1 | 2 | 3].cost, state((j) => j.kind === 'market' && j.hallId === h.id)) : '<span class="bstate">top level</span>'}</div>`,
       ...cells.map((c) => {
         const k = key(c.hex);
         if (!c.building) return `<div class="brow"><span class="bico">${iconSvg('clock', 22)}</span><span class="bname"><b>Construction</b></span><span class="bout">${state((j) => j.kind === 'resource' && key(j.hex) === k) || 'in progress'}</span></div>`;
@@ -717,7 +766,7 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
         <button class="ghost navb" data-a="city:next" ${n < 2 ? 'disabled' : ''}>›</button></div>
       <div class="autorow"><span>Auto-development</span><div class="seg">${([['off', 'Off'], ['economy', 'Economy'], ['army', 'Army']] as const)
         .map(([k, l]) => `<button data-a="auto:${h.id}:${k}" class="${(h.auto ?? 'off') === k ? 'on' : ''}">${l}</button>`).join('')}</div></div>
-      ${h.auto ? `<p class="muted autonote">${h.auto === 'army' ? 'Each turn the city builds barracks, mines and farms for the army' : 'Each turn the city builds farms, sawmills and mines and grows'} — it keeps 20 wood, 20 food and 20 gold for you.</p>` : ''}
+      ${h.auto ? `<p class="muted autonote">${h.auto === 'army' ? 'Each turn the city builds barracks, mines and farms for the army' : 'Each turn the city builds farms, sawmills and mines and grows'}.</p>` : ''}
       <div class="blist">${rows.join('')}</div>
       ${cells.length ? '' : '<p class="muted">No farms, sawmills or mines yet: tap a cell on this city\u2019s land to build.</p>'}
       <div class="acts">${btn(`goto-city:${h.id}`, 'Show on map', '')}${btn('close', 'Close', '')}</div>`;

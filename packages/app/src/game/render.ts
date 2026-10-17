@@ -143,7 +143,7 @@ export class MapView {
     const me = s.players[viewer];
     if (me) {
       const capital = Object.values(s.halls).filter((h) => h.owner === viewer).sort((a, b) => a.order - b.order)[0];
-      const at = (j: Job): string | null => j.kind === 'resource' || j.kind === 'found' ? key(j.hex)
+      const at = (j: Job): string | null => j.kind === 'resource' || j.kind === 'found' || j.kind === 'tower' ? key(j.hex)
         : s.halls[j.hallId] ? key(s.halls[j.hallId].hex) : capital ? key(capital.hex) : null;
       for (const q of me.queue ?? []) { const k = at(q.job); if (k) clocks.set(k, true); }
       for (const j of me.jobs) { const k = at(j); if (k) clocks.set(k, false); }
@@ -225,13 +225,37 @@ export class MapView {
         c.beginPath(); c.moveTo(ax, ay); c.lineTo(bx, by); c.stroke();
       });
     }
+    // дороги: полоса утоптанной земли между соседними клетками с дорогой (там, где игрок знает местность)
+    c.lineCap = 'round';
+    for (const cell of onScreen) {
+      if (!cell.road || !known.has(key(cell.hex))) continue;
+      const { x, y } = this.toPixel(cell.hex);
+      for (const d of dirs.slice(0, 3)) {
+        const n = s.cells[key({ q: cell.hex.q + d.q, r: cell.hex.r + d.r })];
+        if (!n?.road || !known.has(key(n.hex))) continue;
+        const b = this.toPixel(n.hex);
+        c.strokeStyle = 'rgba(70,45,20,.55)'; c.lineWidth = Math.max(3, S * 0.34);
+        c.beginPath(); c.moveTo(x, y); c.lineTo(b.x, b.y); c.stroke();
+        c.strokeStyle = '#d8b67a'; c.lineWidth = Math.max(2, S * 0.22);
+        c.beginPath(); c.moveTo(x, y); c.lineTo(b.x, b.y); c.stroke();
+        c.strokeStyle = 'rgba(255,240,200,.6)'; c.lineWidth = Math.max(1, S * 0.05); c.setLineDash([S * 0.18, S * 0.22]);
+        c.beginPath(); c.moveTo(x, y); c.lineTo(b.x, b.y); c.stroke(); c.setLineDash([]);
+      }
+    }
     // 3. здания и ратуши
     for (const cell of cells) {
       const v = known.get(key(cell.hex));
       if (!v) continue;
       const { x, y } = this.toPixel(cell.hex);
+      if (cell.tower) this.tower(x, y, S);
       if (v.building) this.building(x, y, S, v.building.kind, v.building.level);
       else if (v.reserved && !clocks.has(key(cell.hex))) this.clock(x, y, S * 0.36, false);
+      if (v.hall && hallAt.get(key(cell.hex))?.walls) { // стены: каменное кольцо вокруг города
+        c.save(); c.lineJoin = 'round';
+        this.hexPath(x, y, S * 0.78); c.strokeStyle = 'rgba(40,30,20,.6)'; c.lineWidth = Math.max(3, S * 0.2); c.stroke();
+        this.hexPath(x, y, S * 0.78); c.strokeStyle = '#a99c86'; c.lineWidth = Math.max(2, S * 0.13); c.setLineDash([S * 0.16, S * 0.07]); c.stroke();
+        c.setLineDash([]); c.restore();
+      }
       if (v.hall) this.hall(x, y, S, ownerColor(s, v.hall.owner)!, v.hall.level, !!v.hall.siege);
     }
     // часы над стройками игрока: идёт стройка (белые) или ждёт в очереди (серые)
@@ -492,6 +516,29 @@ export class MapView {
   }
 
   /** Город: каменная крепость со знаменем цвета владельца, точки — уровень. */
+  /** Сторожевая башня: каменная башенка с зубцами и флажком. */
+  private tower(x: number, y: number, S: number): void {
+    const c = this.ctx;
+    const w = S * 0.42, h = S * 0.78, bx = x - w / 2, by = y - h * 0.62;
+    c.save();
+    c.fillStyle = 'rgba(0,0,0,.25)'; c.beginPath(); c.ellipse(x, y + h * 0.4, w * 0.75, S * 0.12, 0, 0, Math.PI * 2); c.fill();
+    c.fillStyle = '#b9ab92'; c.strokeStyle = '#4a3a28'; c.lineWidth = Math.max(1, S * 0.05);
+    c.beginPath();
+    c.moveTo(bx + w * 0.08, y + h * 0.38); c.lineTo(bx + w * 0.16, by + h * 0.2); c.lineTo(bx + w * 0.84, by + h * 0.2); c.lineTo(bx + w * 0.92, y + h * 0.38); c.closePath();
+    c.fill(); c.stroke();
+    // зубцы
+    const tw = w / 5;
+    c.beginPath();
+    for (let i = 0; i < 5; i += 2) c.rect(bx + i * tw, by, tw, h * 0.22);
+    c.rect(bx, by + h * 0.14, w, h * 0.1);
+    c.fill(); c.stroke();
+    c.fillStyle = '#3a2c1c'; c.fillRect(x - w * 0.09, by + h * 0.42, w * 0.18, h * 0.2);
+    // флажок
+    c.strokeStyle = '#3a2c1c'; c.beginPath(); c.moveTo(x, by); c.lineTo(x, by - h * 0.3); c.stroke();
+    c.fillStyle = '#c0392b'; c.beginPath(); c.moveTo(x, by - h * 0.3); c.lineTo(x + w * 0.45, by - h * 0.22); c.lineTo(x, by - h * 0.14); c.fill();
+    c.restore();
+  }
+
   private hall(x: number, y: number, S: number, color: string, level: number, siege: boolean): void {
     const c = this.ctx;
     const w = S * 0.98, h = S * 0.72, base = y + S * 0.28, top = base - h;

@@ -33,8 +33,9 @@ export const reachable = (s: GameState, gid: string): Map<string, number> => {
   while (queue.length) {
     const cur = queue.shift()!;
     const d = dist.get(key(cur))!;
-    // «Дороги»: по своей земле можно пройти на клетку дальше
-    const road = d === g.moveLeft && roads && s.cells[key(cur)]?.owner === g.owner;
+    // «Дороги»: технология — по своей земле на клетку дальше; построенная дорога — по дороге на клетку дальше
+    const onRoad = !!s.cells[key(cur)]?.road;
+    const road = d === g.moveLeft && ((roads && s.cells[key(cur)]?.owner === g.owner) || onRoad);
     if (d >= g.moveLeft && !road) continue;
     if (d > g.moveLeft) continue;
     for (const n of neighbors(cur)) {
@@ -43,7 +44,7 @@ export const reachable = (s: GameState, gid: string): Map<string, number> => {
       if (!c || !PASSABLE[c.terrain] || dist.has(k)) continue;
       if (c.noBandits && g.owner === 'bandits') continue; // в эти края разбойники не ходят
       if (!mayEnter(s, g.owner, c.owner)) continue; // земля страны, с которой мир, — закрыта
-      if (road && c.owner !== g.owner) continue;
+      if (road && !(roads && c.owner === g.owner) && !(onRoad && c.road)) continue;
       if (generalsAt(s, n).some((x) => x.owner !== g.owner)) continue; // чужая армия — только атакой
       const h = hallAt(s, n);
       if (h && h.owner !== g.owner) continue; // чужая ратуша — только осадой
@@ -218,6 +219,7 @@ export const visible = (s: GameState, pid: string): Set<string> => {
   for (const c of Object.values(s.cells)) if (mine(c.owner)) add(c.hex);
   const far = s.players[pid] && hasTech(s, pid, 'cartography') ? FOG_RADIUS + 1 : FOG_RADIUS; // «Картография»
   for (const g of Object.values(s.generals)) if (mine(g.owner)) add(g.hex, g.owner === pid ? far : FOG_RADIUS);
+  for (const c of Object.values(s.cells)) if (c.tower && mine(c.owner)) add(c.hex, 4); // сторожевые башни
   return seen;
 };
 
@@ -305,7 +307,7 @@ export const resolveBattle = (s: GameState, attackerId: string, defenderId: stri
   if (!h || h.owner === att.owner) return out;
   if (att.owner === 'bandits') {
     if (defenderAt(s, defHex, att.owner)) return out;
-    if (isCapital(s, h)) { h.siege = { by: att.id, since: s.turn }; say(s, `bandits besiege ${h.name}! Send an army within a turn or the capital falls`, h.owner); }
+    if (isCapital(s, h) || h.walls) { h.siege = { by: att.id, since: s.turn }; say(s, `bandits besiege ${h.name}! Send an army within a turn or the capital falls`, h.owner); }
     else seizeByBandits(s, att.id, h.id);
     return out;
   }
@@ -357,7 +359,7 @@ export const resolveSieges = (s: GameState, pid: string): void => {
     const g = h.siege && s.generals[h.siege.by];
     if (!h.siege || !g || g.owner !== pid) continue;
     const castles = s.players[h.owner] && NATIONS[s.players[h.owner].nation].mods.castles;
-    if (s.turn < h.siege.since + SIEGE_TURNS + (castles ? 1 : 0)) continue; // японский замок держится 2 хода
+    if (s.turn < h.siege.since + SIEGE_TURNS + (castles ? 1 : 0) + (h.walls ? 1 : 0)) continue; // японский замок и стены — на ход дольше
     if (distance(g.hex, h.hex) > 1) { h.siege = undefined; continue; }
     if (defenderAt(s, h.hex, pid)) { h.siege = undefined; say(s, `reinforcements lifted the siege`, pid); continue; }
     capture(s, h.id, pid);

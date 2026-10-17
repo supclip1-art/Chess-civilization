@@ -28,3 +28,4 @@ export * from './deals.ts';
 export * from './heroes.ts';
 export * from './autodev.ts';
 export * from './difficulty.ts';
+export * from './extras.ts';

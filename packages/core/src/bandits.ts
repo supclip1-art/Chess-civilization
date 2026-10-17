@@ -74,7 +74,7 @@ const hasBand = (s: GameState, pid: string): boolean => {
  *  Столицу — нет: сначала ход осады (есть время прислать армию), и только потом захват. */
 export const raidCity = (s: GameState, gid: string, hallId: string): void => {
   const h = s.halls[hallId];
-  if (h && isCapital(s, h)) {
+  if (h && (isCapital(s, h) || h.walls)) { // столицу и город со стенами — сначала осада
     if (h.siege?.by === gid) return; // осада уже идёт
     h.siege = { by: gid, since: s.turn };
     say(s, `bandits besiege ${h.name}! Send an army within a turn or the capital falls`, h.owner);
@@ -89,7 +89,8 @@ const banditSieges = (s: GameState, b: General): boolean => {
   if (!h) return false;
   const defended = Object.values(s.generals).some((x) => x.owner === h.owner && key(x.hex) === key(h.hex) && armyValue(x.army) > 0);
   if (distance(b.hex, h.hex) > 1 || defended) { h.siege = undefined; if (defended) say(s, `the bandit siege of ${h.name} is lifted`, h.owner); return false; }
-  if (s.turn > h.siege!.since) seizeByBandits(s, b.id, h.id);
+  const hold = (isCapital(s, h) ? 1 : 0) + (h.walls ? 1 : 0); // столица — ход, стены — ещё ход
+  if (s.turn >= h.siege!.since + Math.max(1, hold)) seizeByBandits(s, b.id, h.id);
   return true; // осаждает — стоит на месте
 };
 

@@ -255,3 +255,33 @@ test('сложность: ИИ на «Гроссмейстере» богаче,
   assert.equal(armyValue(ai(gm).army), armyValue(ai(nv).army));
   assert.deepEqual(gm.players.p1.res, nv.players.p1.res);
 });
+
+test('стены, рынок, башня, отмена и снос', async () => {
+  const { buildWalls, upgradeMarket, trade, tradeQuote, buildTower, cancelJob, demolish, playerHalls, endTurn, build, visible, key: k } = await import('../src/index.ts');
+  const s = game();
+  const h = playerHalls(s, 'p1')[0];
+  s.players.p1.res = { wood: 999, food: 999, gold: 999 };
+  h.level = 3; h.builders = 3;
+  assert.ok(buildWalls(s, 'p1', h.id).ok);
+  assert.ok(upgradeMarket(s, 'p1', h.id).ok);
+  // отмена: ресурсы возвращаются
+  const before = { ...s.players.p1.res };
+  const tc = Object.values(s.cells).find((c) => c.hall === h.id && ['field', 'desert', 'tundra'].includes(c.terrain) && !c.building && k(c.hex) !== k(h.hex))!;
+  assert.ok(buildTower(s, 'p1', tc.hex).ok);
+  assert.ok(cancelJob(s, 'p1', s.players.p1.jobs.length - 1).ok);
+  assert.deepEqual(s.players.p1.res, before);
+  assert.ok(!tc.reserved);
+  assert.ok(buildTower(s, 'p1', tc.hex).ok);
+  for (let i = 0; i < 6; i++) endTurn(s);
+  assert.equal(h.walls, 1); assert.equal(h.market, 1); assert.ok(tc.tower);
+  assert.ok(visible(s, 'p1').size > 0);
+  const q = tradeQuote(s, 'p1', 'wood', 'gold', 60);
+  assert.equal(q, 10);
+  const g0 = s.players.p1.res.gold;
+  assert.ok(trade(s, 'p1', 'wood', 'gold', 60).ok);
+  assert.equal(s.players.p1.res.gold, g0 + 10);
+  // снос
+  assert.ok(demolish(s, 'p1', tc.hex).ok);
+  assert.ok(!tc.tower);
+  void build;
+});

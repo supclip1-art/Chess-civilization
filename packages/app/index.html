@@ -94,6 +94,9 @@
     .brow .bname b { font-size: 14.5px; }
     .brow .upb { border-radius: 12px; border: 0; color: #3a2604; background: linear-gradient(#f6cf6a, #d89e2c); box-shadow: 0 2px 0 #a8741a; }
     .brow .upb small .amt { color: #3a2604; }
+    button.tradeb { width: auto; padding: 4px 10px; font-size: 12.5px; border-radius: 999px; margin-top: 2px; }
+    .tradepick { display: flex; align-items: center; justify-content: space-between; gap: 10px; } .tradepick .seg button { width: auto; padding: 7px 12px; display: inline-flex; align-items: center; gap: 4px; }
+    button.act.danger b { color: var(--bad); }
     .autorow .seg button.on { background: linear-gradient(#f6cf6a, #d89e2c); color: #3a2604; font-weight: 700; }
     /* ---------- новая игра ---------- */
     .sethero { position: relative; margin: -16px -16px 2px; padding: calc(24px + env(safe-area-inset-top, 0px)) 22px 26px; border-radius: 0 0 26px 26px; color: #fbf3e2;
@@ -158,6 +161,9 @@
     /* ---------- главный экран ---------- */
     .hero { position: relative; margin: -16px -16px 0; height: min(64vh, 420px); overflow: hidden; border-radius: 0 0 26px 26px; background: #2b2f5a; }
     .hero canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+    .hero::after { content: ''; position: absolute; left: 0; right: 0; top: 0; height: 52%; pointer-events: none;
+      background: linear-gradient(#1e2a52 0%, rgba(42, 46, 92, .92) 38%, rgba(217, 138, 82, .45) 78%, rgba(217, 138, 82, 0) 100%); }
+    .herotext { z-index: 1; }
     .herotext { position: absolute; left: 22px; right: 22px; top: calc(20px + env(safe-area-inset-top, 0px)); color: #fbf3e2; text-shadow: 0 2px 14px rgba(20, 18, 60, .55); }
     .wordmark { font-family: 'Cinzel', 'Trajan Pro', Georgia, serif; font-weight: 700; font-size: clamp(32px, 9.5vw, 46px); line-height: 1.02; letter-spacing: .02em; margin: 0 0 8px; }
     .herotext p { margin: 0; font-size: 14px; line-height: 1.4; max-width: 19em; color: #f6e7c8; }

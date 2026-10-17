@@ -1,7 +1,7 @@
 // Авторазвитие города игрока: в начале хода город сам нанимает строителей, строит и улучшает здания и растёт.
 //   economy — ресурсы: фермы, лесопилки, рудники поровну, с упором на то, чего не хватает;
 //   army    — под армию: казарма (до 3-го уровня), рудники на золото, фермы на содержание.
-// Тратится только то, что сверх запаса (по 20 дерева, еды и золота), — на ручные решения игрока остаётся.
+// Запаса не оставляет: тратит всё, на что хватает.
 
 import { BUILDER_HIRE_FOOD, RESOURCE_OUTPUT, type Res, type ResourceBuilding } from './config.ts';
 import {
@@ -12,7 +12,7 @@ import { key } from './hex.ts';
 import { type GameState, say } from './state.ts';
 
 export type AutoFocus = 'economy' | 'army';
-const RESERVE: Res = { wood: 20, food: 20, gold: 20 };
+const RESERVE: Res = { wood: 0, food: 0, gold: 0 }; // неприкосновенного запаса нет: город тратит всё, что может
 
 /** Хватает ли, не залезая в запас (запас проверяем только по тем ресурсам, что тратятся). */
 const affordable = (have: Res, cost: Partial<Res>) =>

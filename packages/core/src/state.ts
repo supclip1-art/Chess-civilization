@@ -24,6 +24,8 @@ export type Cell = {
   hall?: string; // id ратуши, к зоне которой относится клетка
   building?: { kind: ResourceBuilding; level: number };
   reserved?: boolean; // здесь идёт постройка нового здания
+  tower?: boolean; // сторожевая башня (занимает место под здание, видно на 4 клетки)
+  road?: boolean; // дорога: армия проходит по ней на клетку дальше
   noBandits?: boolean; // разбойники здесь не появляются и сюда не ходят (Греция на карте Европы)
 };
 
@@ -39,6 +41,8 @@ export type TownHall = {
   tavern?: number; // таверна города: в ней нанимают генералов
   builders?: number; // строители города (нет — один)
   auto?: 'economy' | 'army'; // авторазвитие города игрока (autodev.ts)
+  walls?: number; // стены: осада на ход дольше
+  market?: number; // рынок 1–3: обмен ресурсов
   siege?: { by: string; since: number }; // id осаждающего генерала и ход начала осады
   /** До какого хода в городе нельзя строить (карантин, недовольство) и почему. */
   haltUntil?: number;
@@ -85,7 +89,11 @@ export type Job =
   | { kind: 'townhall'; hallId: string; level: number; finish: number }
   | { kind: 'found'; hex: Hex; general: string; finish: number }
   | { kind: 'barracks'; hallId: string; level: number; finish: number }
-  | { kind: 'tavern'; hallId: string; level: number; finish: number };
+  | { kind: 'tavern'; hallId: string; level: number; finish: number }
+  | { kind: 'walls'; hallId: string; level: number; finish: number }
+  | { kind: 'market'; hallId: string; level: number; finish: number }
+  | { kind: 'tower'; hex: Hex; finish: number }
+  | { kind: 'road'; hallId: string; to: string; cells: string[]; finish: number };
 
 export type Player = {
   id: string;
