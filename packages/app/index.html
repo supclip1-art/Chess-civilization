@@ -488,6 +488,111 @@
     .promo[hidden] { display: none; }
     .promo div { display: flex; gap: 10px; }
     .promo button { position: relative; width: 64px; height: 64px; border-radius: 12px; background: #ebecd0; border: 0; padding: 0; pointer-events: auto; }
+    /* ---------- генерал, стройка, держава, итоги: «конфетные» карточки ---------- */
+    .armyrow .pc, .hpiece .pc, .mtok .pc { position: static; inset: auto; display: inline-block; width: 30px; height: 30px; background-size: contain; background-repeat: no-repeat; background-position: center; }
+    .gencard { display: flex; flex-direction: column; gap: 10px; padding: 12px; border-radius: 20px; box-shadow: 0 6px 18px rgba(20, 20, 60, .12); margin-bottom: 8px;
+      background: radial-gradient(120% 60% at 0% 0%, color-mix(in srgb, #f6cf6a 14%, var(--card)), var(--card) 65%); }
+    .gencard.foe { background: radial-gradient(120% 60% at 0% 0%, color-mix(in srgb, #e0604a 12%, var(--card)), var(--card) 65%); }
+    .genhead { display: flex; align-items: center; gap: 11px; }
+    .genport { flex: none; display: inline-flex; border-radius: 50%; padding: 2px; background: linear-gradient(#f6cf6a, #b07b18); box-shadow: 0 0 0 2.5px var(--c), 0 3px 8px rgba(0,0,0,.25); }
+    .genport svg { display: block; border-radius: 50%; }
+    .genglyph { width: 50px; height: 50px; border-radius: 50%; display: grid; place-items: center; font-size: 26px; background: radial-gradient(circle at 35% 30%, #fff3d0, #e9c879); }
+    .genname { flex: 1; min-width: 0; } .genname > b { display: block; font-family: 'Cinzel', Georgia, serif; font-size: 18px; line-height: 1.15; }
+    .genmeta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-top: 4px; font-size: 12.5px; color: var(--muted); }
+    .elo { font-weight: 800; font-size: 12px; color: #3a2604; padding: 1px 8px; border-radius: 999px; background: linear-gradient(#f6cf6a, #d89e2c); box-shadow: 0 1px 0 #a8741a; font-variant-numeric: tabular-nums; }
+    .gstars { color: #e3a81a; letter-spacing: 1px; text-shadow: 0 0 5px rgba(242,182,50,.5); }
+    .genmoves { flex: none; display: grid; justify-items: end; gap: 3px; } .genmoves .pips i { width: 11px; height: 11px; border-radius: 50%; } .genmoves small { font-size: 11.5px; color: var(--muted); }
+    .armyrow { display: flex; flex-wrap: wrap; gap: 6px; }
+    .atok { position: relative; width: 40px; height: 40px; display: grid; place-items: center; border-radius: 12px; background: color-mix(in srgb, #f6cf6a 16%, var(--bg)); border: 1.5px solid color-mix(in srgb, #c99b2e 40%, var(--line)); }
+    .atok.king { background: linear-gradient(#fff3c8, #efd185); border-color: #c99b2e; }
+    .atok .pc { width: 32px; height: 32px; }
+    .atok i { position: absolute; z-index: 2; right: -5px; bottom: -5px; font-style: normal; font-size: 11px; font-weight: 800; color: #fff; background: #3b2a12; border-radius: 999px; padding: 1px 5px; border: 1.5px solid var(--card); }
+    .genbook { display: flex; gap: 8px; align-items: flex-start; font-size: 12px; color: var(--muted); padding: 7px 10px; border-radius: 12px; background: color-mix(in srgb, var(--muted) 8%, transparent); }
+    .genbook b { color: var(--ink); font-weight: 600; }
+    button.ctile.danger { border-color: color-mix(in srgb, var(--bad) 55%, var(--line)); box-shadow: 0 2px 0 color-mix(in srgb, var(--bad) 35%, transparent); }
+    button.ctile.danger .cico { background: linear-gradient(#f39a7c, #c84a2e); color: #fff; } button.ctile.danger b { color: var(--bad); }
+    button.ctile.ctop { background: linear-gradient(160deg, color-mix(in srgb, #f6cf6a 26%, var(--bg)), var(--bg)); border-color: #d6a838; }
+    .cico svg { display: block; }
+    .hirebox { display: grid; gap: 8px; padding-top: 4px; border-top: 1px dashed var(--line); }
+    .hirebox .hirehead { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--muted); margin: 0; } .hirebox .hirehead .cico { width: 28px; height: 28px; font-size: 15px; border-radius: 9px; }
+    .hiregrid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+    button.hpiece { position: relative; display: grid; justify-items: center; gap: 1px; padding: 8px 2px 6px; border-radius: 14px; font-weight: 400; color: var(--ink);
+      background: linear-gradient(180deg, color-mix(in srgb, #f6cf6a 18%, var(--bg)), var(--bg)); border: 1.5px solid color-mix(in srgb, #c99b2e 50%, var(--line)); box-shadow: 0 2px 0 color-mix(in srgb, #c99b2e 40%, transparent); }
+    button.hpiece:active { transform: translateY(1px); box-shadow: none; }
+    button.hpiece .pc { width: 34px; height: 34px; } button.hpiece b { font-size: 11.5px; } button.hpiece small { font-size: 11px; white-space: nowrap; }
+    button.hpiece .hcount { position: absolute; top: 3px; right: 4px; font-size: 10px; font-weight: 700; color: var(--muted); }
+    button.hpiece.off { opacity: .5; filter: grayscale(.5); }
+    .bldico { flex: none; width: 52px; height: 52px; display: grid; place-items: center; border-radius: 16px; font-size: 28px;
+      background: radial-gradient(circle at 35% 30%, #fff6d8, #efd38a 70%, #d6ab4a); box-shadow: 0 3px 8px rgba(160, 105, 20, .3), inset 0 0 0 1.5px rgba(122, 82, 16, .5); }
+    .bldcard .lvl { font-weight: 700; color: var(--ink); }
+    .bldcard .pips i { width: 12px; height: 12px; }
+    .natcard { display: flex; flex-direction: column; gap: 12px; }
+    .nathero { display: flex; gap: 14px; align-items: center; padding: 14px; margin: -4px -4px 0; border-radius: 20px; color: #fbf1da;
+      background: radial-gradient(120% 120% at 0% 0%, color-mix(in srgb, var(--c) 70%, #3a2210), #2c1a0c 85%); box-shadow: 0 8px 18px rgba(40, 20, 0, .25); }
+    .nathero h2 { margin: 0 0 4px; font-family: 'Cinzel', Georgia, serif; font-size: 22px; color: #fff6dc; }
+    .nathero p { margin: 6px 0 0; font-size: 12.5px; color: #f1dcb4; line-height: 1.35; }
+    .natflag svg { display: block; border-radius: 8px; box-shadow: 0 0 0 2px rgba(255,255,255,.7), 0 4px 10px rgba(0,0,0,.4); }
+    .nathero .chip { font-size: 12px; padding: 2px 10px; border-radius: 999px; }
+    .chip.gold { color: #3a2604; background: linear-gradient(#f6cf6a, #d89e2c); border: 1px solid #b07b18; font-weight: 700; }
+    .chip.ok { border: 1px solid color-mix(in srgb, #c99b2e 60%, transparent); padding: 3px 10px; border-radius: 999px; font-size: 12.5px; display: inline-flex; align-items: center; gap: 3px; }
+    .rulerbox { display: flex; gap: 14px; align-items: center; padding: 10px 12px; border-radius: 18px; background: radial-gradient(120% 90% at 0% 0%, color-mix(in srgb, #f6cf6a 16%, var(--card)), var(--card) 70%); box-shadow: 0 4px 12px rgba(20, 20, 60, .1); }
+    .rulerbox b { font-family: 'Cinzel', Georgia, serif; font-size: 17px; } .rulerbox p { margin: 2px 0 6px; }
+    .rulerring { flex: none; display: inline-flex; border-radius: 50%; padding: 3px; background: linear-gradient(#f6cf6a, #b07b18); box-shadow: 0 0 0 3px var(--c), 0 4px 10px rgba(0,0,0,.25); }
+    .rulerring svg { display: block; border-radius: 50%; }
+    .nstats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .nstat { display: grid; grid-template-columns: auto 1fr; grid-template-areas: "i l" "i v" "r r"; gap: 0 9px; align-items: center; padding: 10px; border-radius: 16px; background: var(--card); border: 1.5px solid color-mix(in srgb, #c99b2e 30%, var(--line)); box-shadow: 0 2px 0 color-mix(in srgb, #c99b2e 25%, transparent); }
+    .nsico { grid-area: i; width: 38px; height: 38px; display: grid; place-items: center; border-radius: 12px; font-size: 19px; color: #3a2604; background: linear-gradient(#f6cf6a, #d89e2c); }
+    .nslab { grid-area: l; font-size: 12px; color: var(--muted); } .nstat b { grid-area: v; font-size: 21px; line-height: 1.1; font-variant-numeric: tabular-nums; }
+    .nsrank { grid-area: r; display: flex; align-items: center; gap: 6px; margin-top: 6px; font-size: 11.5px; color: var(--muted); }
+    .rmedal { flex: none; width: 24px; height: 24px; border-radius: 50%; display: inline-grid; place-items: center; font-weight: 800; font-size: 12px; color: var(--muted); background: color-mix(in srgb, var(--muted) 16%, transparent); }
+    .rmedal.r1 { color: #5a3608; background: radial-gradient(circle at 35% 30%, #fff3b8, #e6b84a 60%, #a8741c); box-shadow: 0 0 6px rgba(242,182,50,.55); }
+    .rmedal.r2 { color: #3b3f46; background: radial-gradient(circle at 35% 30%, #ffffff, #c9ced6 60%, #8d939c); }
+    .rmedal.r3 { color: #4a2510; background: radial-gradient(circle at 35% 30%, #ffd9b8, #cf8a52 60%, #8c4f22); }
+    .nincome { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 13px; } .nincome > span:first-child { font-weight: 600; margin-right: 2px; }
+    .nnote { margin: 0; font-size: 12px; }
+    .natcard h3 { margin: 4px 0 0; font-family: 'Cinzel', Georgia, serif; }
+    .natcard .diprow { border-radius: 14px; padding: 9px 12px; border: 1.5px solid color-mix(in srgb, #c99b2e 30%, var(--line)); box-shadow: 0 2px 0 color-mix(in srgb, #c99b2e 22%, transparent); }
+    .natcard .diprow svg { border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,.3); }
+    .ntoggles { display: flex; gap: 8px; } button.ntog { flex: 1; padding: 9px; border-radius: 999px; font-weight: 600; font-size: 13.5px; background: var(--bg); color: var(--muted); border: 1.5px solid var(--line); }
+    button.ntog.on { color: #3a2604; background: linear-gradient(#f6cf6a, #d89e2c); border-color: #b07b18; box-shadow: 0 2px 0 #a8741a; }
+    .glist .grow { display: grid; grid-template-columns: auto 1fr auto; grid-template-areas: "p n m" "p a m"; gap: 3px 10px; align-items: center; padding: 9px 11px; border-radius: 16px;
+      border: 1.5px solid color-mix(in srgb, #c99b2e 30%, var(--line)); box-shadow: 0 2px 0 color-mix(in srgb, #c99b2e 22%, transparent); }
+    .glist .grow.ready { border-color: #d6a838; background: linear-gradient(160deg, color-mix(in srgb, #f6cf6a 20%, var(--card)), var(--card)); }
+    .grow .gport { grid-area: p; display: inline-flex; border-radius: 50%; padding: 2px; background: linear-gradient(#f6cf6a, #b07b18); }
+    .grow .gport svg { display: block; border-radius: 50%; } .grow .gport .genglyph { width: 44px; height: 44px; font-size: 22px; }
+    .grow .gname { display: grid; gap: 2px; } .grow .gname small { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+    .grow .garmy { display: flex; flex-wrap: wrap; gap: 3px; font-family: inherit; }
+    .mtok { position: relative; display: inline-flex; } .mtok .pc { width: 22px; height: 22px; }
+    .mtok i { position: absolute; z-index: 2; right: -4px; bottom: -3px; font-style: normal; font-size: 9.5px; font-weight: 800; color: #fff; background: #3b2a12; border-radius: 999px; padding: 0 4px; }
+    .glist .grow.ready .gmoves { color: #9a6a10; }
+    .sumhero { position: relative; text-align: center; padding: calc(26px + env(safe-area-inset-top, 0px)) 18px 22px; color: #fbf1da; border-radius: 0 0 28px 28px; overflow: hidden;
+      background: radial-gradient(120% 100% at 50% 0%, #a86a2c, #5a2716 60%, #2c140c); box-shadow: 0 10px 24px rgba(60, 30, 10, .3); }
+    .sumhero.win { background: radial-gradient(120% 100% at 50% 0%, #f2c04a, #b0731c 55%, #4f2a0c); }
+    .sumhero.lose { background: radial-gradient(120% 100% at 50% 0%, #6a3a4a, #3a1a24 60%, #1a0c12); }
+    .sumhero h1 { margin: 6px 0 4px; font-family: 'Cinzel', Georgia, serif; font-size: 28px; color: #fff6dc; text-shadow: 0 2px 8px rgba(0,0,0,.35); }
+    .sumhero p { margin: 0 auto; max-width: 420px; color: #f6e2bb; font-size: 14px; }
+    .sumcrown { position: absolute; top: 4px; right: 14px; font-size: 90px; line-height: 1; opacity: .14; }
+    .sumport { display: inline-flex; border-radius: 50%; padding: 3px; background: linear-gradient(#fff0b8, #c99b2e); box-shadow: 0 0 0 3px var(--c), 0 6px 16px rgba(0,0,0,.4); }
+    .sumport svg { display: block; border-radius: 50%; }
+    .sumfacts { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 12px; }
+    .sumfacts > span { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px 4px 5px; border-radius: 999px; background: rgba(0,0,0,.28); font-size: 13px; font-weight: 600; }
+    .sumfacts > span:not(:first-child) { padding-left: 12px; }
+    .sumdyn { margin-top: 14px; padding: 12px; border-radius: 20px; box-shadow: 0 6px 18px rgba(20, 20, 60, .12); background: radial-gradient(120% 60% at 0% 0%, color-mix(in srgb, #f6cf6a 18%, var(--card)), var(--card) 65%); display: grid; gap: 8px; }
+    .charthead { display: flex; align-items: center; gap: 9px; } .charthead h3 { margin: 0; flex: 1; font-family: 'Cinzel', Georgia, serif; font-size: 16px; }
+    .charthead .cico { width: 30px; height: 30px; font-size: 16px; border-radius: 10px; }
+    .xpsum { font-weight: 800; color: #9a6a10; }
+    .xplines { display: grid; gap: 4px; } .xpl { display: flex; justify-content: space-between; font-size: 13.5px; padding: 4px 10px; border-radius: 10px; background: color-mix(in srgb, var(--muted) 7%, transparent); }
+    .xpl.ach { background: color-mix(in srgb, #f6cf6a 22%, transparent); } .xpl b { font-variant-numeric: tabular-nums; }
+    .xplvl { margin: 2px 0 0; }
+    .sumbox .standings li { border-radius: 16px; border: 1.5px solid color-mix(in srgb, #c99b2e 25%, var(--line)); border-left: 5px solid var(--c); box-shadow: 0 2px 0 color-mix(in srgb, #c99b2e 18%, transparent); padding: 9px 11px; }
+    .sumbox .standings li.me { background: linear-gradient(160deg, color-mix(in srgb, #f6cf6a 22%, var(--card)), var(--card)); border-color: #d6a838; border-left-color: var(--c); }
+    .stchips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 3px; } .stchips i { font-style: normal; font-size: 11.5px; padding: 1px 7px; border-radius: 999px; background: color-mix(in srgb, var(--muted) 10%, transparent); display: inline-flex; align-items: center; gap: 3px; }
+    .sumbox .standings .score { font-size: 17px; font-weight: 800; color: #3a2604; padding: 3px 10px; border-radius: 999px; background: linear-gradient(#f6cf6a, #d89e2c); box-shadow: 0 2px 0 #a8741a; }
+    .sumbox .standings li.dead .score { background: var(--line); color: var(--muted); box-shadow: none; }
+    .sumbox .chart { border: 0; border-radius: 20px; padding: 12px; box-shadow: 0 6px 18px rgba(20, 20, 60, .1); background: radial-gradient(120% 60% at 0% 0%, color-mix(in srgb, #f6cf6a 10%, var(--card)), var(--card) 65%); }
+    .sumbox .legend span { padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--card); } .sumbox .legend span.me { border-color: #d6a838; font-weight: 700; }
+    .sumbox #sumdone { margin-top: 18px; }
+    .summary .sumbox { padding-top: 6px; }
   </style>
   <script>
     // Автообновление: если вышла новая версия, а Telegram показал старую страницу из кеша — перезагрузить

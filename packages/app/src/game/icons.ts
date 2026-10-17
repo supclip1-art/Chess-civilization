@@ -2,7 +2,7 @@
 // Рисунки свои, простые: колос — еда и ферма, бревно — дерево, монета — золото, пила — лесопилка, кирка — рудник,
 // рыба — рыбный промысел.
 
-export type IconName = 'food' | 'wood' | 'gold' | 'farm' | 'sawmill' | 'mine' | 'fishery' | 'clock' | 'tactics';
+export type IconName = 'food' | 'wood' | 'gold' | 'farm' | 'sawmill' | 'mine' | 'fishery' | 'clock' | 'tactics' | 'tower';
 
 const WHEAT = `
   <path d="M12 22.5V7" stroke="#7c5c17" stroke-width="1.7" stroke-linecap="round" fill="none"/>
@@ -79,7 +79,27 @@ const TACTICS = `
   <path d="${gearPath(15.6, 15.4, 3.9, 3, 7, 12)}" fill="#cfd6de" stroke="#4b535b" stroke-width="0.6" stroke-linejoin="round"/>
   <circle cx="15.6" cy="15.4" r="1.2" fill="#2f4a6b"/>`;
 
-const BODY: Record<IconName, string> = { food: WHEAT, farm: WHEAT, wood: LOG, gold: COIN, sawmill: SAW, mine: PICK, fishery: FISH, clock: CLOCK, tactics: TACTICS };
+
+/** Сторожевая башня: каменный ствол с кладкой, светящееся окно, дозорная площадка с зубцами, черепичный шатёр и флажок. */
+const TOWER = `
+  <defs>
+    <linearGradient id="twS" x1="0" x2="1"><stop offset="0" stop-color="#f1e8d6"/><stop offset=".55" stop-color="#d3c5aa"/><stop offset="1" stop-color="#9c8b6e"/></linearGradient>
+    <linearGradient id="twR" x1="0" x2="1"><stop offset="0" stop-color="#e2735a"/><stop offset=".6" stop-color="#b9452f"/><stop offset="1" stop-color="#7e2618"/></linearGradient>
+    <radialGradient id="twW"><stop offset="0" stop-color="#fff2b0"/><stop offset="1" stop-color="#f0a52a"/></radialGradient>
+  </defs>
+  <ellipse cx="12" cy="22.6" rx="6.6" ry="1.2" fill="rgba(0,0,0,.25)"/>
+  <path d="M8 22.5L8.9 10.4H15.1L16 22.5Z" fill="url(#twS)" stroke="#4d3b25" stroke-width=".8" stroke-linejoin="round"/>
+  <path d="M8.6 14.2H15.4M8.3 18.3H15.7M10.6 10.4V14.2M13.4 14.2V18.3M10.3 18.3V22.4M13.9 18.3V22.4M12 10.4V12" stroke="#8a7656" stroke-width=".45" fill="none"/>
+  <path d="M10.7 22.5V20.3a1.3 1.3 0 0 1 2.6 0V22.5Z" fill="#5b3a1e" stroke="#3a2412" stroke-width=".4"/>
+  <path d="M11 15.9V14.9a1 1 0 0 1 2 0V15.9Z" fill="url(#twW)" stroke="#4d3b25" stroke-width=".4"/>
+  <path d="M7.1 10.6H16.9L16.4 8.6H7.6Z" fill="#c9b994" stroke="#4d3b25" stroke-width=".7" stroke-linejoin="round"/>
+  <path d="M7.6 8.6V7.6H9.1V8.6M10.4 8.6V7.6H11.9V8.6M12.1 8.6V7.6H13.6V8.6M14.9 8.6V7.6H16.4V8.6" fill="#ddd0b2" stroke="#4d3b25" stroke-width=".55"/>
+  <path d="M6.8 7.7L12 2.1L17.2 7.7Z" fill="url(#twR)" stroke="#5a1c10" stroke-width=".7" stroke-linejoin="round"/>
+  <path d="M9.2 7.6L12 2.6M14.8 7.6L12 2.6" stroke="rgba(255,220,200,.45)" stroke-width=".45"/>
+  <path d="M12 2.3V.4" stroke="#3a2412" stroke-width=".6" stroke-linecap="round"/>
+  <path d="M12.2 .4L15.6 1.2L12.2 2Z" fill="#f2c041" stroke="#8a5d10" stroke-width=".35"/>`;
+
+const BODY: Record<IconName, string> = { food: WHEAT, farm: WHEAT, wood: LOG, gold: COIN, sawmill: SAW, mine: PICK, fishery: FISH, clock: CLOCK, tactics: TACTICS, tower: TOWER };
 
 /** SVG-разметка значка для HTML. */
 export const iconSvg = (name: IconName, size = 18): string =>

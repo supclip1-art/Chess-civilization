@@ -4,6 +4,7 @@ import { audioPrefs, chestOpen, page, setMusic, setSfx } from '../audio.ts';
 import { iconSvg, iconsReady } from './icons.ts';
 import { flagSvg } from './flags.ts';
 import { portraitSvg } from './portraits.ts';
+import { pieceHtml } from './pieces.ts';
 import { startTutorial } from './tutorial.ts';
 import {
   canAfford, armyValue, WALLS, MARKET, TOWER, TOWER_TERRAIN, ROAD_WOOD_PER_CELL, ROAD_MAX, marketLevel, tradeQuote, trade, buildWalls, upgradeMarket, buildTower, roadPath, roadCost, buildRoad, cancelJob, WONDERS, WONDER, WONDER_IDS, wonderStatus, wonderBlocked, startWonder, type WonderId, seaRouteTargets, buildSeaRoute, seaRouteGold, coastal, routesOf, activeSeaRoutes, SEA_ROUTE, tradeRate, isCapital, demolish, demolishRefund, canPillage, pillage, pillageLoot, isOutlaw, setAuto, autoDevelop, type AutoFocus,   BARRACKS, BUILD_TURNS, BUILDING_TERRAIN, GENERAL_HIRE_GOLD, HIRE_LEVEL, NATIONS, PIECE_PRICE, RESEARCH, RESOURCE_COST,
@@ -295,26 +296,41 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
   // ---------- нижняя панель ----------
   const btn = (id: string, label: string, sub: string, enabled = true) =>
     `<button class="act" data-a="${id}" ${enabled ? '' : 'disabled'}><b>${label}</b><span>${sub}</span></button>`;
+  /** «Конфетная» плитка действия: значок в золотом кружке, название, цена; бледная, если не хватает ресурсов. */
+  const ctile = (id: string, ico: string, label: string, c: Res | null, sub: string, cls = '') => {
+    const poor = c && !canAfford(s.players[ME].res, c);
+    return `<button class="ctile ${poor ? 'poor' : ''} ${cls}" data-a="${id}"><span class="cico">${ico}</span><span class="ctext"><b>${label}</b><small>${c ? `<span class="ccost">${cost(c)}</span>` : ''}${sub}</small></span></button>`;
+  };
+  /** Армия жетонами: король и фигуры с числом. */
+  const armyTokens = (a: GameState['generals'][string]['army'], white = true) => `<div class="armyrow"><span class="atok king">${pieceHtml(white, 'k')}</span>${PIECES.filter((x) => a[x])
+    .map((x) => `<span class="atok">${pieceHtml(white, x)}${a[x] > 1 ? `<i>×${a[x]}</i>` : ''}</span>`).join('')}${PIECES.some((x) => a[x]) ? '' : '<span class="muted">no pieces</span>'}</div>`;
+  /** Шапка карточки юнита: портрет или значок, имя, ELO и звёзды, справа — ходы. */
+  const unitHead = (pic: string, name: string, color: string, meta: string, right = '') =>
+    `<div class="genhead"><span class="genport" style="--c:${color}">${pic}</span><div class="genname"><b>${name}</b><span class="genmeta">${meta}</span></div>${right}</div>`;
+  const movePips = (g: GameState['generals'][string]) => {
+    const max = Math.max(g.moveLeft, armyMove(s, g.owner));
+    return `<div class="genmoves"><span class="pips">${Array.from({ length: max }, (_, i) => `<i class="${i < g.moveLeft ? 'on' : ''}"></i>`).join('')}</span><small>${g.attacked ? 'acted' : `${g.moveLeft} move${g.moveLeft === 1 ? '' : 's'}`}</small></div>`;
+  };
 
   /** Карточка поселенца: где он, основание города, приказы. */
   const settlerCard = (g: typeof s.generals[string], cell: typeof s.cells[string]): string => {
     const mine = g.owner === ME;
-    if (!mine) return `<div class="card"><div class="row"><b style="color:${ownerColor(s, g.owner)}">Settler · ${esc(ownerName(s, g.owner))}</b>${s.players[g.owner] ? nationBtn(g.owner) : ''}</div><p class="muted">Unarmed: any army next to him can kill him.</p></div>`;
+    const color = ownerColor(s, g.owner) ?? '#888';
+    if (!mine) return `<div class="gencard foe">${unitHead('<span class="genglyph">⛺</span>', 'Settler', color, `${esc(ownerName(s, g.owner))}`, s.players[g.owner] ? nationBtn(g.owner) : '')}<p class="muted">Unarmed: any army next to him can kill him.</p></div>`;
     const p = s.players[ME];
     const founding = p.jobs.find((j) => j.kind === 'found' && j.general === g.id);
     const m = NATIONS[p.nation].mods;
     const turns = m.townHallFoundTurns ?? TOWN_HALL_FOUND.turns;
     const o = g.order;
     const canFound = !cell.owner && cell.terrain !== 'water' && cell.terrain !== 'mountain';
-    return `<div class="card"><div class="row"><b style="color:${ownerColor(s, ME)}">Your settler</b><span class="muted">${founding ? '' : `moves left ${g.moveLeft}`}</span></div>
-      <p class="muted">Unarmed: an enemy army next to him can kill him. Walk him to free land and found a city.</p>
+    return `<div class="gencard">${unitHead('<span class="genglyph">⛺</span>', 'Your settler', color, 'founds a new city', founding ? '' : movePips(g))}
       ${sel.gid !== g.id ? '<p class="muted"><b>Tap this cell again</b> to command the settler.</p>' : ''}
-      ${founding ? `<p class="withico">${iconSvg('clock', 15)}Founding a city · ${left(founding.finish)}</p>` : `
-      ${o ? `<p class="muted"><b>${o.kind === 'goto' ? 'marching' : 'holding position'}</b></p>` : ''}
-      <div class="acts">${canFound ? btn(`found:${g.id}`, 'Found a city here', `${turns} turn${turns > 1 ? 's' : ''} · the settler becomes the city`) : ''}
-        ${o?.kind === 'goto' ? btn(`order:${g.id}:none`, 'Stop the march', 'he waits for orders') : ''}
-        ${btn(`order:${g.id}:${o?.kind === 'hold' ? 'none' : 'hold'}`, o?.kind === 'hold' ? 'Stop holding' : 'Hold position', o?.kind === 'hold' ? 'remind me about him again' : 'stays put; no end-of-turn reminder')}</div>
-      ${canFound ? '' : '<p class="muted">Cities are founded on unclaimed land. Tap a far cell to send him there.</p>'}`}</div>`;
+      ${founding ? `<div class="cjobs"><span class="cjob">${iconSvg('clock', 14)}Founding a city · ${left(founding.finish)}</span></div>` : `
+      ${o ? `<div class="chips"><span class="chip gold">${o.kind === 'goto' ? '➜ marching' : '⛨ holding position'}</span></div>` : ''}
+      <div class="ctiles">${canFound ? ctile(`found:${g.id}`, '🏰', 'Found a city here', null, `${turns} turn${turns > 1 ? 's' : ''} · the settler becomes the city`, 'ctop') : ''}
+        ${o?.kind === 'goto' ? ctile(`order:${g.id}:none`, '✋', 'Stop the march', null, 'he waits for orders') : ''}
+        ${ctile(`order:${g.id}:${o?.kind === 'hold' ? 'none' : 'hold'}`, '⛨', o?.kind === 'hold' ? 'Stop holding' : 'Hold position', null, o?.kind === 'hold' ? 'remind me about him again' : 'stays put; no end-of-turn reminder')}</div>
+      <p class="muted">Unarmed: an enemy army next to him can kill him. ${canFound ? '' : 'Cities are founded on unclaimed land. Tap a far cell to send him there.'}</p>`}</div>`;
   };
 
   const sheet = () => {
@@ -361,39 +377,42 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
     // «место» на клетке: город или своё здание — без выбранного юнита показываем его, а не генерала
     const hallOnCell = Object.values(s.halls).some((x) => key(x.hex) === k) || (cell.owner === ME && (!!cell.building || !!cell.reserved));
     const ownHere = gens.filter((g) => g.owner === ME);
-    if (hallOnCell && ownHere.length && !sel.gid) parts.push(`<p class="muted">${ownHere.length > 1 ? 'Your units are' : `Your ${ownHere[0].settler ? 'settler is' : 'general is'}`} here — tap the cell again to select.</p>`);
+    if (ownHere.length && !sel.gid) parts.push(`<p class="muted">${ownHere.length > 1 ? 'Your units are' : `Your ${ownHere[0].settler ? 'settler is' : 'general is'}`} here — tap the cell again to select.</p>`);
     for (const g of gens) {
       const mine = g.owner === ME;
       // своих показываем только выбранного; без выбора на клетке города — сначала город
-      if (mine && (sel.gid ? g.id !== sel.gid : hallOnCell)) continue;
+      if (mine && (!sel.gid || g.id !== sel.gid)) continue; // свой юнит — только выбранный; без выбора показываем саму клетку
       if (g.settler) { parts.push(settlerCard(g, cell)); continue; }
-      const army = PIECES.filter((x) => g.army[x]).map((x) => `${g.army[x]} ${PIECE_NAME[x].toLowerCase()}${g.army[x] > 1 ? 's' : ''}`).join(', ') || 'no pieces';
-      let html = `<div class="card"><div class="row"><b style="color:${ownerColor(s, g.owner)}">${mine ? `General ${esc(g.name)}` : esc(ownerName(s, g.owner))}</b><span>ELO ${g.elo} ${'★'.repeat(g.stars)}${!mine && s.players[g.owner] ? nationBtn(g.owner) : ''}</span></div>
-        <p>King + ${army}</p>${traitChips(g)}`;
+      const color = ownerColor(s, g.owner) ?? '#888';
+      const nat = s.players[g.owner]?.nation;
+      const pic = nat ? portraitSvg(nat, g.name, 54) : '<span class="genglyph">⚔</span>';
+      const meta = `<span class="elo">ELO ${g.elo}</span>${g.stars ? `<span class="gstars">${'★'.repeat(g.stars)}</span>` : ''}${mine ? '' : `<span>${esc(ownerName(s, g.owner))}</span>`}`;
+      let html = `<div class="gencard ${mine ? '' : 'foe'}">${unitHead(pic, mine ? `General ${esc(g.name)}` : esc(g.name), color, meta, mine ? movePips(g) : s.players[g.owner] ? nationBtn(g.owner) : '')}
+        ${armyTokens(g.army, mine)}${traitChips(g)}`;
       if (mine) {
         const o = g.order;
         const where = o?.kind === 'goto' ? (Object.values(s.halls).find((h) => key(h.hex) === key(o.to))?.name ?? `${TERRAIN_NAME[s.cells[key(o.to)].terrain].toLowerCase()} far away`) : '';
-        html += `<p class="muted">White: ${esc(g.white)} · vs 1.e4: ${esc(g.vsE4)} · vs 1.d4: ${esc(g.vsD4)}</p>
-          <p class="muted">${g.attacked ? 'Has acted this turn' : `Moves left: ${g.moveLeft}`}${o ? ` · <b>${o.kind === 'goto' ? `marching to ${esc(where)}` : o.kind === 'explore' ? 'exploring' : 'holding position'}</b>` : ''}</p>
-          <div class="acts">${o?.kind === 'goto' ? btn(`order:${g.id}:none`, 'Stop the march', 'the general waits for orders') : ''}
-            ${btn(`order:${g.id}:${o?.kind === 'explore' ? 'none' : 'explore'}`, o?.kind === 'explore' ? 'Stop exploring' : 'Explore', o?.kind === 'explore' ? 'back to your orders' : 'walks into the unknown by himself every turn')}
-            ${btn(`order:${g.id}:${o?.kind === 'hold' ? 'none' : 'hold'}`, o?.kind === 'hold' ? 'Stop holding' : 'Hold position', o?.kind === 'hold' ? 'remind me about him again' : 'stays put; no end-of-turn reminder')}</div>
-          ${canPillage(s, g.id).ok ? `<div class="acts">${btn(`pillage:${g.id}`, `Pillage the ${cell.building ? BUILDING_NAME[cell.building.kind].toLowerCase() : 'watchtower'}`, `destroys it · you get ${cost(pillageLoot(s, g.hex))} · ends his turn`).replace('class="act"', 'class="act danger"')}</div>` : ''}
-          ${(() => { // «Военная академия»: догнать новые ступени «Тактики»
-            const tr = trainingFor(s, g.id);
-            if (!tr.steps) return '';
-            return hasTech(s, ME, 'academy')
-              ? `<div class="acts">${btn(`train:${g.id}`, `Retrain: +${tr.steps * ELO_PER_RESEARCH} ELO`, `${amount('gold', tr.gold)} · catches up with your Tactics`).replace('class="act"', `class="act${p.res.gold >= tr.gold ? '' : ' off'}"`)}</div>`
-              : `<p class="muted">New generals are ${tr.steps * ELO_PER_RESEARCH} ELO stronger than him. The Military academy can retrain him.</p>`;
-          })()}
-          <p class="muted">${o?.kind === 'goto' ? 'To change the route, stop the march and tap a new cell.' : 'Tip: tap any far cell to send this general marching there.'}</p>`;
+        const tr = trainingFor(s, g.id);
+        html += `${o ? `<div class="chips"><span class="chip gold">${o.kind === 'goto' ? `➜ marching to ${esc(where)}` : o.kind === 'explore' ? '🧭 exploring' : '⛨ holding position'}</span></div>` : ''}
+          <div class="genbook"><span>📖</span><span>White: <b>${esc(g.white)}</b> · vs 1.e4: <b>${esc(g.vsE4)}</b> · vs 1.d4: <b>${esc(g.vsD4)}</b></span></div>
+          <div class="ctiles">${o?.kind === 'goto' ? ctile(`order:${g.id}:none`, '✋', 'Stop the march', null, 'the general waits for orders') : ''}
+            ${ctile(`order:${g.id}:${o?.kind === 'explore' ? 'none' : 'explore'}`, '🧭', o?.kind === 'explore' ? 'Stop exploring' : 'Explore', null, o?.kind === 'explore' ? 'back to your orders' : 'walks into the unknown by himself every turn')}
+            ${ctile(`order:${g.id}:${o?.kind === 'hold' ? 'none' : 'hold'}`, '⛨', o?.kind === 'hold' ? 'Stop holding' : 'Hold position', null, o?.kind === 'hold' ? 'remind me about him again' : 'stays put; no end-of-turn reminder')}
+            ${canPillage(s, g.id).ok ? ctile(`pillage:${g.id}`, '🔥', `Pillage the ${cell.building ? BUILDING_NAME[cell.building.kind].toLowerCase() : 'watchtower'}`, null, `destroys it · you get ${cost(pillageLoot(s, g.hex))} · ends his turn`, 'danger') : ''}
+            ${tr.steps && hasTech(s, ME, 'academy') ? ctile(`train:${g.id}`, '🎓', `Retrain: +${tr.steps * ELO_PER_RESEARCH} ELO`, { wood: 0, food: 0, gold: tr.gold }, ' · catches up with your Tactics') : ''}</div>
+          ${tr.steps && !hasTech(s, ME, 'academy') ? `<p class="muted">New generals are ${tr.steps * ELO_PER_RESEARCH} ELO stronger than him. The Military academy can retrain him.</p>` : ''}
+          <p class="muted">${o?.kind === 'goto' ? 'To change the route, stop the march and tap a new cell.' : 'Tip: tap any far cell to send this general marching there.'}${hallOnCell ? '' : ' Tap his cell again to see the land under him.'}</p>`;
         const home = cell.owner === ME && cell.hall ? s.halls[cell.hall] : undefined;
         if (home) {
           // найм — по казарме города, на чьей земле стоит генерал; кнопки не отключаем: нажатие объясняет, чего не хватает
           const bar = home.barracks ?? 0;
-          html += `<p class="muted hirehead">Hire pieces · barracks of <b>${esc(home.name)}</b>: ${bar ? `level ${bar}` : 'none yet — build them in this city'}</p>
-            <div class="acts">${PIECES.map((x) => btn(`hire:${g.id}:${x}`, PIECE_NAME[x], `${amount('gold', Math.round(piecePrice(s, ME, x) * (g.traits?.includes('recruiter') ? 0.8 : 1)))}${g.army[x] >= ARMY_MAX[x] ? ` · max ${ARMY_MAX[x]}` : bar < HIRE_LEVEL[x] ? ` · barracks ${HIRE_LEVEL[x]}` : ''}`)
-              .replace('class="act"', `class="act${bar >= HIRE_LEVEL[x] && p.res.gold >= piecePrice(s, ME, x) && g.army[x] < ARMY_MAX[x] ? '' : ' off'}"`)).join('')}</div>`;
+          html += `<div class="hirebox"><div class="hirehead"><span class="cico">⚔</span><span>Hire pieces · barracks of <b>${esc(home.name)}</b>: ${bar ? `level ${bar}` : 'none yet — build them in this city'}</span></div>
+            <div class="hiregrid">${PIECES.map((x) => {
+              const price = Math.round(piecePrice(s, ME, x) * (g.traits?.includes('recruiter') ? 0.8 : 1));
+              const full = g.army[x] >= ARMY_MAX[x], locked = bar < HIRE_LEVEL[x];
+              const ok = !locked && !full && p.res.gold >= price;
+              return `<button class="hpiece ${ok ? '' : 'off'}" data-a="hire:${g.id}:${x}">${pieceHtml(true, x)}<b>${PIECE_NAME[x]}</b><small>${locked ? `🔒 ${HIRE_LEVEL[x]}` : amount('gold', price)}</small><span class="hcount">${g.army[x]}/${ARMY_MAX[x]}</span></button>`;
+            }).join('')}</div></div>`;
         } else if (cell.owner === ME) {
           html += '<p class="muted hirehead">Pieces are hired on the land of a city with barracks.</p>';
         }
@@ -450,34 +469,50 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
     }
 
     // ресурсное здание (если выбран свой генерал на этой клетке — сначала только он)
-    if (!hall && cell.owner === ME && unitPicked && (cell.building || cell.reserved)) {
-      parts.push(`<p class="muted">Tap the cell again to open the ${cell.building ? BUILDING_NAME[cell.building.kind].toLowerCase() : 'construction'}.</p>`);
+    if (!hall && cell.owner === ME && unitPicked) { // выбран свой юнит — клетку (здание или стройку) открывает следующее касание
+      if (cell.building || cell.reserved || cell.tower) parts.push(`<p class="muted">Tap the cell again to open the ${cell.building ? BUILDING_NAME[cell.building.kind].toLowerCase() : cell.tower ? 'watchtower' : 'construction'}.</p>`);
     } else if (!hall && cell.owner === ME) {
       const kinds = buildOptions(s, ME, cell).map((o) => o.kind);
       const top = cell.building ? maxLevelAt(s, ME, cell, cell.building.kind) || 5 : 5;
+      const home = cell.hall ? s.halls[cell.hall] : undefined;
+      const slots = home ? (() => { const sl = citySlots(s, home.id); return `<span class="citystats">${pips(sl.used, sl.max)}<span>${esc(home.name)}: ${sl.used}/${sl.max} slots</span></span>`; })() : '';
+      const big = (ico: string) => `<span class="bldico">${ico}</span>`;
+      const demolishTile = ctile(`demolish:${k}`, '⛏', 'Demolish', null, `frees the slot · returns ${cost(demolishRefund(s, cell.hex))}`, 'danger');
       if (cell.building) {
         const b = cell.building;
         const job = p.jobs.find((j): j is Extract<Job, { kind: 'resource' }> => j.kind === 'resource' && key(j.hex) === k);
         const qi = (p.queue ?? []).findIndex((q) => q.job.kind === 'resource' && key(q.job.hex) === k);
         const busy = !!job || qi >= 0;
         const out = RESOURCE_OUTPUT[b.kind];
-        parts.push(`<div class="card"><div class="row"><b class="withico">${iconSvg(b.kind, 20)}${BUILDING_NAME[b.kind]} · level ${b.level}</b><span>${(['food', 'wood', 'gold'] as const).filter((r) => buildingOutput(s, ME, cell)[r]).map((r) => `+${amount(r, buildingOutput(s, ME, cell)[r])}`).join(' ')} per turn</span></div>
-          ${b.level < top ? `<div class="acts">${(busy ? `<p class="muted withico">${iconSvg('clock', 15)}${job ? `Upgrading to level ${job.level} · ${left(job.finish)}` : 'Upgrade queued — starts when a builder is free'}</p>${qi >= 0 ? btn(`unqueue:${qi}`, 'Cancel the queued upgrade', 'resources are returned') : ''}${job ? btn(`canceljob:${p.jobs.indexOf(job)}`, 'Cancel the upgrade', 'resources are returned') : ''}` : btn(`up:${k}`, `Upgrade → ${b.level + 1}`, `${cost(resourceCost(s, ME, b.kind, b.level + 1))} · ${BUILD_TURNS[b.level]} turn${BUILD_TURNS[b.level] > 1 ? 's' : ''} · +${amount(RES_OF[b.kind], out[b.level] - out[b.level - 1])}/turn`))}</div>` : '<p class="muted">Top level</p>'}
-          ${busy ? '' : `<div class="acts">${btn(`demolish:${k}`, 'Demolish', `frees the slot · returns ${cost(demolishRefund(s, cell.hex))}`).replace('class="act"', 'class="act danger"')}</div>`}</div>`);
+        const yields = (['food', 'wood', 'gold'] as const).filter((r) => buildingOutput(s, ME, cell)[r]).map((r) => `<span class="chip ok">+${amount(r, buildingOutput(s, ME, cell)[r])} per turn</span>`).join('');
+        parts.push(`<div class="citycard bldcard">
+          <div class="cityrow">${big(iconSvg(b.kind, 34))}<div class="cityname"><b>${BUILDING_NAME[b.kind]}</b>
+            <span class="citystats"><span class="lvl">level ${b.level}</span>${pips(b.level, top)}<span>of ${top}</span></span></div></div>
+          <div class="chips">${yields}</div>
+          ${busy ? `<div class="cjobs"><span class="cjob">${iconSvg('clock', 14)}${job ? `Upgrading to level ${job.level} · ${left(job.finish)}` : 'Upgrade queued — starts when a builder is free'}${job ? `<button class="cx" data-a="canceljob:${p.jobs.indexOf(job)}" aria-label="Cancel the upgrade">×</button>` : `<button class="cx" data-a="unqueue:${qi}" aria-label="Cancel the queued upgrade">×</button>`}</span></div>` : ''}
+          <div class="ctiles">${!busy && b.level < top ? ctile(`up:${k}`, '⬆', `Upgrade → ${b.level + 1}`, resourceCost(s, ME, b.kind, b.level + 1), ` · ${BUILD_TURNS[b.level]} turn${BUILD_TURNS[b.level] > 1 ? 's' : ''} · +${amount(RES_OF[b.kind], out[b.level] - out[b.level - 1])}/turn`, 'ctop') : ''}
+            ${busy ? '' : demolishTile}</div>
+          ${b.level >= top ? '<p class="muted">Top level</p>' : ''}${slots}</div>`);
       } else if (cell.tower) {
-        parts.push(`<div class="card"><div class="row"><b>♜ Watchtower</b><span class="muted">sees ${TOWER.sight} cells around</span></div>
-          <div class="acts">${btn(`demolish:${k}`, 'Demolish', `frees the slot · returns ${cost(demolishRefund(s, cell.hex))}`).replace('class="act"', 'class="act danger"')}</div></div>`);
+        parts.push(`<div class="citycard bldcard">
+          <div class="cityrow">${big(iconSvg('tower', 40))}<div class="cityname"><b>Watchtower</b><span class="citystats"><span>sees ${TOWER.sight} cells around</span></span></div></div>
+          <div class="ctiles">${demolishTile}</div>${slots}</div>`);
       } else if (cell.reserved) {
         const job = p.jobs.find((j) => (j.kind === 'resource' || j.kind === 'tower') && key(j.hex) === k);
         const qi = (p.queue ?? []).findIndex((q) => q.job.kind === 'resource' && key(q.job.hex) === k);
-        parts.push(`<div class="card"><p class="muted withico">${iconSvg('clock', 15)}${job ? `${esc(jobName(job))} · ${left(job.finish)}` : qi >= 0 ? `${esc(jobName(p.queue![qi].job))} queued — starts when a builder is free` : 'Construction in progress'}</p>
-          ${qi >= 0 ? `<div class="acts">${btn(`unqueue:${qi}`, 'Cancel', 'resources are returned')}</div>` : job ? `<div class="acts">${btn(`canceljob:${p.jobs.indexOf(job)}`, 'Cancel construction', 'resources are returned')}</div>` : ''}</div>`);
+        const ico = job?.kind === 'tower' ? iconSvg('tower', 34) : job?.kind === 'resource' ? iconSvg(job.building, 34) : iconSvg('clock', 30);
+        parts.push(`<div class="citycard bldcard">
+          <div class="cityrow">${big(ico)}<div class="cityname"><b>${job ? esc(jobName(job)) : qi >= 0 ? esc(jobName(p.queue![qi].job)) : 'Construction'}</b>
+            <span class="citystats"><span>${job ? left(job.finish) : qi >= 0 ? 'queued — starts when a builder is free' : 'Construction in progress'}</span></span></div></div>
+          <div class="ctiles">${qi >= 0 ? ctile(`unqueue:${qi}`, '✕', 'Cancel', null, 'resources are returned') : job ? ctile(`canceljob:${p.jobs.indexOf(job)}`, '✕', 'Cancel construction', null, 'resources are returned') : ''}</div></div>`);
       } else if ((kinds.length || TOWER_TERRAIN.includes(cell.terrain)) && cell.hall && citySlots(s, cell.hall).used >= citySlots(s, cell.hall).max) {
         const h = s.halls[cell.hall], sl = citySlots(s, cell.hall);
-        parts.push(`<div class="card"><p><b>${esc(h.name)}</b> has no free building slots (${sl.used}/${sl.max}).</p><p class="muted">${h.level < 3 ? `Grow the city to level ${h.level + 1} for ${BUILDING_SLOTS[h.level]} slots, ` : ''}upgrade the buildings you have, or found a new city.</p></div>`);
+        parts.push(`<div class="citycard bldcard"><div class="cityrow">${big('🏗')}<div class="cityname"><b>No free slots</b>${slots}</div></div>
+          <p><b>${esc(h.name)}</b> has no free building slots (${sl.used}/${sl.max}).</p><p class="muted">${h.level < 3 ? `Grow the city to level ${h.level + 1} for ${BUILDING_SLOTS[h.level]} slots, ` : ''}upgrade the buildings you have, or found a new city.</p></div>`);
       } else if (kinds.length || (TOWER_TERRAIN.includes(cell.terrain) && cell.hall)) {
-        if (cell.hall) { const sl = citySlots(s, cell.hall); parts.push(`<p class="muted">${esc(s.halls[cell.hall].name)}: ${sl.used}/${sl.max} building slots used</p>`); }
-        parts.push(`<div class="acts">${kinds.map((b) => btn(`build:${k}:${b}`, `Build ${BUILDING_NAME[b].toLowerCase()}`, `${cost(resourceCost(s, ME, b, 1))} · 1 turn · +${amount(RES_OF[b], RESOURCE_OUTPUT[b][0])}/turn`)).join('')}${TOWER_TERRAIN.includes(cell.terrain) ? btn(`tower:${k}`, 'Build a watchtower', `${cost(TOWER.cost)} · 1 turn · sees ${TOWER.sight} cells around`) : ''}</div>`);
+        parts.push(`<div class="citycard bldcard"><div class="cityrow">${big('🏗')}<div class="cityname"><b>Build here</b>${slots}</div></div>
+          <div class="ctiles">${kinds.map((b) => ctile(`build:${k}:${b}`, iconSvg(b, 24), `Build ${BUILDING_NAME[b].toLowerCase()}`, resourceCost(s, ME, b, 1), ` · 1 turn · +${amount(RES_OF[b], RESOURCE_OUTPUT[b][0])}/turn`)).join('')}
+            ${TOWER_TERRAIN.includes(cell.terrain) ? ctile(`tower:${k}`, iconSvg('tower', 28), 'Build a watchtower', TOWER.cost, ` · 1 turn · sees ${TOWER.sight} cells around`) : ''}</div></div>`);
       } else {
         parts.push(`<p class="muted">Nothing can be built on ${TERRAIN_NAME[cell.terrain].toLowerCase()}.</p>`);
       }
@@ -718,19 +753,23 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
     const n = NATIONS[pl.nation];
     const st = nationStats(s, pid);
     const mineN = pid === ME;
-    const rank = (r: number) => `<small>${r === 1 ? '1st' : r === 2 ? '2nd' : r === 3 ? '3rd' : `${r}th`} of ${st.rank.of}</small>`;
-    modal(`<div class="nation-head">${flagSvg(pl.nation, 44)}<div><h2>${esc(n.name)}</h2><p class="muted">${esc(n.bonus)}: ${esc(n.effect)}</p></div></div>
-      <div class="ruler">${portraitSvg(pl.nation, st.ruler, 76)}<div><b>${esc(st.ruler)}</b><p class="muted">${mineN ? 'Your ruler' : `Ruler${st.character ? ` · ${st.character}` : ''}`}</p>${pl.startBonus ? `<p class="muted">Start bonus: ${esc(pl.startBonus)}</p>` : ''}</div></div>
-      <div class="stats">
-        <div><span>Cities</span><b>${st.cities}</b></div>
-        <div><span>Area</span><b>${st.area}</b>${rank(st.rank.area)}</div>
-        <div><span>Military</span><b>${st.military}</b>${rank(st.rank.military)}</div>
-        <div><span>Economy</span><b>${st.economy}</b>${rank(st.rank.economy)}</div>
+    const color = ownerColor(s, pid) ?? '#888';
+    const medal = (r: number) => `<span class="rmedal ${r === 1 ? 'r1' : r === 2 ? 'r2' : r === 3 ? 'r3' : ''}">${r}</span><small>${r === 1 ? '1st' : r === 2 ? '2nd' : r === 3 ? '3rd' : `${r}th`} of ${st.rank.of}</small>`;
+    const stat = (ico: string, label: string, v: number, r?: number) => `<div class="nstat"><span class="nsico">${ico}</span><span class="nslab">${label}</span><b>${v}</b>${r ? `<span class="nsrank">${medal(r)}</span>` : ''}</div>`;
+    modal(`<div class="natcard" style="--c:${color}">
+      <div class="nathero"><span class="natflag">${flagSvg(pl.nation, 64)}</span><div><h2>${esc(n.name)}</h2><span class="chip gold">${esc(n.bonus)}</span><p>${esc(n.effect)}</p></div></div>
+      <div class="rulerbox"><span class="rulerring">${portraitSvg(pl.nation, st.ruler, 72)}</span><div><b>${esc(st.ruler)}</b><p class="muted">${mineN ? 'Your ruler' : `Ruler${st.character ? ` · ${st.character}` : ''}`}</p>${pl.startBonus ? `<span class="chip ok">✦ Start bonus: ${esc(pl.startBonus)}</span>` : ''}</div></div>
+      <div class="nstats">
+        ${stat('🏰', 'Cities', st.cities)}
+        ${stat('⬢', 'Area', st.area, st.rank.area)}
+        ${stat('⚔', 'Military', st.military, st.rank.military)}
+        ${stat(iconSvg('gold', 20), 'Economy', st.economy, st.rank.economy)}
       </div>
-      <p class="muted">Area — cells of land. Military — the value of all pieces, stronger with the generals' ELO (${st.generals} general${st.generals > 1 ? 's' : ''}, ${st.pieces} pieces). Economy — income per turn after feeding the army, gold counted ×4.</p>
-      ${mineN ? `<p class="withico">Income: ${amount('wood', st.income.wood)} ${amount('food', st.income.food - st.upkeep)} ${amount('gold', st.income.gold)} per turn</p>` : ''}
+      ${mineN ? `<div class="nincome"><span>Income per turn</span><span class="chip ok">${amount('wood', st.income.wood)}</span><span class="chip ok">${amount('food', st.income.food - st.upkeep)}</span><span class="chip ok">${amount('gold', st.income.gold)}</span></div>` : ''}
+      <p class="muted nnote">Area — cells of land. Military — the value of all pieces, stronger with the generals' ELO (${st.generals} general${st.generals > 1 ? 's' : ''}, ${st.pieces} pieces). Economy — income per turn after feeding the army, gold counted ×4.</p>
       ${mineN ? diploList() : diploBlock(pid)}
-      ${mineN ? `<div class="acts">${btn('music', `Music: ${audioPrefs().music ? 'on' : 'off'}`, 'tavern tunes')}${btn('sfx', `Sounds: ${audioPrefs().sfx ? 'on' : 'off'}`, 'clicks and pages')}</div>` : ''}
+      ${mineN ? `<div class="ntoggles"><button class="ntog ${audioPrefs().music ? 'on' : ''}" data-a="music">♫ Music: ${audioPrefs().music ? 'on' : 'off'}</button><button class="ntog ${audioPrefs().sfx ? 'on' : ''}" data-a="sfx">🔔 Sounds: ${audioPrefs().sfx ? 'on' : 'off'}</button></div>` : ''}
+      </div>
       <div class="acts">${btn('close', 'Close', '')}${mineN ? btn('endgame', 'End campaign', 'final standings and charts') : ''}</div>`);
     const c = await ask();
     if (c.startsWith('nation:')) return nationInfo(c.slice(7));
@@ -751,9 +790,15 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
     const mine = Object.values(s.generals).filter((g) => g.owner === ME).sort((a, b) => Number(!!a.settler) - Number(!!b.settler) || Number(a.id.slice(1)) - Number(b.id.slice(1)));
     const status = (g: typeof mine[number]) => g.order?.kind === 'goto' ? 'marching' : g.order?.kind === 'explore' ? 'exploring' : g.order?.kind === 'hold' ? 'holding'
       : g.attacked ? 'done this turn' : g.moveLeft > 0 ? `${g.moveLeft} move${g.moveLeft > 1 ? 's' : ''} left` : 'no moves left';
-    modal(`<h2>Your generals</h2><div class="glist">${mine.map((g) => `<button class="grow ${g.moveLeft > 0 && !g.attacked && !g.order ? 'ready' : ''}" data-a="pick:${g.id}">
-        <span class="gname">${g.settler ? 'Settler' : `General ${esc(g.name)}`}${g.settler ? '' : ` <small>ELO ${g.elo}${g.stars ? ` ${'★'.repeat(g.stars)}` : ''}${g.traits?.length ? ` · ${g.traits.map((t) => esc(TRAITS[t].name)).join(', ')}` : ''}</small>`}</span>
-        <span class="garmy">${g.settler ? 'founds a city' : glyphs(g.army)}</span><span class="gmoves">${status(g)}</span></button>`).join('')}</div>
+    const nat = s.players[ME].nation;
+    modal(`<h2>Your generals</h2><div class="glist">${mine.map((g) => {
+      const ready = g.moveLeft > 0 && !g.attacked && !g.order;
+      return `<button class="grow ${ready ? 'ready' : ''}" data-a="pick:${g.id}">
+        <span class="gport">${g.settler ? '<span class="genglyph">⛺</span>' : portraitSvg(nat, g.name, 44)}</span>
+        <span class="gname"><b>${g.settler ? 'Settler' : `General ${esc(g.name)}`}</b>${g.settler ? '' : `<small><span class="elo">ELO ${g.elo}</span>${g.stars ? ` <span class="gstars">${'★'.repeat(g.stars)}</span>` : ''}${g.traits?.length ? ` · ${g.traits.map((t) => esc(TRAITS[t].name)).join(', ')}` : ''}</small>`}</span>
+        <span class="garmy">${g.settler ? '<small>founds a city</small>' : PIECES.filter((x) => g.army[x]).map((x) => `<span class="mtok">${pieceHtml(true, x)}${g.army[x] > 1 ? `<i>${g.army[x]}</i>` : ''}</span>`).join('') || '<small>no pieces</small>'}</span>
+        <span class="gmoves">${status(g)}</span></button>`;
+    }).join('')}</div>
       <div class="acts">${btn('close', 'Close', '')}</div>`);
     const c = await ask();
     modal(null);
@@ -1197,7 +1242,9 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
     // город или своё здание (в том числе стройка) на клетке — после юнитов выбирается оно
     const hallHere = Object.values(s.halls).some((x) => key(x.hex) === k);
     const placeHere = hallHere || (s.cells[k].owner === ME && (!!s.cells[k].building || !!s.cells[k].reserved));
-    const seq: (string | undefined)[] = [...units.map((g) => g.id), ...(placeHere || !units.length ? [undefined] : [])];
+    // после своих юнитов — сама клетка (город, здание или просто земля, на которой стоит генерал)
+    const seq: (string | undefined)[] = [...units.map((g) => g.id), undefined];
+    void placeHere;
     const same = sel.hex && key(sel.hex) === k;
     const at = same ? seq.indexOf(sel.gid) : -1;
     sel = { hex: h, gid: seq[(at + 1) % seq.length] };
