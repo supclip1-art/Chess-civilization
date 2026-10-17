@@ -6,7 +6,7 @@ import { flagSvg } from './flags.ts';
 import { portraitSvg } from './portraits.ts';
 import { startTutorial } from './tutorial.ts';
 import {
-  armyValue, isOutlaw, setAuto, autoDevelop, type AutoFocus,   BARRACKS, BUILD_TURNS, BUILDING_TERRAIN, GENERAL_HIRE_GOLD, HIRE_LEVEL, NATIONS, PIECE_PRICE, RESEARCH, RESOURCE_COST,
+  canAfford, armyValue, isOutlaw, setAuto, autoDevelop, type AutoFocus,   BARRACKS, BUILD_TURNS, BUILDING_TERRAIN, GENERAL_HIRE_GOLD, HIRE_LEVEL, NATIONS, PIECE_PRICE, RESEARCH, RESOURCE_COST,
   RESOURCE_OUTPUT, TAVERN, TOWN_HALL_FOUND, TOWN_HALL_UPGRADE, BUILDER_HIRE_FOOD, BUILDER_UPKEEP_FOOD, GENERAL_UPKEEP_FOOD, cityUpgradeCost, tavernCost, PIECES, barracksCost, buildOptions, buildingOutput, maxLevelAt, piecePrice, researchCost, researchTurns, resourceCost, aiEconomyTurn, aiMilitaryTurn, attack, endTurn, say,
   foundTownHall, freeBuilders, hireBuilder, hireGeneral, hirePiece, income, key, maxBuilders, move, playerGenerals,
   reachable, recruitElo, resolveBattle, startResearch, upgrade, upgradeBarracks, upgradeTavern, upgradeTownHall,
@@ -60,6 +60,10 @@ const esc = (t: string) => t.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&l
 const amount = (name: 'wood' | 'food' | 'gold', n: number) => `<i class="amt" title="${name}">${iconSvg(name, 13)}${n}</i>`;
 const RES_OF = { farm: 'food', sawmill: 'wood', mine: 'gold', fishery: 'food' } as const;
 const cost = (c: Res) => [c.wood && amount('wood', c.wood), c.food && amount('food', c.food), c.gold && amount('gold', c.gold)].filter(Boolean).join(' ') || 'free';
+/** Герб города: золотой щит с уровнем. */
+const crest = (level: number) => `<span class="ccrest"><b>${level}</b></span>`;
+/** Полоска мест под здания: занятые — золотые. */
+const pips = (used: number, max: number) => `<span class="pips" title="${used}/${max}">${Array.from({ length: max }, (_, i) => `<i class="${i < used ? 'on' : ''}"></i>`).join('')}</span>`;
 const CASTLE = '<svg class="ico" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 21V9h3v3h2.5V9h5V12H17V9h3v12h-6v-4.5a2 2 0 0 0-4 0V21Z" fill="#8a6d3b" stroke="#4a3a1f" stroke-width="1.2" stroke-linejoin="round"/></svg>';
 
 /** Число для панели ресурсов: 1.4k, 3m — чтобы большие запасы влезали в строку. */
@@ -409,18 +413,28 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
       const tavNext = ht < 4 ? TAVERN[(ht + 1) as 1 | 2 | 3 | 4] : null;
       const gCount = playerGenerals(s, ME).length;
       const gCost = gCount < 5 ? Math.max(0, GENERAL_HIRE_GOLD[(gCount + 1) as 2 | 3 | 4 | 5] - (NATIONS[p.nation].mods.generalHireDiscount ?? 0)) : 0;
-      parts.push(`<div class="card"><div class="row"><b>${esc(hall.name)} · level ${hall.level}</b><span class="muted">builders ${freeBuilders(s, ME, hall.id)}/${hallBuilders(hall)} free</span></div>
-        <div class="acts">
-          ${thUp ? btn(`th:${hall.id}`, `City → ${hall.level + 1}`, `${cost(cityUpgradeCost(s, ME, (hall.level + 1) as 2 | 3))} · ${thUp.turns} turn · ${BUILDING_SLOTS[hall.level]} building slots, +1 builder, wider land`) : ''}
-          ${nb <= maxBuilders(s, ME, hall.id) ? btn(`builder:${hall.id}`, `Hire builder ${nb}`, `${NATIONS[p.nation].mods.freeBuilderHire ? 'free' : `${amount('food', BUILDER_HIRE_FOOD[nb as 2 | 3])}`} · ${NATIONS[p.nation].mods.freeBuilderUpkeep ? 'eats nothing' : `eats ${amount('food', BUILDER_UPKEEP_FOOD)}/turn`}`) : ''}
-          ${barNext ? btn(`barracks:${hall.id}`, hb ? `Barracks → ${hb + 1}` : 'Build barracks', `${cost(barracksCost(s, ME, (hb + 1) as 1 | 2 | 3 | 4 | 5))} · ${barNext.turns} turn${barNext.turns > 1 ? 's' : ''} · ${PIECE_NAME[PIECES[hb]].toLowerCase()}s here`) : ''}
-          ${tavNext ? btn(`tavern:${hall.id}`, ht ? `Tavern → ${ht + 1}` : 'Build tavern', `${cost(tavernCost(s, ME, (ht + 1) as 1 | 2 | 3 | 4))} · ${tavNext.turns} turn${tavNext.turns > 1 ? 's' : ''} · up to ${Math.min(5, ht + 2)} generals`) : ''}
-          ${btn(`settler:${hall.id}`, 'Train a settler', `${cost(settlerCost(s, ME))} · founds a new city · moves ${armyMove(s, ME)} cells`)}
-          ${ht && gCount < generalLimit(s, ME) ? btn(`general:${hall.id}`, 'Hire a general here', `${amount('gold', gCost)} · ELO ${recruitElo(s, ME)} · eats ${amount('food', GENERAL_UPKEEP_FOOD)}/turn`) : ''}
+      const free = freeBuilders(s, ME, hall.id), total = hallBuilders(hall);
+      const sl = citySlots(s, hall.id);
+      // плитка действия: значок, название, цена; если не хватает ресурсов — бледная
+      const tile = (id: string, ico: string, label: string, c: Res | null, sub: string) => {
+        const poor = c && !canAfford(p.res, c);
+        return `<button class="ctile ${poor ? 'poor' : ''}" data-a="${id}"><span class="cico">${ico}</span><span class="ctext"><b>${label}</b><small>${c ? `<span class="ccost">${cost(c)}</span>` : ''}${sub}</small></span></button>`;
+      };
+      parts.push(`<div class="citycard">
+        <div class="cityrow">${crest(hall.level)}<div class="cityname"><b>${esc(hall.name)}</b>
+          <span class="citystats">${pips(sl.used, sl.max)}<span>${sl.used}/${sl.max} slots</span><span class="hammers">${'⚒'.repeat(free)}<i>${'⚒'.repeat(Math.max(0, total - free))}</i></span><span>${free}/${total} builders</span></span></div></div>
+        <div class="chips">${hb ? `<span class="chip ok">⚔ Barracks ${hb}</span>` : '<span class="chip">⚔ no barracks</span>'}${ht ? `<span class="chip ok">♚ Tavern ${ht}</span>` : '<span class="chip">♚ no tavern</span>'}${hall.auto ? `<span class="chip gold">⟳ Auto: ${hall.auto === 'army' ? 'army' : 'economy'}</span>` : ''}</div>
+        <div class="ctiles">
+          ${thUp ? tile(`th:${hall.id}`, '🏰', `City → ${hall.level + 1}`, cityUpgradeCost(s, ME, (hall.level + 1) as 2 | 3), ` · ${thUp.turns} turn · ${BUILDING_SLOTS[hall.level]} slots, +1 builder, wider land`) : ''}
+          ${nb <= maxBuilders(s, ME, hall.id) ? tile(`builder:${hall.id}`, '⚒', `Hire builder ${nb}`, NATIONS[p.nation].mods.freeBuilderHire ? null : { wood: 0, food: BUILDER_HIRE_FOOD[nb as 2 | 3], gold: 0 }, `${NATIONS[p.nation].mods.freeBuilderHire ? 'free' : ''} · ${NATIONS[p.nation].mods.freeBuilderUpkeep ? 'eats nothing' : `eats ${amount('food', BUILDER_UPKEEP_FOOD)}/turn`}`) : ''}
+          ${barNext ? tile(`barracks:${hall.id}`, '⚔', hb ? `Barracks → ${hb + 1}` : 'Build barracks', barracksCost(s, ME, (hb + 1) as 1 | 2 | 3 | 4 | 5), ` · ${barNext.turns} turn${barNext.turns > 1 ? 's' : ''} · ${PIECE_NAME[PIECES[hb]].toLowerCase()}s here`) : ''}
+          ${tavNext ? tile(`tavern:${hall.id}`, '♚', ht ? `Tavern → ${ht + 1}` : 'Build tavern', tavernCost(s, ME, (ht + 1) as 1 | 2 | 3 | 4), ` · ${tavNext.turns} turn${tavNext.turns > 1 ? 's' : ''} · up to ${Math.min(5, ht + 2)} generals`) : ''}
+          ${tile(`settler:${hall.id}`, '⛺', 'Train a settler', settlerCost(s, ME), ` · founds a new city · moves ${armyMove(s, ME)} cells`)}
+          ${ht && gCount < generalLimit(s, ME) ? tile(`general:${hall.id}`, '♛', 'Hire a general here', { wood: 0, food: 0, gold: gCost }, ` · ELO ${recruitElo(s, ME)} · eats ${amount('food', GENERAL_UPKEEP_FOOD)}/turn`) : ''}
         </div>
-        <p class="muted">Buildings on its land ${citySlots(s, hall.id).used}/${citySlots(s, hall.id).max}${hall.level < 3 ? ` · level ${hall.level + 1}: ${BUILDING_SLOTS[hall.level]}` : ''} · Barracks ${hb || '—'} · Tavern ${ht || '—'}</p>
-        ${jobs.length ? `<p class="muted withico">${iconSvg('clock', 15)}In progress: ${jobs.map(esc).join('; ')}</p>` : ''}
-        ${queue.length ? `<p class="muted">Queued — start when a builder is free:</p><div class="queue">${queue.map(({ q, i }) => `<span>${esc(jobName(q.job))}<button class="ghost" data-a="unqueue:${i}">Cancel</button></span>`).join('')}</div>` : ''}</div>`);
+        ${jobs.length ? `<div class="cjobs">${jobs.map((j) => `<span class="cjob">${iconSvg('clock', 14)}${esc(j)}</span>`).join('')}</div>` : ''}
+        ${queue.length ? `<p class="muted cqhead">Queued — start when a builder is free:</p><div class="cjobs">${queue.map(({ q, i }) => `<span class="cjob queued">${esc(jobName(q.job))}<button class="cx" data-a="unqueue:${i}" aria-label="Cancel">×</button></span>`).join('')}</div>` : ''}
+      </div>`);
     } else if (hall) {
       parts.push(`<div class="card"><div class="row"><b>${esc(hall.name)} · city level ${hall.level}</b>${s.players[hall.owner] ? nationBtn(hall.owner) : ''}</div><p class="muted">${esc(ownerName(s, hall.owner))}${hall.siege ? ' · under siege' : ''}${hall.barracks ? ` · barracks ${hall.barracks}` : ''}${hall.tavern ? ` · tavern ${hall.tavern}` : ''}</p></div>`);
     }
@@ -681,25 +695,25 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
     const cells = Object.values(s.cells).filter((c) => c.hall === h.id && (c.building || c.reserved));
     const hb = h.barracks ?? 0, ht = h.tavern ?? 0;
     const rows = [
-      `<div class="brow"><span class="bname"><b>City</b> · level ${h.level}</span><span class="bout">${sl.used}/${sl.max} slots · builders ${freeBuilders(s, ME, h.id)}/${hallBuilders(h)} free</span>
+      `<div class="brow"><span class="bico">🏰</span><span class="bname"><b>City</b> · level ${h.level}</span><span class="bout">${pips(sl.used, sl.max)} ${sl.used}/${sl.max} slots · builders ${freeBuilders(s, ME, h.id)}/${hallBuilders(h)} free</span>
         ${h.level < 3 ? up(`th:${h.id}`, `→ ${h.level + 1}`, cityUpgradeCost(s, ME, (h.level + 1) as 2 | 3), state((j) => j.kind === 'townhall' && j.hallId === h.id)) : '<span class="bstate">top level</span>'}</div>`,
-      `<div class="brow"><span class="bname"><b>Barracks</b> · ${hb ? `level ${hb}` : 'none'}</span><span class="bout">${hb ? `hires up to ${PIECE_NAME[PIECES[hb - 1]].toLowerCase()}s` : 'needed to hire pieces here'}</span>
+      `<div class="brow"><span class="bico">⚔</span><span class="bname"><b>Barracks</b> · ${hb ? `level ${hb}` : 'none'}</span><span class="bout">${hb ? `hires up to ${PIECE_NAME[PIECES[hb - 1]].toLowerCase()}s` : 'needed to hire pieces here'}</span>
         ${hb < 5 ? up(`barracks:${h.id}`, hb ? `→ ${hb + 1}` : 'Build', barracksCost(s, ME, (hb + 1) as 1 | 2 | 3 | 4 | 5), state((j) => j.kind === 'barracks' && j.hallId === h.id)) : '<span class="bstate">top level</span>'}</div>`,
-      `<div class="brow"><span class="bname"><b>Tavern</b> · ${ht ? `level ${ht}` : 'none'}</span><span class="bout">${ht ? `up to ${Math.min(5, ht + 1)} generals` : 'hires generals'}</span>
+      `<div class="brow"><span class="bico">♚</span><span class="bname"><b>Tavern</b> · ${ht ? `level ${ht}` : 'none'}</span><span class="bout">${ht ? `up to ${Math.min(5, ht + 1)} generals` : 'hires generals'}</span>
         ${ht < 4 ? up(`tavern:${h.id}`, ht ? `→ ${ht + 1}` : 'Build', tavernCost(s, ME, (ht + 1) as 1 | 2 | 3 | 4), state((j) => j.kind === 'tavern' && j.hallId === h.id)) : '<span class="bstate">top level</span>'}</div>`,
       ...cells.map((c) => {
         const k = key(c.hex);
-        if (!c.building) return `<div class="brow"><span class="bname">${iconSvg('clock', 18)}<b>Construction</b></span><span class="bout">${state((j) => j.kind === 'resource' && key(j.hex) === k) || 'in progress'}</span></div>`;
+        if (!c.building) return `<div class="brow"><span class="bico">${iconSvg('clock', 22)}</span><span class="bname"><b>Construction</b></span><span class="bout">${state((j) => j.kind === 'resource' && key(j.hex) === k) || 'in progress'}</span></div>`;
         const b = c.building;
         const out = buildingOutput(s, ME, c);
         const income = (['food', 'wood', 'gold'] as const).filter((r) => out[r]).map((r) => `+${amount(r, out[r])}`).join(' ');
         const top = maxLevelAt(s, ME, c, b.kind) || 5;
-        return `<div class="brow"><span class="bname">${iconSvg(b.kind, 18)}<b>${BUILDING_NAME[b.kind]}</b> · level ${b.level}</span><span class="bout">${income} per turn</span>
+        return `<div class="brow"><span class="bico">${iconSvg(b.kind, 24)}</span><span class="bname"><b>${BUILDING_NAME[b.kind]}</b> · level ${b.level}</span><span class="bout">${income} per turn</span>
           ${b.level < top ? up(`up:${k}`, `→ ${b.level + 1}`, resourceCost(s, ME, b.kind, b.level + 1), state((j) => j.kind === 'resource' && key(j.hex) === k)) : '<span class="bstate">top level</span>'}</div>`;
       }),
     ];
     return `<div class="cityhead"><button class="ghost navb" data-a="city:prev" ${n < 2 ? 'disabled' : ''}>‹</button>
-        <div><h2>${esc(h.name)}</h2><small class="muted">${i + 1} / ${n} · swipe for other cities</small></div>
+        <div class="cityheadmid">${crest(h.level)}<div><h2>${esc(h.name)}</h2><small class="muted">${i + 1} / ${n} · swipe for other cities</small></div></div>
         <button class="ghost navb" data-a="city:next" ${n < 2 ? 'disabled' : ''}>›</button></div>
       <div class="autorow"><span>Auto-development</span><div class="seg">${([['off', 'Off'], ['economy', 'Economy'], ['army', 'Army']] as const)
         .map(([k, l]) => `<button data-a="auto:${h.id}:${k}" class="${(h.auto ?? 'off') === k ? 'on' : ''}">${l}</button>`).join('')}</div></div>

@@ -612,6 +612,10 @@ export const DICT: [string, string, string][] = [
   ["King's Indian Defense", 'Defensa india de rey', 'Староиндийская защита'], ['Slav Defense', 'Defensa eslava', 'Славянская защита'],
   ['Nimzo-Indian Defense', 'Defensa nimzoindia', 'Защита Нимцовича'], ['Grünfeld Defense', 'Defensa Grünfeld', 'Защита Грюнфельда'], ['Dutch Defense', 'Defensa holandesa', 'Голландская защита'],
   // династия
+  ['founds a new city', 'funda una ciudad nueva', 'основывает новый город'], ['moves 2 cells', 'mueve 2 casillas', 'ходит на 2 клетки'], ['moves 3 cells', 'mueve 3 casillas', 'ходит на 3 клетки'],
+  ['pawns here', 'peones aquí', 'пешки здесь'], ['knights here', 'caballos aquí', 'кони здесь'], ['bishops here', 'alfiles aquí', 'слоны здесь'], ['rooks here', 'torres aquí', 'ладьи здесь'], ['queens here', 'damas aquí', 'ферзи здесь'],
+  ['no barracks', 'sin cuartel', 'нет казармы'], ['no tavern', 'sin taberna', 'нет таверны'],
+  ['Auto:', 'Auto:', 'Авто:'], ['slots, +1 builder, wider land', 'espacios, +1 constructor, más tierra', 'мест, +1 строитель, шире земли'],
   ['cautious rivals: they go to war late and only with a big advantage, and skip technologies', 'rivales prudentes: van a la guerra tarde, solo con gran ventaja, y no investigan tecnologías', 'осторожные соперники: воюют поздно и лишь при большом перевесе, технологии не изучают'],
   ['rivals start richer, go to war earlier and expand harder', 'los rivales empiezan más ricos, van antes a la guerra y se expanden más', 'соперники богаче на старте, раньше воюют и активнее расширяются'],
   ['merciless: rich from the start, warlike and quick to strike', 'despiadado: ricos desde el inicio, belicosos y rápidos en atacar', 'беспощадно: богаты с первого хода, воинственны и бьют при малейшем перевесе'],

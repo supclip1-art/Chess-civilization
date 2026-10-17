@@ -55,6 +55,46 @@
     .autorow { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin: 4px 0 6px; font-size: 14px; font-weight: 600; }
     .autorow .seg button { width: auto; padding: 7px 10px; font-size: 13px; }
     .autonote { margin: 0 0 8px; font-size: 12px; }
+    /* ---------- город: панель и меню городов ---------- */
+    .citycard { display: flex; flex-direction: column; gap: 10px; padding: 12px; border-radius: 20px; box-shadow: 0 6px 18px rgba(20, 20, 60, .12);
+      background: radial-gradient(120% 60% at 0% 0%, color-mix(in srgb, #f6cf6a 14%, var(--card)), var(--card) 65%); }
+    .cityrow { display: flex; align-items: center; gap: 12px; }
+    .ccrest { flex: none; width: 40px; height: 46px; display: grid; place-items: center; color: #fff8e1; font-weight: 800; font-size: 18px;
+      background: linear-gradient(#d9a632, #7c5413); clip-path: polygon(0 0, 100% 0, 100% 70%, 50% 100%, 0 70%); filter: drop-shadow(0 2px 3px rgba(0,0,0,.3)); }
+    .ccrest b { margin-top: -6px; }
+    .cityname { flex: 1; min-width: 0; } .cityname > b { display: block; font-family: 'Cinzel', Georgia, serif; font-size: 20px; line-height: 1.15; }
+    .citystats { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; font-size: 12px; color: var(--muted); margin-top: 3px; }
+    .pips { display: inline-flex; gap: 3px; vertical-align: middle; } .pips i { width: 9px; height: 9px; border-radius: 3px; background: var(--line); }
+    .pips i.on { background: linear-gradient(#f6cf6a, #c99b2e); box-shadow: 0 0 0 1px #a8741a inset; }
+    .hammers { color: #c99b2e; letter-spacing: 1px; } .hammers i { font-style: normal; color: var(--line); }
+    .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+    .chips .chip { font-size: 12px; padding: 3px 10px; border-radius: 999px; background: transparent; border: 1px solid var(--line); color: var(--muted); }
+    .chips .chip.ok { color: var(--ink); border-color: color-mix(in srgb, #c99b2e 60%, transparent); }
+    .chips .chip.gold { color: #3a2604; background: linear-gradient(#f6cf6a, #d89e2c); border-color: #b07b18; font-weight: 700; }
+    .ctiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+    button.ctile { display: flex; align-items: flex-start; gap: 9px; padding: 10px; border-radius: 16px; text-align: left; font-weight: 400;
+      background: var(--bg); color: var(--ink); border: 1.5px solid color-mix(in srgb, #c99b2e 45%, var(--line)); box-shadow: 0 2px 0 color-mix(in srgb, #c99b2e 35%, transparent); }
+    button.ctile:active { transform: translateY(1px); box-shadow: none; }
+    .cico { flex: none; width: 34px; height: 34px; display: grid; place-items: center; border-radius: 11px; font-size: 18px; line-height: 1; color: #3a2604;
+      background: linear-gradient(#f6cf6a, #d89e2c); box-shadow: 0 2px 6px rgba(160, 105, 20, .3); }
+    .ctext { min-width: 0; } .ctext b { display: block; font-size: 14px; line-height: 1.2; }
+    .ctext small { display: block; font-size: 11.5px; line-height: 1.35; color: var(--muted); margin-top: 2px; }
+    .ccost { color: var(--ink); font-weight: 600; } .ccost .amt { font-style: normal; }
+    button.ctile.poor { opacity: .5; } button.ctile.poor .cico { filter: grayscale(.6); }
+    .cjobs { display: flex; flex-wrap: wrap; gap: 6px; }
+    .cjob { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; padding: 4px 6px 4px 9px; border-radius: 999px; background: color-mix(in srgb, #f6cf6a 20%, var(--bg)); }
+    .cjob.queued { background: var(--bg); border: 1px dashed var(--line); }
+    button.cx { width: 22px; height: 22px; padding: 0; border-radius: 50%; font-size: 15px; line-height: 1; background: var(--line); color: var(--ink); }
+    .cqhead { margin: 0; font-size: 12px; }
+    .cityheadmid { display: flex; align-items: center; gap: 10px; text-align: left; } .cityheadmid h2 { font-family: 'Cinzel', Georgia, serif; font-size: 20px; }
+    .brow { grid-template-columns: auto 1fr auto !important; grid-template-areas: "i n u" "i o u" !important; border-radius: 16px !important; padding: 9px 10px !important;
+      border: 1.5px solid color-mix(in srgb, #c99b2e 30%, var(--line)) !important; }
+    .brow .bico { grid-area: i; width: 38px; height: 38px; display: grid; place-items: center; border-radius: 12px; font-size: 19px;
+      background: color-mix(in srgb, #f6cf6a 22%, var(--bg)); }
+    .brow .bname b { font-size: 14.5px; }
+    .brow .upb { border-radius: 12px; border: 0; color: #3a2604; background: linear-gradient(#f6cf6a, #d89e2c); box-shadow: 0 2px 0 #a8741a; }
+    .brow .upb small .amt { color: #3a2604; }
+    .autorow .seg button.on { background: linear-gradient(#f6cf6a, #d89e2c); color: #3a2604; font-weight: 700; }
     /* ---------- новая игра ---------- */
     .sethero { position: relative; margin: -16px -16px 2px; padding: calc(24px + env(safe-area-inset-top, 0px)) 22px 26px; border-radius: 0 0 26px 26px; color: #fbf3e2;
       background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='48' viewBox='0 0 28 48'%3E%3Cpath d='M14 0l14 8v16l-14 8L0 24V8zM14 32v16' fill='none' stroke='%23fff3c4' stroke-opacity='.12' stroke-width='1'/%3E%3C/svg%3E"), linear-gradient(160deg, #1e2a52 0%, #4a3f6b 55%, #d98a52 100%); text-shadow: 0 2px 12px rgba(20, 18, 60, .5); }
