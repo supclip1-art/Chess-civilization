@@ -209,13 +209,15 @@ export const runOrders = (s: GameState, pid: string): { gid: string; text: strin
 
 // ---------- Туман войны ----------
 
-/** Видимые игроку клетки: 2 клетки от края его территории и 2 клетки вокруг его генералов. */
+/** Видимые игроку клетки: 2 клетки от края его территории и 2 клетки вокруг его генералов.
+ *  Земля и генералы вассалов видны сюзерену так же, как свои. */
 export const visible = (s: GameState, pid: string): Set<string> => {
   const seen = new Set<string>();
   const add = (h: Hex, r = FOG_RADIUS) => { for (const x of range(h, r)) if (s.cells[key(x)]) seen.add(key(x)); };
-  for (const c of Object.values(s.cells)) if (c.owner === pid) add(c.hex);
+  const mine = (o: string | undefined) => !!o && (o === pid || s.players[o]?.overlord === pid);
+  for (const c of Object.values(s.cells)) if (mine(c.owner)) add(c.hex);
   const far = s.players[pid] && hasTech(s, pid, 'cartography') ? FOG_RADIUS + 1 : FOG_RADIUS; // «Картография»
-  for (const g of Object.values(s.generals)) if (g.owner === pid) add(g.hex, far);
+  for (const g of Object.values(s.generals)) if (mine(g.owner)) add(g.hex, g.owner === pid ? far : FOG_RADIUS);
   return seen;
 };
 
@@ -301,7 +303,12 @@ export const resolveBattle = (s: GameState, attackerId: string, defenderId: stri
   if (out.winner !== 'attacker') return out;
   const h = hallAt(s, defHex);
   if (!h || h.owner === att.owner) return out;
-  if (att.owner === 'bandits') { if (!defenderAt(s, defHex, att.owner)) seizeByBandits(s, att.id, h.id); return out; }
+  if (att.owner === 'bandits') {
+    if (defenderAt(s, defHex, att.owner)) return out;
+    if (isCapital(s, h)) { h.siege = { by: att.id, since: s.turn }; say(s, `bandits besiege ${h.name}! Send an army within a turn or the capital falls`, h.owner); }
+    else seizeByBandits(s, att.id, h.id);
+    return out;
+  }
   if (!s.players[att.owner]) return out; // нейтралы города не захватывают
   // защитники города разбиты: если других армий в городе нет — город сразу переходит к победителю
   if (defenderAt(s, defHex, att.owner)) { h.siege = { by: att.id, since: s.turn }; return out; }
@@ -390,6 +397,7 @@ export const capture = (s: GameState, hallId: string, newOwner: string): void =>
   h.owner = newOwner;
   h.siege = undefined;
   h.takenAt = s.turn;
+  h.takenFrom = old;
   h.decided = undefined;
   h.haltUntil = undefined;
   if (s.neutrals[old]) {
@@ -398,11 +406,20 @@ export const capture = (s: GameState, hallId: string, newOwner: string): void =>
   }
   recomputeTerritory(s);
   say(s, `${h.name} is captured`, newOwner);
+  if (s.players[newOwner]?.outlaw && playerHalls(s, newOwner).length === 1) say(s, `${h.name} is yours — the outlaw kingdom begins. No crown will recognise you`, newOwner);
+  // сюзерен узнаёт о потере вассала; в его памяти город уже под новым хозяином (дальше — туман)
+  const lord = oldPlayer?.overlord;
+  if (lord && s.players[lord]) {
+    say(s, `${h.name} of your vassal ${NATIONS[oldPlayer!.nation].name} was taken${s.neutrals[newOwner] ? ' — it is a free city now' : ''}`, lord);
+    const mem = ((s.memory ??= {})[lord] ??= {});
+    for (const c of Object.values(s.cells)) if (c.hall === hallId) mem[key(c.hex)] = { turn: s.turn, owner: c.owner, building: c.building ? { ...c.building } : undefined, hall: key(c.hex) === key(h.hex) ? { name: h.name, owner: h.owner, level: h.level } : undefined };
+  }
   if (oldPlayer && playerHalls(s, old).length === 0) {
     oldPlayer.alive = false;
     for (const v of Object.values(s.players)) if (v.overlord === old) { v.overlord = undefined; v.stance = undefined; } // вассалы павшей страны свободны
     for (const g of Object.values(s.generals)) if (g.owner === old) delete s.generals[g.id];
     say(s, `${NATIONS[oldPlayer.nation].name} is out of the game`, newOwner);
+    if (lord && s.players[lord]) say(s, `your vassal ${NATIONS[oldPlayer.nation].name} has fallen`, lord);
   }
 };
 

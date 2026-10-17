@@ -109,6 +109,8 @@ const setup = () => {
     const last = localStorage.getItem('chessciv.nation') as NationId | null;
     if (last && NATIONS[last]) nation = last;
   } catch { /* ничего */ }
+  let outlaw = false;
+  try { outlaw = localStorage.getItem('chessciv.outlaw') === '1'; } catch { /* ничего */ }
   const lv = level();
   if (mapLevel(mapId) > lv) mapId = 'europe';
   if (nationLevel(nation) > lv) nation = 'russia';
@@ -126,6 +128,8 @@ const setup = () => {
         `<button class="${id === mapId ? 'on' : ''}" data-m="${id}" ${mapLevel(id) > lv ? 'disabled' : ''}>${mapLevel(id) > lv ? '🔒 ' : ''}${esc(MAPS[id]().name)}</button>`).join('')}</div></div>
       <p class="muted" id="mapnote" style="margin-top:6px"></p>
       <div class="row" style="margin-top:10px"><span>Players</span><select id="players">${playerOptions()}</select></div>
+      <div class="row" style="margin-top:10px"><span>Play as</span><div class="seg" id="mode"><button data-o="0" class="${outlaw ? '' : 'on'}">Nation</button><button data-o="1" class="${outlaw ? 'on' : ''}">Outlaws</button></div></div>
+      <p class="muted" id="modenote" style="margin-top:6px"></p>
       <div class="row" style="margin-top:10px"><span>Generals' ELO</span><select id="elo">${[800, 1000, 1200, 1400, 1600, 1800, 2000].map((e) => `<option ${e === elo ? 'selected' : ''}>${e}</option>`).join('')}</select></div>
       <p class="muted" style="margin-top:10px">One ELO for every general in the game, yours and the AI's.</p>
       <div class="row" style="margin-top:10px"><span>Start bonus</span><select id="bonus">${bonuses.filter((b) => b.open).map((b) => `<option value="${b.id}" ${b.id === dynasty().bonus ? 'selected' : ''}>${esc(b.name)}</option>`).join('')}</select></div>
@@ -139,6 +143,14 @@ const setup = () => {
     <div class="nav"><button class="ghost" id="prevN" aria-label="Previous nation">‹</button><span id="countN"></span><button class="ghost" id="nextN" aria-label="Next nation">›</button></div>
     <button id="start">Start</button>`);
   const playersSel = document.getElementById('players') as HTMLSelectElement;
+  const showMode = () => {
+    document.getElementById('modenote')!.textContent = outlaw
+      ? 'You start as a bandit band with no city. Seize one to found your kingdom — but no crown will recognise you: eternal war with every nation, no peace or trade. Vassals are still possible.'
+      : 'Rule a nation from its capital, with diplomacy, trade and alliances.';
+    for (const b of document.querySelectorAll<HTMLButtonElement>('#mode button')) b.classList.toggle('on', (b.dataset.o === '1') === outlaw);
+    document.querySelector('h2.pick')!.firstChild!.textContent = outlaw ? 'Your banner ' : 'Your nation ';
+  };
+  for (const b of document.querySelectorAll<HTMLButtonElement>('#mode button')) b.addEventListener('click', () => { tap(); outlaw = b.dataset.o === '1'; showMode(); });
   const bonusSel = document.getElementById('bonus') as HTMLSelectElement;
   const showBonus = () => { document.getElementById('bonusnote')!.textContent = bonuses.find((b) => b.id === bonusSel.value)?.text ?? ''; };
   showBonus();
@@ -154,6 +166,7 @@ const setup = () => {
       playersSel.innerHTML = playerOptions(); showMap();
     });
   }
+  showMode();
   const strip = document.getElementById('nations')!;
   const cards = [...strip.querySelectorAll<HTMLButtonElement>('.nation')];
   const select = (i: number) => {
@@ -188,7 +201,7 @@ const setup = () => {
     const seed = Math.floor(Math.random() * 1e9);
     const others = NATION_ORDER.filter((n) => n !== nation).sort(() => Math.random() - 0.5).slice(0, players - 1);
     const s = newGame(MAPS[mapId](), [
-      { nation },
+      { nation, ...(outlaw ? { outlaw: true } : {}) },
       ...others.map((n) => {
         const aggression = AGGR[Math.floor(Math.random() * 3)];
         return { nation: n, ai: { aggression, ruler: NATIONS[n].rulers[aggression] } };
@@ -201,6 +214,7 @@ const setup = () => {
     try {
       localStorage.setItem('chessciv.nation', nation); localStorage.setItem('chessciv.map', mapId);
       localStorage.setItem('chessciv.players', String(players)); localStorage.setItem('chessciv.elo', String(elo));
+      localStorage.setItem('chessciv.outlaw', outlaw ? '1' : '0');
     } catch { /* ничего */ }
     openGame(app, s, home);
   });

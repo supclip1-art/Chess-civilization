@@ -22,3 +22,4 @@ export * from './diplomacy.ts';
 export * from './vassals.ts';
 export * from './deals.ts';
 export * from './heroes.ts';
+export * from './autodev.ts';

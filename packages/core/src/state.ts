@@ -37,12 +37,15 @@ export type TownHall = {
   barracks?: number; // казарма города: какие фигуры можно нанять на его земле (0 / нет — не построена)
   tavern?: number; // таверна города: в ней нанимают генералов
   builders?: number; // строители города (нет — один)
+  auto?: 'economy' | 'army'; // авторазвитие города игрока (autodev.ts)
   siege?: { by: string; since: number }; // id осаждающего генерала и ход начала осады
   /** До какого хода в городе нельзя строить (карантин, недовольство) и почему. */
   haltUntil?: number;
   haltWhy?: string;
   /** Ход, когда город взяли силой (для бунтов). */
   takenAt?: number;
+  /** У кого город взят силой последним (для оценки, давит ли враг). */
+  takenFrom?: string;
   /** Игрок уже решил, присоединить город или сделать вассалом. */
   decided?: boolean;
 };
@@ -111,6 +114,8 @@ export type Player = {
   stance?: 'expand' | 'defend' | 'economy';
   starterKnight: boolean; // стартовый конь жив и всегда возвращается после боя
   alive: boolean;
+  /** Разбойник: начинает шайкой без города, его не признают — вечная война со всеми, переговоров нет. */
+  outlaw?: boolean;
 };
 
 export type Neutral = { id: string; hallId: string };
@@ -168,7 +173,7 @@ export type MapDef = {
   noBandits?: string[];
 };
 
-export type PlayerSetup = { nation: NationId; ruler?: string; ai?: { aggression: Aggression; ruler: string } };
+export type PlayerSetup = { nation: NationId; ruler?: string; ai?: { aggression: Aggression; ruler: string }; outlaw?: boolean };
 
 export const OPENINGS_WHITE = ['Italian Game', 'Ruy Lopez', 'Scotch Game', 'Vienna Game', "Queen's Gambit", 'Catalan', 'London System', 'English Opening'];
 export const DEFENSES_E4 = ['Sicilian Defense', 'French Defense', 'Caro-Kann Defense', 'Scandinavian Defense', 'Open Game', 'Pirc Defense'];
@@ -305,9 +310,11 @@ export const createGame = (map: MapDef, setup: PlayerSetup[], opts: { elo: numbe
   if (map.randomSpawns) {
     const idx = map.spawns.map((_, i) => i);
     for (let i = idx.length - 1; i > 0; i--) { const j = int(s.rng, 0, i); [idx[i], idx[j]] = [idx[j], idx[i]]; }
-    spawnOf = setup.map((_, i) => idx[i]);
+    let n = 0;
+    spawnOf = setup.map((p) => (p.outlaw ? -1 : idx[n++])); // разбойник места столицы не занимает
   } else {
     spawnOf = setup.map((p, i) => {
+      if (p.outlaw) return -1;
       if (!map.spawnNations) return i;
       const at = map.spawnNations.indexOf(p.nation);
       if (at < 0) throw new Error(`no spawn for ${p.nation} on ${map.name}`);
@@ -321,15 +328,34 @@ export const createGame = (map: MapDef, setup: PlayerSetup[], opts: { elo: numbe
     s.players[id] = {
       id, nation: p.nation, ai: p.ai, ruler: p.ruler ?? p.ai?.ruler,
       res: { wood: START_RESOURCES.wood + (NATIONS[p.nation].mods.startBonus?.wood ?? 0), food: START_RESOURCES.food + (NATIONS[p.nation].mods.startBonus?.food ?? 0), gold: START_RESOURCES.gold + (NATIONS[p.nation].mods.startBonus?.gold ?? 0) },
-      research: { done: 0 }, jobs: [], starterKnight: true, alive: true,
+      research: { done: 0 }, jobs: [], starterKnight: !p.outlaw, alive: true, ...(p.outlaw ? { outlaw: true } : {}),
     };
+    if (p.outlaw) return; // шайку ставим, когда все города на месте
     addHall(s, id, hex, 1);
     const hero = makeGeneral(s, id, hex, opts.elo, { ...STARTING_ARMY }, generalName(s, id));
     hero.traits = [(['endgame', 'gambit', 'wall', 'pathfinder', 'frugal', 'recruiter', 'plunderer', 'veteran'] as const)[int(s.rng, 0, 7)]];
   });
   map.spawns.forEach((h, i) => { if (!spawnOf.includes(i)) addNeutral(s, h, map.names?.[key(h)]); });
   const freeSpawns = map.spawns.filter((_, i) => !spawnOf.includes(i));
-  pickNeutrals(s, map, [...spawnOf.map((i) => map.spawns[i]), ...freeSpawns]).forEach((h) => addNeutral(s, h, map.names?.[key(h)]));
+  pickNeutrals(s, map, [...spawnOf.filter((i) => i >= 0).map((i) => map.spawns[i]), ...freeSpawns]).forEach((h) => addNeutral(s, h, map.names?.[key(h)]));
   recomputeTerritory(s);
+  setup.forEach((p, i) => { if (p.outlaw) placeOutlaw(s, `p${i + 1}`, opts.elo); });
   return s;
+};
+
+/** Шайка игрока-разбойника: в глуши, не ближе 5 клеток к городам и 9 — к столицам, ближе к середине карты. */
+const placeOutlaw = (s: GameState, id: string, elo: number): void => {
+  const halls = Object.values(s.halls);
+  const caps = halls.filter((h) => s.players[h.owner]);
+  const land = Object.values(s.cells).filter((c) => PASSABLE[c.terrain] && !c.owner);
+  const mid = land.reduce((a, c) => ({ q: a.q + c.hex.q / land.length, r: a.r + c.hex.r / land.length }), { q: 0, r: 0 });
+  const ok = (gap: number, capGap: number) => land.filter((c) => halls.every((h) => distance(h.hex, c.hex) >= gap) && caps.every((h) => distance(h.hex, c.hex) >= capGap));
+  let spots = ok(5, 9);
+  if (!spots.length) spots = ok(4, 6);
+  if (!spots.length) spots = land;
+  spots.sort((a, b) => distance(a.hex, { q: Math.round(mid.q), r: Math.round(mid.r) }) - distance(b.hex, { q: Math.round(mid.q), r: Math.round(mid.r) }));
+  const c = spots[int(s.rng, 0, Math.min(spots.length, 12) - 1)];
+  const band = makeGeneral(s, id, { ...c.hex }, elo, { ...emptyArmy(), p: 6, n: 2, b: 1, r: 1 }, generalName(s, id));
+  band.traits = ['plunderer'];
+  s.players[id].res.gold += 60;
 };

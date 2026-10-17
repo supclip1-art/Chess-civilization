@@ -542,7 +542,9 @@ export const settleEconomy = (s: GameState, pid: string): void => {
   const inc = income(s, pid);
   p.res.wood += inc.wood;
   p.res.gold += inc.gold;
-  p.res.food += inc.food - upkeep(s, pid);
+  // шайка разбойника без города кормится грабежом — содержания нет
+  const homeless = p.outlaw && !Object.values(s.halls).some((h) => h.owner === pid);
+  p.res.food += inc.food - (homeless ? 0 : upkeep(s, pid));
   if (p.res.food < 0) {
     p.res.food = 0;
     famine(s, pid, inc.food);

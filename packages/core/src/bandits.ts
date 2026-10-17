@@ -4,7 +4,7 @@
 import { ARMY_MAX, PIECE_PRICE, STARTING_ARMY, type Piece } from './config.ts';
 import { armyValue } from './economy.ts';
 import { type Hex, distance, key } from './hex.ts';
-import { findPath, move, reachable, seizeByBandits } from './map.ts';
+import { findPath, isCapital, move, reachable, seizeByBandits } from './map.ts';
 import { power } from './aiwar.ts';
 import { int } from './rng.ts';
 import { type Army, type GameState, type General, PASSABLE, makeGeneral, say } from './state.ts';
@@ -19,7 +19,7 @@ const RAIDS_FROM = 12; // на города — ещё позже
 
 /** Состав новой шайки: по средней силе самой мощной армии каждого живого игрока (не слабее стартовой армии). */
 export const banditArmy = (s: GameState): Army => {
-  const alive = s.order.filter((pid) => s.players[pid].alive);
+  const alive = s.order.filter((pid) => s.players[pid].alive && !s.players[pid].outlaw); // шайка игрока-разбойника силу шаек не поднимает
   const best = alive.map((pid) => Math.max(0, ...Object.values(s.generals).filter((g) => g.owner === pid && !g.settler).map((g) => armyValue(g.army))));
   const target = best.length ? best.reduce((a, b) => a + b, 0) / best.length : 0;
   const army: Army = { ...STARTING_ARMY };
@@ -70,8 +70,28 @@ const hasBand = (s: GameState, pid: string): boolean => {
   return !!cap && bandits(s).some((b) => distance(b.camp ?? b.hex, cap.hex) <= 9);
 };
 
-/** Город без армии разбойники берут сразу: он становится вольным (нейтральным), шайка — его гарнизоном. */
-export const raidCity = (s: GameState, gid: string, hallId: string): void => seizeByBandits(s, gid, hallId);
+/** Город без армии разбойники берут сразу: он становится вольным (нейтральным), шайка — его гарнизоном.
+ *  Столицу — нет: сначала ход осады (есть время прислать армию), и только потом захват. */
+export const raidCity = (s: GameState, gid: string, hallId: string): void => {
+  const h = s.halls[hallId];
+  if (h && isCapital(s, h)) {
+    if (h.siege?.by === gid) return; // осада уже идёт
+    h.siege = { by: gid, since: s.turn };
+    say(s, `bandits besiege ${h.name}! Send an army within a turn or the capital falls`, h.owner);
+    return;
+  }
+  seizeByBandits(s, gid, hallId);
+};
+
+/** Осады разбойников: прошёл полный круг, шайка рядом и города никто не защищает — столица пала. */
+const banditSieges = (s: GameState, b: General): boolean => {
+  const h = Object.values(s.halls).find((x) => x.siege?.by === b.id);
+  if (!h) return false;
+  const defended = Object.values(s.generals).some((x) => x.owner === h.owner && key(x.hex) === key(h.hex) && armyValue(x.army) > 0);
+  if (distance(b.hex, h.hex) > 1 || defended) { h.siege = undefined; if (defended) say(s, `the bandit siege of ${h.name} is lifted`, h.owner); return false; }
+  if (s.turn > h.siege!.since) seizeByBandits(s, b.id, h.id);
+  return true; // осаждает — стоит на месте
+};
 
 export type BanditAttack = { gid: string; target: Hex };
 
@@ -90,6 +110,7 @@ export const banditsTurn = (s: GameState): BanditAttack[] => {
     b.moveLeft = 2;
     b.attacked = false;
     if (armyValue(b.army) === 0) { delete s.generals[b.id]; continue; }
+    if (banditSieges(s, b)) continue;
     const camp = b.camp ?? b.hex;
     // добыча: поселенцы, армии слабее, города без армии
     // d — «цена» цели: расстояние; города ещё и по уровню — разбойники выбирают малоразвитые

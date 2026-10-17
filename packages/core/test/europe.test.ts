@@ -91,13 +91,20 @@ test('разбойники: по шайке на игрока недалеко �
   const cap = playerHalls(s, 'p1')[0];
   g1.hex = { q: g1.hex.q + 5, r: g1.hex.r }; // армия ушла из города
   const band = bs[0];
+  // столицу сначала осаждают: ход на помощь
+  band.hex = Object.values(s.cells).find((c) => distance(c.hex, cap.hex) === 1 && c.terrain !== 'water' && c.terrain !== 'mountain' && !Object.values(s.generals).some((g) => key(g.hex) === key(c.hex)))!.hex;
   raidCity(s, band.id, cap.id);
+  assert.equal(cap.owner, 'p1', 'столица держится ход');
+  assert.equal(cap.siege?.by, band.id);
+  s.turn++;
+  banditsTurn(s);
   assert.ok(s.neutrals[cap.owner], 'город стал нейтральным');
   assert.equal(s.generals[band.id].owner, cap.owner, 'шайка стала гарнизоном');
   assert.equal(key(s.generals[band.id].hex), key(cap.hex));
   assert.equal(s.players.p1.alive, false, 'последний город потерян');
   // ходят раз в круг
   const before = bs.map((b) => key(b.hex)).join();
+  s.turn++;
   banditsTurn(s);
   assert.deepEqual(banditsTurn(s), []);
   assert.ok(bandits(s).every((b) => b.owner === BANDITS));
@@ -162,6 +169,10 @@ test('разбойники, разбившие армию в городе, за�
   const g1 = Object.values(s.generals).find((x) => x.owner === 'p1')!;
   g1.hex = { ...cap.hex };
   win(cap.hex, g1.id);
+  assert.equal(s.halls[cap.id].siege?.by, b.id, 'столицу сначала осаждают');
+  const { banditsTurn } = await import('../src/index.ts');
+  s.turn++;
+  banditsTurn(s);
   assert.ok(s.neutrals[s.halls[cap.id].owner], 'столица тоже может пасть');
 });
 

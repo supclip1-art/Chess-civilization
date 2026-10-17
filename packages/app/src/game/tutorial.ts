@@ -36,7 +36,7 @@ export const resetTutorial = (): void => { try { localStorage.removeItem(KEY); }
 
 /** Подсказки первой партии. update() вызывать после каждого действия игрока. */
 export const startTutorial = (app: HTMLElement, s: GameState, me: string): { update: () => void } => {
-  if (tutorialDone()) return { update: () => {} };
+  if (tutorialDone() || s.players[me]?.outlaw) return { update: () => {} }; // разбойнику обучение про столицу не подходит
   let i = 0;
   const el = document.createElement('div');
   el.className = 'tutorial';

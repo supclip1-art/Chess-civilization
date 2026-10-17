@@ -6,7 +6,7 @@ import { flagSvg } from './flags.ts';
 import { portraitSvg } from './portraits.ts';
 import { startTutorial } from './tutorial.ts';
 import {
-  armyValue,   BARRACKS, BUILD_TURNS, BUILDING_TERRAIN, GENERAL_HIRE_GOLD, HIRE_LEVEL, NATIONS, PIECE_PRICE, RESEARCH, RESOURCE_COST,
+  armyValue, isOutlaw, setAuto, autoDevelop, type AutoFocus,   BARRACKS, BUILD_TURNS, BUILDING_TERRAIN, GENERAL_HIRE_GOLD, HIRE_LEVEL, NATIONS, PIECE_PRICE, RESEARCH, RESOURCE_COST,
   RESOURCE_OUTPUT, TAVERN, TOWN_HALL_FOUND, TOWN_HALL_UPGRADE, BUILDER_HIRE_FOOD, BUILDER_UPKEEP_FOOD, GENERAL_UPKEEP_FOOD, cityUpgradeCost, tavernCost, PIECES, barracksCost, buildOptions, buildingOutput, maxLevelAt, piecePrice, researchCost, researchTurns, resourceCost, aiEconomyTurn, aiMilitaryTurn, attack, endTurn, say,
   foundTownHall, freeBuilders, hireBuilder, hireGeneral, hirePiece, income, key, maxBuilders, move, playerGenerals,
   reachable, recruitElo, resolveBattle, startResearch, upgrade, upgradeBarracks, upgradeTavern, upgradeTownHall,
@@ -149,7 +149,8 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
   const bar = () => {
     const p = s.players[ME];
     const inc = income(s, ME);
-    const food = inc.food - upkeep(s, ME);
+    const homeless = p.outlaw && !playerHalls(s, ME).length; // шайка без города кормится грабежом
+    const food = inc.food - (homeless ? 0 : upkeep(s, ME));
     app.querySelector('#res')!.innerHTML = `
       <span title="Wood">${iconSvg('wood')}${fmt(p.res.wood)}<small>+${inc.wood}</small></span>
       <span title="Food">${iconSvg('food')}${fmt(p.res.food)}<small class="${food < 0 ? 'neg' : ''}">${food >= 0 ? '+' : ''}${fmt(food)}</small></span>
@@ -201,6 +202,7 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
       const c = await ask();
       modal(null);
       if (c.startsWith('vassal:')) { const vid = makeVassal(s, ME, h.id, c.slice(7) as VassalStance); if (vid) toast(`${h.name} is now ${NATIONS[s.players[vid].nation].name}, your vassal.`); }
+      else toast(`${h.name} is annexed: the city and its land are yours.`);
       saveGame(s);
       refresh();
     }
@@ -524,6 +526,7 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
   /** Отношения с чужой страной и что можно предложить. */
   const diploBlock = (pid: string) => {
     if (!hasMet(s, ME, pid)) return '';
+    if (isOutlaw(s, ME) || isOutlaw(s, pid)) return `<h3>Relations</h3><p><b class="bad">Eternal war</b></p><p class="muted">${isOutlaw(s, ME) ? 'No crown recognises you as a ruler: there is no peace, trade or alliance with outlaws.' : 'They are outlaws: no one makes peace, trade or alliances with them.'}</p>`;
     const r = relation(s, ME, pid);
     const blocked = warBlocked(s, ME, pid);
     const acts = r.state === 'peace'
@@ -594,6 +597,7 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
   const offerCard = async () => {
     const o = s.players[ME]?.offer;
     if (!o || !s.players[o.from]) return;
+    if (!hasMet(s, ME, o.from)) { s.players[ME].offer = undefined; return; } // незнакомая страна не пишет
     const name = NATIONS[s.players[o.from].nation].name;
     const flag = flagSvg(s.players[o.from].nation, 44);
     const what = termsText(s, o.terms);
@@ -697,6 +701,9 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
     return `<div class="cityhead"><button class="ghost navb" data-a="city:prev" ${n < 2 ? 'disabled' : ''}>‹</button>
         <div><h2>${esc(h.name)}</h2><small class="muted">${i + 1} / ${n} · swipe for other cities</small></div>
         <button class="ghost navb" data-a="city:next" ${n < 2 ? 'disabled' : ''}>›</button></div>
+      <div class="autorow"><span>Auto-development</span><div class="seg">${([['off', 'Off'], ['economy', 'Economy'], ['army', 'Army']] as const)
+        .map(([k, l]) => `<button data-a="auto:${h.id}:${k}" class="${(h.auto ?? 'off') === k ? 'on' : ''}">${l}</button>`).join('')}</div></div>
+      ${h.auto ? `<p class="muted autonote">${h.auto === 'army' ? 'Each turn the city builds barracks, mines and farms for the army' : 'Each turn the city builds farms, sawmills and mines and grows'} — it keeps 20 wood, 20 food and 20 gold for you.</p>` : ''}
       <div class="blist">${rows.join('')}</div>
       ${cells.length ? '' : '<p class="muted">No farms, sawmills or mines yet: tap a cell on this city\u2019s land to build.</p>'}
       <div class="acts">${btn(`goto-city:${h.id}`, 'Show on map', '')}${btn('close', 'Close', '')}</div>`;
@@ -712,6 +719,13 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
       if (c === 'city:prev') { cityIdx--; continue; }
       if (c === 'city:next') { cityIdx++; continue; }
       if (c.startsWith('goto-city:')) { const h = s.halls[c.slice(10)]; modal(null); sel = { hex: { ...h.hex } }; refresh(); glideTo(h.hex); return; }
+      if (c.startsWith('auto:')) {
+        const [, hid, mode] = c.split(':');
+        setAuto(s, ME, hid, mode === 'off' ? undefined : mode as AutoFocus);
+        if (mode !== 'off') { const n = autoDevelop(s, ME).length; if (n) toast(`${s.halls[hid].name}: ${n} order${n > 1 ? 's' : ''} given`); }
+        saveGame(s); refresh();
+        continue;
+      }
       await handleAction(c);
     }
   };
@@ -1142,11 +1156,12 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
 
   const capital = Object.values(s.halls).filter((h) => h.owner === ME).sort((a, b) => a.order - b.order)[0];
   const g0 = playerGenerals(s, ME)[0];
-  sel = capital ? { hex: capital.hex, gid: g0 && key(g0.hex) === key(capital.hex) ? g0.id : undefined } : {};
+  sel = capital ? { hex: capital.hex, gid: g0 && key(g0.hex) === key(capital.hex) ? g0.id : undefined } : g0 ? { hex: g0.hex, gid: g0.id } : {};
+  if (s.players[ME].outlaw && !capital && s.turn === 1) requestAnimationFrame(() => toast('You are outlaws: no crown recognises you and every nation is your enemy. Take a city by force — it becomes the seat of your kingdom.'));
   bar(); sheet();
   // центрируем после того, как нижняя панель заполнилась и карта получила свой настоящий размер
   requestAnimationFrame(() => {
-    if (capital) view.centerOn(capital.hex);
+    if (capital) view.centerOn(capital.hex); else if (g0) view.centerOn(g0.hex);
     draw();
     checkEnd();
     void eventCard().then(offerCard).then(annexPrompt);

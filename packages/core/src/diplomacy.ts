@@ -28,8 +28,11 @@ export const relation = (s: GameState, a: string, b: string): Relation => {
   if (!isNation(s, a) || !isNation(s, b)) return a === b ? { state: 'alliance', since: 0 } : { state: 'war', since: 0, warFrom: 0 }; // нейтралы и разбойники
   a = top(s, a); b = top(s, b);
   if (a === b) return { state: 'alliance', since: 0 };
+  if (s.players[a].outlaw || s.players[b].outlaw) return { state: 'war', since: 0, warFrom: 0 }; // разбойника не признают: вечная война
   return s.diplo?.[pairKey(a, b)] ?? { state: 'peace', since: 0 };
 };
+/** Разбойник (или вассал разбойника): с ним не договариваются. */
+export const isOutlaw = (s: GameState, id: string): boolean => !!s.players[top(s, id)]?.outlaw;
 const setRelation = (s: GameState, a: string, b: string, r: Relation) => { (s.diplo ??= {})[pairKey(top(s, a), top(s, b))] = r; };
 
 /** Можно ли сейчас воевать (атаковать, входить на землю, осаждать). */
@@ -46,6 +49,7 @@ export const mayEnter = (s: GameState, a: string, owner: string | undefined): bo
 /** Почему нельзя объявить войну (или null — можно). */
 export const warBlocked = (s: GameState, a: string, b: string): string | null => {
   if (!isNation(s, a) || !isNation(s, b) || a === b) return 'not a nation';
+  if (isOutlaw(s, a) || isOutlaw(s, b)) return 'outlaws are always at war';
   const r = relation(s, a, b);
   if (r.state === 'war') return 'already at war';
   if (r.state === 'alliance') return 'you are allies — break the alliance first';
@@ -111,16 +115,30 @@ export const might = (s: GameState, pid: string): number =>
 const capitalOf = (s: GameState, pid: string) => Object.values(s.halls).filter((h) => h.owner === pid).sort((x, y) => x.order - y.order)[0];
 
 /** Соседи: страны, чьи города в пределах 14 клеток от моих. */
-export const neighbours = (s: GameState, pid: string): string[] => {
+export const neighbours = (s: GameState, pid: string, reach = 14): string[] => {
   const mine = Object.values(s.halls).filter((h) => h.owner === pid);
   return Object.keys(s.players).filter((x) => x !== pid && s.players[x].alive
-    && Object.values(s.halls).some((h) => h.owner === x && mine.some((m) => distance(m.hex, h.hex) <= 14)));
+    && Object.values(s.halls).some((h) => h.owner === x && mine.some((m) => distance(m.hex, h.hex) <= reach)));
+};
+
+/** Знает ли страна a о стране b (видела её землю или армию). */
+const knows = (s: GameState, a: string, b: string): boolean =>
+  a === b || !!s.met?.[a]?.[b] || Object.values(s.memory?.[a] ?? {}).some((m) => m.owner === b);
+
+/** Насколько враг x давит на страну pid в этой войне: армии x у её городов, осады, потерянные города. */
+const pressure = (s: GameState, pid: string, x: string): { near: boolean; sieged: boolean; lost: boolean } => {
+  const mine = Object.values(s.halls).filter((h) => h.owner === pid);
+  const since = relation(s, pid, x).since;
+  const near = Object.values(s.generals).some((g) => g.owner === x && !g.settler && mine.some((h) => distance(h.hex, g.hex) <= 4));
+  const sieged = mine.some((h) => h.siege && s.generals[h.siege.by]?.owner === x);
+  const lost = Object.values(s.halls).some((h) => h.owner === x && h.takenFrom === pid && (h.takenAt ?? -1) >= since);
+  return { near, sieged, lost };
 };
 
 /** Примет ли ИИ b мир от a. */
 export const acceptsPeace = (s: GameState, b: string, a: string, gold = 0): boolean => {
   const r = relation(s, a, b);
-  if (r.state !== 'war') return false;
+  if (r.state !== 'war' || isOutlaw(s, a) || isOutlaw(s, b)) return false;
   const ratio = might(s, b) / Math.max(1, might(s, a));
   const long = s.turn - r.since >= 10;
   return ratio < 0.8 || (long && ratio < 1.3) || gold >= 40 + might(s, b) * 0.1;
@@ -139,23 +157,27 @@ export const acceptsAlliance = (s: GameState, b: string, a: string): boolean => 
 /** Дипломатия ИИ в начале его хода: коалиции против агрессора, мир при проигрыше, войны по характеру, дань. */
 export const aiDiplomacy = (s: GameState, pid: string, opts: { wantsWar: boolean; human?: string }): void => {
   const p = s.players[pid];
-  if (!p?.ai || !p.alive) return;
+  if (!p?.ai || !p.alive || isOutlaw(s, pid)) return;
   // агрессия со временем остывает
   for (const k of Object.keys(s.aggro ?? {})) if (k === pid) s.aggro![k] = Math.max(0, s.aggro![k] * 0.97);
   const near = neighbours(s, pid);
   const me = might(s, pid);
-  // 1. проигрываем войну — ищем мира (с ИИ сразу, человеку — предложение с данью)
+  // 1. проигрываем войну — ищем мира (с ИИ сразу, человеку — предложение с данью).
+  //    Только если враг и правда давит: его армии у наших городов, осада или уже потерянный город.
+  //    Город отдаём, лишь когда дело совсем плохо: осада или потеря города и враг намного сильнее.
   for (const x of Object.keys(s.players)) {
-    if (!atWar(s, pid, x) || !s.players[x].alive) continue;
+    if (!atWar(s, pid, x) || !s.players[x].alive || isOutlaw(s, x)) continue;
+    const pr = pressure(s, pid, x);
+    if (!pr.near && !pr.sieged && !pr.lost) continue;
     if (me < 0.6 * might(s, x) && s.turn - relation(s, pid, x).since >= 3) {
       if (s.players[x].ai) { if (acceptsPeace(s, x, pid)) makePeace(s, pid, x); }
-      else if (!s.players[x].offer) {
+      else if (!s.players[x].offer && knows(s, x, pid)) {
         // за мир предлагает золото и то, чего у него в избытке; в отчаянии — ещё и город
         const terms = emptyTerms();
         terms.res.gold = Math.min(p.res.gold, 30 + Math.round(me * 0.1));
         for (const r of ['wood', 'food'] as const) if (p.res[r] > 120) terms.res[r] = Math.round(p.res[r] / 3 / 10) * 10;
         const cities = tradableCities(s, pid).sort((a, b) => cityValue(s, a) - cityValue(s, b));
-        if (me < 0.4 * might(s, x) && cities.length) terms.cities = [cities[0]];
+        if (me < 0.4 * might(s, x) && (pr.sieged || pr.lost) && cities.length) terms.cities = [cities[0]];
         s.players[x].offer = { from: pid, kind: 'peace', terms };
       }
     }
@@ -168,14 +190,15 @@ export const aiDiplomacy = (s: GameState, pid: string, opts: { wantsWar: boolean
       if (neighbours(s, y).includes(aggressor) && acceptsAlliance(s, y, pid)) makeAlliance(s, pid, y);
     }
     const friends = near.filter((y) => allied(s, pid, y)).reduce((a, y) => a + might(s, y), me);
-    if (!warBlocked(s, pid, aggressor) && friends > 1.1 * might(s, aggressor)) declareWar(s, pid, aggressor, ' to stop its conquests');
+    if (!warBlocked(s, pid, aggressor) && (s.players[aggressor].ai || knows(s, aggressor, pid)) && friends > 1.1 * might(s, aggressor)) declareWar(s, pid, aggressor, ' to stop its conquests');
   }
-  // 3. война по характеру: самая слабая из соседних стран, живой игрок — в первую очередь
+  // 3. война по характеру: самая слабая из близких стран (до 10 клеток — чтобы армия дошла), живой игрок — чуть охотнее.
+  //    Человеку войну объявляют и дань требуют, только если он уже встречался с этой страной.
   if (opts.wantsWar && !Object.keys(s.players).some((x) => relation(s, pid, x).state === 'war' && s.players[x].alive)) {
-    const prey = near.filter((x) => !warBlocked(s, pid, x))
-      .map((x) => ({ x, score: might(s, x) / Math.max(1, me) - (s.players[x].ai ? 0 : 0.35) }))
+    const prey = neighbours(s, pid, 10).filter((x) => !warBlocked(s, pid, x) && (s.players[x].ai || knows(s, x, pid)))
+      .map((x) => ({ x, score: might(s, x) / Math.max(1, me) - (s.players[x].ai ? 0 : 0.1) }))
       .sort((a, b) => a.score - b.score)[0];
-    if (prey && prey.score < 1) {
+    if (prey && prey.score < 0.9) {
       // слабый живой игрок рядом — сначала требуем дань
       if (!s.players[prey.x].ai && !s.players[prey.x].offer && might(s, prey.x) < 0.8 * me && (p.ai.tributeAt ?? -99) + 10 <= s.turn) {
         p.ai.tributeAt = s.turn;

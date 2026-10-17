@@ -200,3 +200,48 @@ test('герои: черта при найме, вторая — с третье
   assert.equal(s.players.p1.res.gold, 92);
   assert.ok(hasTrait(g, 'recruiter'));
 });
+
+test('сундук: фигура — сначала пешка; при полном наборе фигура не выпадает', () => {
+  const s = game();
+  const g = Object.values(s.generals).find((x) => x.owner === 'p1')!;
+  g.army = { p: 2, n: 2, b: 0, r: 0, q: 0 };
+  for (let i = 0; i < 300; i++) {
+    const before = { ...g.army };
+    const r = openChest(s, 'p1', g.id)!;
+    if (r.kind === 'piece') {
+      if (before.p < 8) assert.equal(r.piece, 'p');
+      g.army = { ...before };
+    }
+  }
+  g.army = { p: 8, n: 2, b: 2, r: 2, q: 1 };
+  for (let i = 0; i < 300; i++) assert.notEqual(openChest(s, 'p1', g.id)!.kind, 'piece');
+});
+
+test('авторазвитие: город сам строит, оставляя запас', async () => {
+  const { autoDevelop, setAuto, playerHalls } = await import('../src/index.ts');
+  const s = game();
+  const h = playerHalls(s, 'p1')[0];
+  s.players.p1.res = { wood: 400, food: 400, gold: 200 };
+  assert.ok(setAuto(s, 'p1', h.id, 'economy'));
+  const done = autoDevelop(s, 'p1');
+  assert.ok(done.length >= 1, 'что-то построено');
+  assert.ok(s.players.p1.res.wood >= 20 && s.players.p1.res.food >= 20 && s.players.p1.res.gold >= 20, 'запас не тронут');
+  setAuto(s, 'p1', h.id, undefined);
+  assert.deepEqual(autoDevelop(s, 'p1'), []);
+});
+
+test('разбойник: шайка без города, вечная война, без торговли; гибнет без армий', async () => {
+  const { relation, warBlocked, acceptChance, emptyTerms, endTurn, playerHalls, BANDIT_COUNT } = await import('../src/index.ts');
+  const s = newGame(europeMap(), [{ nation: 'spain', outlaw: true }, { nation: 'italy', ai: { aggression: 'moderate', ruler: 'x' } }], { elo: 1200, seed: 3, bandits: BANDIT_COUNT });
+  assert.equal(playerHalls(s, 'p1').length, 0);
+  assert.ok(Object.values(s.generals).some((g) => g.owner === 'p1'), 'у разбойника есть шайка');
+  assert.equal(relation(s, 'p1', 'p2').state, 'war');
+  assert.ok(warBlocked(s, 'p2', 'p1'));
+  assert.equal(acceptChance(s, 'p1', 'p2', { give: { ...emptyTerms(), res: { wood: 10, food: 0, gold: 0 } }, take: emptyTerms(), peace: true }), 0);
+  const food = s.players.p1.res.food;
+  endTurn(s); endTurn(s);
+  assert.ok(s.players.p1.res.food >= food, 'без города содержания нет');
+  for (const g of Object.values(s.generals)) if (g.owner === 'p1') delete s.generals[g.id];
+  endTurn(s);
+  assert.equal(s.players.p1.alive, false);
+});

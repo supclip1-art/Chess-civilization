@@ -10,7 +10,7 @@ import { freeCellNear } from './map.ts';
 import { next } from './rng.ts';
 import { type GameState, recomputeTerritory, say } from './state.ts';
 import { NATIONS } from './nations.ts';
-import { atWar, makePeace, might, relation } from './diplomacy.ts';
+import { atWar, isOutlaw, makePeace, might, relation } from './diplomacy.ts';
 
 export type Terms = { res: Res; cities: string[]; techs: TechId[] };
 export type Deal = { give: Terms; take: Terms; peace: boolean };
@@ -58,7 +58,7 @@ const termsValue = (s: GameState, judge: string, t: Terms): number => {
 
 /** Шанс (0..1), что ИИ to примет сделку от from. */
 export const acceptChance = (s: GameState, from: string, to: string, d: Deal): number => {
-  if (!valid(s, from, to, d)) return 0;
+  if (!valid(s, from, to, d) || isOutlaw(s, from) || isOutlaw(s, to)) return 0; // с разбойником не торгуют
   // для to: получает d.give, отдаёт d.take
   let score = termsValue(s, to, d.give) - termsValue(s, to, d.take) * 1.15;
   if (d.peace && relation(s, from, to).state === 'war') {

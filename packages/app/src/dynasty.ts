@@ -122,7 +122,8 @@ export const applyStartBonus = (s: GameState, me: string): void => {
   if (b === 'pawns' && g) g.army.p = Math.min(8, g.army.p + 2);
   if (b === 'militia') (p.research.techs ??= {}).militia = true;
   if (b === 'scouts') {
-    const cap = playerHalls(s, me)[0];
+    const cap = playerHalls(s, me)[0] ?? g;
+    if (!cap) return;
     const mem = ((s.memory ??= {})[me] ??= {});
     for (const c of Object.values(s.cells)) {
       const d = (Math.abs(c.hex.q - cap.hex.q) + Math.abs(c.hex.r - cap.hex.r) + Math.abs(c.hex.q + c.hex.r - cap.hex.q - cap.hex.r)) / 2;
