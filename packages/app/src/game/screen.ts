@@ -6,8 +6,8 @@ import { flagSvg } from './flags.ts';
 import { portraitSvg } from './portraits.ts';
 import { pieceHtml } from './pieces.ts';
 import { tr } from '../i18n.ts';
-import { MONETIZED, access, fmtLeft, onAccess, startClock, stopClock } from '../access.ts';
-import { timeUpDialog } from '../shop.ts';
+import { MONETIZED, access, autoLocked, fmtLeft, onAccess, startClock, stopClock } from '../access.ts';
+import { crownDialog, timeUpDialog } from '../shop.ts';
 import { startTutorial } from './tutorial.ts';
 import {
   canAfford, armyValue, WALLS, MARKET, TOWER, TOWER_TERRAIN, ROAD_WOOD_PER_CELL, ROAD_MAX, marketLevel, tradeQuote, trade, buildWalls, upgradeMarket, buildTower, roadPath, roadCost, roadLinked, buildRoad, cancelJob, WONDERS, WONDER, WONDER_IDS, wonderStatus, wonderBlocked, startWonder, type WonderId, seaRouteTargets, buildSeaRoute, seaRouteGold, coastal, routesOf, activeSeaRoutes, SEA_ROUTE, tradeRate, isCapital, demolish, demolishRefund, canPillage, pillage, pillageLoot, isOutlaw, setAuto, autoDevelop, type AutoFocus,   BARRACKS, BUILD_TURNS, BUILDING_TERRAIN, GENERAL_HIRE_GOLD, HIRE_LEVEL, NATIONS, PIECE_PRICE, RESEARCH, RESOURCE_COST,
@@ -945,7 +945,7 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
         <div class="cityheadmid">${crest(h.level)}<div><h2>${esc(h.name)}</h2><small class="muted">${i + 1} / ${n} · swipe for other cities</small></div></div>
         <button class="ghost navb" data-a="city:next" ${n < 2 ? 'disabled' : ''}>›</button></div>
       <div class="autorow"><span>Auto-development</span><div class="seg">${([['off', 'Off'], ['economy', 'Economy'], ['army', 'Army']] as const)
-        .map(([k, l]) => `<button data-a="auto:${h.id}:${k}" class="${(h.auto ?? 'off') === k ? 'on' : ''}">${l}</button>`).join('')}</div></div>
+        .map(([k, l]) => `<button data-a="auto:${h.id}:${k}" class="${(h.auto ?? 'off') === k ? 'on' : ''}">${k !== 'off' && autoLocked() ? '👑 ' : ''}${l}</button>`).join('')}</div></div>
       ${h.auto ? `<p class="muted autonote">${h.auto === 'army' ? 'Each turn the city builds barracks, mines and farms for the army' : 'Each turn the city builds farms, sawmills and mines and grows'}.</p>` : ''}
       <div class="blist">${rows.join('')}</div>
       ${cells.length ? '' : '<p class="muted">No farms, sawmills or mines yet: tap a cell on this city\u2019s land to build.</p>'}
@@ -964,6 +964,7 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
       if (c.startsWith('goto-city:')) { const h = s.halls[c.slice(10)]; modal(null); sel = { hex: { ...h.hex } }; refresh(); glideTo(h.hex); return; }
       if (c.startsWith('auto:')) {
         const [, hid, mode] = c.split(':');
+        if (mode !== 'off' && autoLocked() && !(await crownDialog(modal, ask, 'Auto-development comes with the Imperial Crown'))) continue;
         setAuto(s, ME, hid, mode === 'off' ? undefined : mode as AutoFocus);
         if (mode !== 'off') { const n = autoDevelop(s, ME).length; if (n) toast(`${s.halls[hid].name}: ${n} order${n > 1 ? 's' : ''} given`); }
         saveGame(s); refresh();
@@ -1281,6 +1282,7 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
     if (marched.length) { draw(); await sleep(450); }
     await interceptions(marched);
     if (!s.players[ME].alive || winner(s)) { busy = false; refresh(); checkEnd(); return; }
+    dropAuto();
     endTurn(s);
     try {
       while (s.order[s.current] !== ME && s.players[ME].alive && !winner(s)) {
@@ -1516,6 +1518,9 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
     busy = false;
     if (goOn) { startClock(() => void timeUp()); timeChip(); } else { saveGame(s); exit(); }
   };
+  /** Без короны авторазвитие выключено (старые сохранения, корона снята). */
+  const dropAuto = () => { if (autoLocked()) for (const h of Object.values(s.halls)) if (h.owner === ME) delete h.auto; };
+  dropAuto();
   startClock(() => void timeUp());
   (window as unknown as { __cc?: unknown }).__cc = { view, state: s, chest: chestScreen, api: { seaRouteTargets, buildSeaRoute, refresh: () => refresh(), event: () => eventCard(), offer: () => offerCard(), fight: (a: string, d: string, def: boolean) => fightBattle(a, d, def) } }; // для автотестов в браузере
 };

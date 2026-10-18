@@ -48,6 +48,8 @@ export const adsAvailable = (): boolean => MONETIZED && !!ADS_BLOCK && inTelegra
 export const chapterLocked = (id: number): boolean => MONETIZED && !st.premium && id > 2;
 export const mapLocked = (id: string): boolean => MONETIZED && !st.premium && id !== 'europe';
 export const outlawsLocked = (): boolean => MONETIZED && !st.premium;
+/** Авторазвитие городов — только с короной. */
+export const autoLocked = (): boolean => MONETIZED && !st.premium;
 
 // ---------- сервер ----------
 const call = async (path: string, body: Record<string, unknown> = {}): Promise<Access | null> => {

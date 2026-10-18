@@ -1146,4 +1146,7 @@ export const DICT: [string, string, string][] = [
   ['Farms produce +10 food at every level.', 'Las granjas dan +10 de comida en cada nivel.', 'Фермы дают +10 еды на любом уровне.'],
   ['Welcome! Your nation is', '¡Bienvenido! Tu nación es', 'Добро пожаловать! Ваш народ —'],
   ['engine failed to load', 'no se pudo cargar el motor', 'не удалось загрузить движок'],
+  ['Auto-development comes with the Imperial Crown', 'El desarrollo automático viene con la Corona imperial', 'Авторазвитие — с Императорской короной'],
+  ['City auto-development', 'Desarrollo automático de ciudades', 'Авторазвитие городов'],
+  ['cities build farms, mines and barracks on their own every turn', 'las ciudades construyen granjas, minas y cuarteles solas cada turno', 'города сами строят фермы, шахты и казармы каждый ход'],
 ];

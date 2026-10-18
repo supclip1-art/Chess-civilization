@@ -1,11 +1,12 @@
 // «Императорская корона»: что даёт, цена в Telegram Stars, покупка. Плюс окно «время на сегодня вышло» для партии.
 
-import { MONETIZED, access, adsAvailable, buyCrown, canBuy, fmtLeft, refreshAccess, watchAd } from './access.ts';
+import { MONETIZED, access, adsAvailable, autoLocked, buyCrown, canBuy, fmtLeft, refreshAccess, watchAd } from './access.ts';
 import { setBack, tap } from './tg.ts';
 
 const PERKS: [string, string, string][] = [
   ['📜', 'Chapters 3–8 of the Chronicles', 'from the Walls of Constantinople to the Checkmate of Empires'],
   ['🗺', 'Every map', 'Asia, the Mediterranean, Africa, the New World and South America — they open with your dynasty level'],
+  ['⟳', 'City auto-development', 'cities build farms, mines and barracks on their own every turn'],
   ['☠', 'Play as the Outlaws', 'after the Bandit bane achievement'],
   ['⏳', 'No daily limit', 'play as long as you like, without ads'],
 ];
@@ -73,5 +74,16 @@ export const timeUpDialog = async (modal: (html: string | null) => void, ask: ()
     if (c === 'menu') { modal(null); return false; }
     if (c === 'ad') { await watchAd(); continue; }
     if (c === 'buy') { await buyCrown(); continue; }
+  }
+};
+
+/** Окно «это с короной» внутри партии (например, авторазвитие). Возвращает true, если корона теперь есть. */
+export const crownDialog = async (modal: (html: string | null) => void, ask: () => Promise<string>, why: string): Promise<boolean> => {
+  for (;;) {
+    if (!autoLocked()) return true;
+    modal(`<div class="timeup"><h2>${why}</h2>${crownCard()}<div class="acts"><button class="act close" data-a="close">Not now</button></div></div>`);
+    const c = await ask();
+    if (c === 'buy') { await buyCrown(); continue; }
+    return false;
   }
 };
