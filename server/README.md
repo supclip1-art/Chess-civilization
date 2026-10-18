@@ -9,7 +9,21 @@
 
 Токен бота живёт **только** в секретах Cloudflare — ни в коде, ни в чате, ни в репозитории.
 
-## Один раз: настройка
+## Без терминала: всё через сайт Cloudflare
+
+1. **D1 → Create** → имя `checkmate-empires` → открыть базу → **Console** → вставить весь текст `schema.sql` → **Execute**.
+2. **Workers & Pages → Create → Worker** (Hello World) → имя `checkmate-empires` → **Deploy** → **Edit code** →
+   стереть всё и вставить весь `worker.js` → **Deploy**.
+3. Воркер → **Settings → Bindings → Add → D1 database**: имя переменной `DB`, база `checkmate-empires`.
+4. Воркер → **Settings → Variables and Secrets → Add**:
+   секреты (Secret) `BOT_TOKEN`, `WEBHOOK_SECRET`; текст (Text) `GAME_URL`, `ALLOWED_ORIGINS`, `CROWN_PRICE`, `FREE_MINUTES`, `AD_MINUTES`, `ADS_PER_DAY` — значения как в таблице ниже.
+5. Адрес воркера (`https://checkmate-empires.<имя>.workers.dev`) → в браузере открыть
+   `https://api.telegram.org/bot<ТОКЕН>/setWebhook?url=<АДРЕС>/bot&secret_token=<WEBHOOK_SECRET>` — должно быть `"ok":true`.
+6. GitHub → Settings → Secrets and variables → Actions → Variables: `CE_API` = адрес воркера.
+
+`worker.js` — тот же `src/index.ts`, собранный в один файл (`npx esbuild src/index.ts --bundle --format=esm --outfile=worker.js`).
+
+## Через терминал: настройка
 
 Понадобятся аккаунт Cloudflare (бесплатный) и Node.js на компьютере.
 
