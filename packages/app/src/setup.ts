@@ -9,6 +9,8 @@ import { flagSvg } from './game/flags.ts';
 import { portraitSvg } from './game/portraits.ts';
 import { dynasty, level, mapLevel, nationLevel, randomBonuses } from './dynasty.ts';
 import { setBack, tap } from './tg.ts';
+import { mapLocked, outlawsLocked } from './access.ts';
+import { openShop } from './shop.ts';
 
 export const MAPS = {
   europe: europeMap, asia: asiaMap, mediterranean: mediterraneanMap, newworld: newWorldMap, africa: africaMap, southamerica: southAmericaMap,
@@ -78,9 +80,9 @@ export const openSetup = (app: HTMLElement, back: () => void, start: (s: GameSta
     if (last && NATIONS[last] && last !== 'outlaws') nation = last;
     outlaw = localStorage.getItem('chessciv.outlaw') === '1';
   } catch { /* по умолчанию */ }
-  if (mapLevel(mapId) > lv) mapId = 'europe';
+  if (mapLevel(mapId) > lv || mapLocked(mapId)) mapId = 'europe';
   if (nationLevel(nation) > lv) nation = 'russia';
-  if (!canOutlaw) outlaw = false;
+  if (!canOutlaw || outlawsLocked()) outlaw = false;
   let bonuses = true, difficulty: Difficulty = 'club';
   try {
     bonuses = localStorage.getItem('chessciv.bonuses') !== '0';
@@ -95,15 +97,15 @@ export const openSetup = (app: HTMLElement, back: () => void, start: (s: GameSta
     <div class="sethero"><h1 class="wordmark small">New game</h1><p>Pick a world, a banner and the rules of war.</p></div>
     <h2 class="sethead">World</h2>
     <div class="mapstrip" id="maps">${(Object.keys(MAPS) as MapId[]).map((id) => {
-      const locked = mapLevel(id) > lv;
-      return `<button class="mapcard ${id === mapId ? 'on' : ''} ${locked ? 'locked' : ''}" data-m="${id}" ${locked ? 'disabled' : ''}>
-        <img src="${thumb(id)}" alt=""><b>${esc(MAPS[id]().name)}</b><small>${locked ? `🔒 Dynasty level ${mapLevel(id)}` : esc(MAP_BLURB[id])}</small></button>`;
+      const locked = mapLevel(id) > lv, crown = mapLocked(id);
+      return `<button class="mapcard ${id === mapId ? 'on' : ''} ${locked || crown ? 'locked' : ''} ${crown ? 'crowned' : ''}" data-m="${id}" ${crown ? 'data-crown="1"' : ''} ${locked && !crown ? 'disabled' : ''}>
+        <img src="${thumb(id)}" alt=""><b>${esc(MAPS[id]().name)}</b><small>${crown ? `👑 Imperial Crown${locked ? ` · dynasty level ${mapLevel(id)}` : ''}` : locked ? `🔒 Dynasty level ${mapLevel(id)}` : esc(MAP_BLURB[id])}</small></button>`;
     }).join('')}</div>
     <h2 class="sethead">Play as</h2>
     <div class="modes" id="mode">
       <button class="modecard ${outlaw ? '' : 'on'}" data-o="0"><span class="modeico">♛</span><b>A nation</b><small>Diplomacy, trade and alliances</small></button>
-      <button class="modecard ${outlaw ? 'on' : ''} ${canOutlaw ? '' : 'locked'}" data-o="1" ${canOutlaw ? '' : 'disabled'}><span class="modeico">${flagSvg('outlaws', 40)}</span><b>Outlaws</b>
-        <small>${canOutlaw ? 'No city, no crown, eternal war' : '🔒 Achievement: Bandit bane'}</small></button>
+      <button class="modecard ${outlaw ? 'on' : ''} ${canOutlaw && !outlawsLocked() ? '' : 'locked'}" data-o="1" ${outlawsLocked() ? 'data-crown="1"' : canOutlaw ? '' : 'disabled'}><span class="modeico">${flagSvg('outlaws', 40)}</span><b>Outlaws</b>
+        <small>${outlawsLocked() ? `👑 Imperial Crown${canOutlaw ? '' : ' · achievement Bandit bane'}` : canOutlaw ? 'No city, no crown, eternal war' : '🔒 Achievement: Bandit bane'}</small></button>
     </div>
     <div id="nationbox">
       <h2 class="sethead">Your nation <span class="muted" id="picked"></span></h2>
@@ -176,8 +178,9 @@ export const openSetup = (app: HTMLElement, back: () => void, start: (s: GameSta
   }, { passive: true });
   $('#prevN').onclick = () => { tap(); goTo(ABC.indexOf(nation) - 1); };
   $('#nextN').onclick = () => { tap(); goTo(ABC.indexOf(nation) + 1); };
-  for (const b of app.querySelectorAll<HTMLButtonElement>('#maps .mapcard')) b.onclick = () => { tap(); mapId = b.dataset.m as MapId; players = spawns(mapId); refresh(); };
-  for (const b of app.querySelectorAll<HTMLButtonElement>('#mode .modecard')) b.onclick = () => { tap(); outlaw = b.dataset.o === '1'; refresh(); };
+  const crownShop = () => openShop(app, () => openSetup(app, back, start));
+  for (const b of app.querySelectorAll<HTMLButtonElement>('#maps .mapcard')) b.onclick = () => { tap(); if (b.dataset.crown) { crownShop(); return; } mapId = b.dataset.m as MapId; players = spawns(mapId); refresh(); };
+  for (const b of app.querySelectorAll<HTMLButtonElement>('#mode .modecard')) b.onclick = () => { tap(); if (b.dataset.crown) { crownShop(); return; } outlaw = b.dataset.o === '1'; refresh(); };
   $('#bonus').onclick = () => { tap(); bonuses = !bonuses; refresh(); };
   for (const b of app.querySelectorAll<HTMLButtonElement>('#diff .diffcard')) b.onclick = () => { tap(); difficulty = b.dataset.d as Difficulty; refresh(); };
   for (const b of app.querySelectorAll<HTMLButtonElement>('.stepb')) b.onclick = () => {

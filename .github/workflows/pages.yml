@@ -26,8 +26,13 @@ jobs:
       - run: npm install
       - name: Rules core tests
         run: npm test --workspace @chess-civ/core
+      - name: Server tests
+        run: node --test server/test/*.test.ts
       - name: Build the Mini App
         run: npm run build --workspace @chess-civ/app
+        env:
+          CE_API: ${{ vars.CE_API }}
+          CE_ADSGRAM_BLOCK: ${{ vars.CE_ADSGRAM_BLOCK }}
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

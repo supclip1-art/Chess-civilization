@@ -7,6 +7,7 @@ export type NationId =
   | 'russia' | 'ukraine' | 'poland' | 'germany' | 'france' | 'britain' | 'spain' | 'italy' | 'turkey'
   | 'egypt' | 'arabia' | 'persia' | 'uzbekistan' | 'kazakhstan' | 'pakistan' | 'india' | 'bangladesh'
   | 'china' | 'korea' | 'japan' | 'vietnam' | 'indonesia' | 'nigeria' | 'mexico' | 'usa' | 'brazil'
+  | 'venice' | 'sicily' // только соперники первой главы кампании (карта «Италия»)
   | 'outlaws'; // разбойники — только для режима «Играть за разбойников»
 export type Aggression = 'warlike' | 'moderate' | 'peaceful';
 
@@ -158,6 +159,14 @@ export const NATIONS: Record<NationId, Nation> = {
     ['Deodoro da Fonseca', 'Pedro I', 'Pedro II'],
     'Rio de Janeiro, Salvador, São Paulo, Brasília, Recife, Manaus, Belém, Ouro Preto, Fortaleza, Curitiba, Porto Alegre, Belo Horizonte',
     { output: [{ kind: 'sawmill', from: 2, to: 5, res: 'wood', amount: 10 }] }),
+  venice: N('venice', 'Venice', 'Queen of the Adriatic', 'Every city except the capital brings 4 gold per turn.',
+    ['Enrico Dandolo', 'Pietro Orseolo', 'Francesco Foscari'],
+    'Venice, Padua, Treviso, Vicenza, Chioggia, Murano, Rovigo, Belluno, Udine, Aquileia, Ferrara, Mestre',
+    { goldPerCity: 4 }),
+  sicily: N('sicily', 'Sicily', 'Breadbasket of the Sea', 'Farms produce +10 food at every level.',
+    ['Agathocles', 'Hiero II', 'Gelon'],
+    'Syracuse, Catana, Gela, Leontini, Tauromenium, Akragas, Camarina, Megara, Selinus, Himera, Naxos, Enna',
+    { output: [{ kind: 'farm', from: 1, to: 5, res: 'food', amount: 10 }] }),
   outlaws: N('outlaws', 'Outlaws', 'Loot and Pillage', 'Every battle you win brings 20 gold. Without a city the band needs no food.',
     ['Ivo the Black', 'Margit Redhand', 'Old Grey Wolf'],
     'Freehold, Ravenrock, Crowfield, Wolfden, Blackmoor, Cutthroat Ford, Gallows Hill, Smugglers Cove, Thornwood, Ashgate, Redwater, Hollow Keep',
@@ -165,7 +174,9 @@ export const NATIONS: Record<NationId, Nation> = {
 };
 
 /** Порядок наций на экране выбора и для ИИ (разбойники — отдельный режим, в общий список не входят). */
-export const NATION_ORDER: NationId[] = (Object.keys(NATIONS) as NationId[]).filter((n) => n !== 'outlaws');
+/** Нации только для кампании: в обычную партию не попадают. */
+export const CAMPAIGN_NATIONS: NationId[] = ['venice', 'sicily'];
+export const NATION_ORDER: NationId[] = (Object.keys(NATIONS) as NationId[]).filter((n) => n !== 'outlaws' && !CAMPAIGN_NATIONS.includes(n));
 
 /** Названия городов нейтральных государств. */
 export const NEUTRAL_CITIES: string[] = [
@@ -191,6 +202,6 @@ const REGION: Record<NationId, keyof typeof COMMANDERS> = {
   spain: 'southern', italy: 'southern', turkey: 'middle', egypt: 'middle', arabia: 'middle', persia: 'middle',
   uzbekistan: 'steppe', kazakhstan: 'steppe', pakistan: 'south_asia', india: 'south_asia', bangladesh: 'south_asia',
   china: 'east_asia', korea: 'east_asia', japan: 'east_asia', vietnam: 'east_asia', indonesia: 'far', nigeria: 'far',
-  mexico: 'southern', usa: 'far', brazil: 'far', outlaws: 'outlaw',
+  mexico: 'southern', usa: 'far', brazil: 'far', venice: 'southern', sicily: 'southern', outlaws: 'outlaw',
 };
 export const commanderNames = (nation: NationId): string[] => COMMANDERS[REGION[nation]];

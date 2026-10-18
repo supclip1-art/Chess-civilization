@@ -674,6 +674,35 @@
     button.gcmd.war { border-color: color-mix(in srgb, var(--bad) 50%, var(--line)); background: linear-gradient(180deg, color-mix(in srgb, #f08a6c 18%, var(--bg)), var(--bg)); }
     button.gcmd.war b { color: var(--bad); }
     .gcmds.hunt { grid-template-columns: minmax(0, 160px); margin-top: 6px; } .gcmds.hunt button.gcmd { grid-template-columns: auto auto; justify-content: center; gap: 6px; padding: 7px 10px; }
+    .gbubble { position: fixed; z-index: 50; max-width: min(300px, calc(100vw - 16px)); padding: 8px 12px; border-radius: 12px; font-size: 13px; line-height: 1.35; color: #3a2604;
+      background: linear-gradient(#fff6d8, #f3d98c); border: 1px solid #c99b2e; box-shadow: 0 6px 16px rgba(0,0,0,.25); pointer-events: none; animation: gbub .18s ease-out; }
+    @keyframes gbub { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+    /* ---------- корона, лавка, бесплатное время ---------- */
+    button.crownbtn { display: grid; grid-template-columns: auto 1fr auto; grid-template-areas: "i b t" "i s t"; gap: 0 12px; align-items: center; text-align: left; padding: 12px 14px; border-radius: 18px;
+      color: #3a2604; background: linear-gradient(135deg, #fbe7a6, #efc350 55%, #d99c2b); border: 1px solid #b07b18; box-shadow: 0 4px 0 #a8741a, 0 8px 18px rgba(160, 105, 20, .3); }
+    button.crownbtn > span { grid-area: i; font-size: 28px; } button.crownbtn b { grid-area: b; font: 700 16px 'Cinzel', Georgia, serif; } button.crownbtn small { grid-area: s; font-size: 12px; color: #5d4114; }
+    button.crownbtn i { grid-area: t; font-style: normal; font-weight: 800; font-size: 13px; padding: 3px 10px; border-radius: 999px; background: rgba(255,255,255,.55); }
+    button.crownbtn.own { box-shadow: 0 2px 0 #a8741a; opacity: .92; }
+    .shop { display: flex; flex-direction: column; gap: 14px; padding-bottom: 24px; }
+    .crowncard { display: grid; justify-items: center; gap: 8px; text-align: center; padding: 18px 14px; border-radius: 22px; color: #3b2a12;
+      background: radial-gradient(120% 80% at 50% 0%, #fff4cc, #f3d98c 60%, #e0b45a); border: 1px solid #c99b2e; box-shadow: 0 10px 24px rgba(160, 105, 20, .25); }
+    .crowncard h2 { margin: 0; font: 700 24px 'Cinzel', Georgia, serif; } .crowncard > p { margin: 0; color: #6b4e1c; }
+    .crownico { font-size: 54px; filter: drop-shadow(0 4px 8px rgba(160, 105, 20, .45)); }
+    .perks { width: 100%; display: grid; gap: 8px; text-align: left; }
+    .perk { display: flex; gap: 10px; align-items: flex-start; padding: 9px 11px; border-radius: 14px; background: rgba(255,255,255,.55); }
+    .perk > span { font-size: 20px; } .perk b { display: block; font-size: 14.5px; } .perk small { color: #6b4e1c; font-size: 12.5px; }
+    .crowncard .buycrown { width: 100%; margin-top: 4px; }
+    .crownown { font-weight: 700; color: #6b4510; }
+    .freebox { padding: 12px 14px; border-radius: 18px; background: var(--card); border: 1px solid var(--line); }
+    .freebox ul { margin: 6px 0 8px; padding-left: 20px; } .freebox li { margin: 2px 0; } .freebox p { margin: 4px 0 8px; }
+    button.crownlock { width: 100%; padding: 11px; border-radius: 14px; font-weight: 700; color: #3a2604; background: linear-gradient(#f6cf6a, #d89e2c); box-shadow: 0 2px 0 #a8741a; }
+    .mapcard.crowned { opacity: 1 !important; filter: none !important; } .mapcard.crowned img { filter: grayscale(.6) brightness(.9); } .mapcard.crowned small { color: #9a6a10; font-weight: 700; }
+    .timechip { position: absolute; left: 10px; bottom: 10px; z-index: 2; padding: 4px 11px; border-radius: 999px; font-size: 13px; font-weight: 800; color: #3a2604;
+      background: linear-gradient(#fbf0d4, #ecd39c); border: 1px solid #c99b2e; box-shadow: 0 2px 6px rgba(0,0,0,.3); }
+    .timechip.low { color: #fff; background: linear-gradient(#f08a6c, #c84a2e); border-color: #7e2618; }
+    .timechip[hidden] { display: none; }
+    .timeup { display: grid; gap: 10px; text-align: center; } .timeup h2 { margin: 0; font-family: 'Cinzel', Georgia, serif; } .timeup > p { margin: 0; }
+    .tuico { font-size: 46px; } .timeup .ctiles { text-align: left; }
   </style>
   <script>
     // Автообновление: если вышла новая версия, а Telegram показал старую страницу из кеша — перезагрузить

@@ -125,13 +125,28 @@ export const roadPath = (s: GameState, pid: string, fromHall: string, toHall: st
   for (let k: string | null = goal; k; k = prev.get(k) ?? null) { const [qq, r] = k.split(',').map(Number); path.unshift({ q: qq, r }); }
   return path;
 };
+/** Два города уже связаны дорогой (готовой — по клеткам с дорогой — или строящейся в любую сторону). */
+export const roadLinked = (s: GameState, a: string, b: string): boolean => {
+  if (Object.values(s.players).some((p) => p.jobs.some((j) => j.kind === 'road' && ((j.hallId === a && j.to === b) || (j.hallId === b && j.to === a))))) return true;
+  const ha = s.halls[a], hb = s.halls[b];
+  if (!ha || !hb || !s.cells[key(ha.hex)]?.road) return false;
+  const goal = key(hb.hex);
+  const seen = new Set([key(ha.hex)]);
+  const q = [ha.hex];
+  while (q.length) {
+    const cur = q.shift()!;
+    if (key(cur) === goal) return true;
+    for (const n of neighbors(cur)) { const k = key(n); if (!seen.has(k) && s.cells[k]?.road) { seen.add(k); q.push(n); } }
+  }
+  return false;
+};
 export const roadCost = (s: GameState, path: Hex[]): Res => res(path.filter((h) => !s.cells[key(h)].road).length * ROAD_WOOD_PER_CELL, 0);
 export const buildRoad = (s: GameState, pid: string, fromHall: string, toHall: string): Result => {
   const p = s.players[pid];
   const path = roadPath(s, pid, fromHall, toHall);
   if (!path) return no('no way for a road between these cities');
   if (path.length - 1 > ROAD_MAX) return no(`too long for a road (${path.length - 1} cells, at most ${ROAD_MAX})`);
-  if (path.every((h) => s.cells[key(h)].road)) return no('the road is already there');
+  if (roadLinked(s, fromHall, toHall) || path.every((h) => s.cells[key(h)].road)) return no('these cities are already linked by road');
   if (p.jobs.some((j) => j.kind === 'road' && j.hallId === fromHall)) return no('a road is already being built from here');
   if (freeBuilders(s, pid, fromHall) < 1) return no(`all builders of ${s.halls[fromHall].name} are busy`);
   const c = roadCost(s, path);

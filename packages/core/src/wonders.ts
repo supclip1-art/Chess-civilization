@@ -3,8 +3,8 @@
 //     за партию и только в столице 3-го уровня. Начатую стройку видят все — идёт гонка: проигравшим
 //     возвращается половина вложенного, и они могут взяться за другое чудо. Бонус чуда — у хозяина города:
 //     захватил город — забрал и чудо.
-//   • Морской торговый путь — как дорога, только по воде: два своих приморских города (на их земле есть море),
-//     соединённые водой, приносят золото каждый ход, пока оба у одного хозяина.
+//   • Морской торговый путь — как дорога, только по воде: два своих приморских города (стоят у самого моря),
+//     соединённые водой — путь идёт только по морским клеткам, приносят золото каждый ход, пока оба у одного хозяина.
 
 import { ARMY_MAX, type Res } from './config.ts';
 import { buildTurns, canAfford, freeBuilders, playerHalls } from './economy.ts';
@@ -121,8 +121,9 @@ export const SEA_ROUTE = { woodPerCell: 6, max: 24, perCity: 2 };
 /** Золото за ход с пути: чем дальше плыть, тем дороже товар. */
 export const seaRouteGold = (cells: number): number => Math.min(8, 2 + Math.floor(cells / 4));
 
-const seaOf = (s: GameState, hallId: string): string[] => Object.values(s.cells).filter((c) => c.hall === hallId && c.terrain === 'water').map((c) => key(c.hex));
-/** Приморский ли город: на его земле есть море. */
+/** Морские клетки, примыкающие к самому городу: отсюда корабли и выходят в море. */
+const seaOf = (s: GameState, hallId: string): string[] => { const h = s.halls[hallId]; return h ? neighbors(h.hex).map(key).filter((k) => s.cells[k]?.terrain === 'water') : []; };
+/** Приморский ли город: стоит у самого моря. */
 export const coastal = (s: GameState, hallId: string): boolean => seaOf(s, hallId).length > 0;
 export const routesOf = (s: GameState, hallId: string) => (s.seaRoutes ?? []).filter((r) => r.a === hallId || r.b === hallId);
 const pending = (s: GameState, hallId: string) => Object.values(s.players).flatMap((p) => p.jobs).filter((j) => j.kind === 'searoute' && (j.hallId === hallId || j.to === hallId));
@@ -155,7 +156,7 @@ export const seaRouteCost = (path: string[]): Res => res(path.length * SEA_ROUTE
 export const seaRouteBlocked = (s: GameState, pid: string, a: string, b: string): string | null => {
   const ha = s.halls[a], hb = s.halls[b];
   if (!ha || !hb || ha.owner !== pid || hb.owner !== pid || a === b) return 'pick two of your cities';
-  if (!coastal(s, a) || !coastal(s, b)) return 'both cities need the sea on their land';
+  if (!coastal(s, a) || !coastal(s, b)) return 'both cities must stand on the coast';
   const pair = (r: { a: string; b: string } | { hallId: string; to: string }) => { const x = 'a' in r ? [r.a, r.b] : [r.hallId, r.to]; return x.includes(a) && x.includes(b); };
   if (routesOf(s, a).some(pair) || pending(s, a).some((j) => j.kind === 'searoute' && pair(j))) return 'these cities are already linked';
   if (routesOf(s, a).length + pending(s, a).length >= SEA_ROUTE.perCity) return `${ha.name} already has ${SEA_ROUTE.perCity} sea routes`;

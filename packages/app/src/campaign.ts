@@ -3,7 +3,7 @@
 // (обычно быстрее срока), ★★★ — ни один свой город не потерян. За главы, звёзды и особые подвиги — достижения.
 
 import {
-  NATIONS, finalScore, makeAlliance, nationStats, newGame, playerGenerals, playerHalls, recomputeTerritory, vassalsOf, winner,
+  NATIONS, italyMap, finalScore, makeAlliance, nationStats, newGame, playerGenerals, playerHalls, recomputeTerritory, vassalsOf, winner,
   type Difficulty, type GameState, type MapDef, type NationId,
 } from '../../core/src/index.ts';
 import { MAPS, type MapId } from './setup.ts';
@@ -20,7 +20,9 @@ export type Goal =
 
 export type Chapter = {
   id: number; name: string; era: string; story: string;
-  nation: NationId; map: MapId; spawn?: string; capitalName?: string;
+  nation: NationId; map: MapId | 'italy'; spawn?: string; capitalName?: string;
+  /** Места старта закреплены за нациями карты (Рим, Венеция, Сицилия). */
+  fixedSpawns?: boolean;
   rivals: NationId[]; difficulty: Difficulty; elo: number;
   goal: Goal; goalText: string; limit: number;
   /** Вторая звезда: условие и как его назвать. */
@@ -39,8 +41,8 @@ const fast = (turn: number) => ({ text: `by turn ${turn}`, check: (s: GameState)
 export const CHAPTERS: Chapter[] = [
   {
     id: 1, name: 'Rise of Rome', era: 'Italy · 3rd century BC',
-    story: 'A city of seven hills dreams of more. Bring the lands around Rome under one banner before the northern kingdoms wake.',
-    nation: 'italy', map: 'europe', spawn: '14,29', capitalName: 'Rome', rivals: ['france', 'germany', 'spain'], difficulty: 'novice', elo: 1000,
+    story: 'A city of seven hills dreams of more. Venice rules the north, Syracuse holds Sicily. Bring the lands of Italy under one banner before they do.',
+    nation: 'italy', map: 'italy', fixedSpawns: true, capitalName: 'Rome', rivals: ['venice', 'sicily'], difficulty: 'novice', elo: 1000,
     goal: { kind: 'cities', n: 5 }, goalText: 'Rule 5 cities', limit: 25, star2: fast(18),
     special: { id: 'veni_vidi_vici', check: (s) => s.turn <= 15 },
   },
@@ -110,7 +112,7 @@ export const totalStars = (): number => CHAPTERS.reduce((n, c) => n + chapterSta
 
 /** Начать главу: партия с заданной страной, местом старта, соперниками и сложностью. */
 export const startChapter = (ch: Chapter): GameState => {
-  const base: MapDef = MAPS[ch.map]();
+  const base: MapDef = ch.map === 'italy' ? italyMap() : MAPS[ch.map]();
   // своё место старта — первым, остальные по кругу (в главе места фиксированы, а не случайны)
   let spawns = base.spawns;
   if (ch.spawn) {
@@ -118,12 +120,14 @@ export const startChapter = (ch: Chapter): GameState => {
     if (i >= 0) spawns = [spawns[i], ...spawns.filter((_, j) => j !== i).sort(() => Math.random() - 0.5)];
   }
   const outlaw = ch.nation === 'outlaws';
-  const map: MapDef = { ...base, spawns, randomSpawns: !ch.spawn, spawnNations: undefined };
+  const map: MapDef = ch.fixedSpawns
+    ? { ...base, randomSpawns: false, spawnNations: ['italy', 'venice', 'sicily'] } // свои места: Рим, Венеция, Сиракузы
+    : { ...base, spawns, randomSpawns: !ch.spawn, spawnNations: undefined };
   const AGGR = ['warlike', 'moderate', 'peaceful'] as const;
   const s = newGame(map, [
     { nation: ch.nation, ...(outlaw ? { outlaw: true } : {}) },
     ...ch.rivals.map((n, i) => { const aggression = AGGR[i % 3]; return { nation: n, ai: { aggression, ruler: NATIONS[n].rulers[aggression] } }; }),
-  ], { elo: ch.elo, seed: Math.floor(Math.random() * 1e9), bandits: 8, difficulty: ch.difficulty });
+  ], { elo: ch.elo, seed: Math.floor(Math.random() * 1e9), bandits: ch.map === 'italy' ? 2 : 8, difficulty: ch.difficulty });
   const cap = playerHalls(s, ME)[0];
   if (cap && ch.capitalName) cap.name = ch.capitalName;
   ch.setup?.(s);

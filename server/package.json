@@ -1,0 +1,14 @@
+{
+  "name": "@chess-civ/server",
+  "private": true,
+  "type": "module",
+  "description": "Checkmate Empires server: Telegram Stars payments, daily free time, ad rewards (Cloudflare Worker + D1)",
+  "scripts": {
+    "test": "node --test test/*.test.ts",
+    "deploy": "wrangler deploy",
+    "db:init": "wrangler d1 execute checkmate-empires --remote --file=schema.sql"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  }
+}

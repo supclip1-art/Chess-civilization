@@ -20,7 +20,13 @@ const result = await build({
   outdir: dist,
   entryNames: '[name].[hash]',
   metafile: true,
-  define: { __BUILD__: JSON.stringify((process.env.GITHUB_SHA ?? 'local').slice(0, 7)) },
+  define: {
+    __BUILD__: JSON.stringify((process.env.GITHUB_SHA ?? 'local').slice(0, 7)),
+    // адрес сервера (оплата, лимит времени) и рекламный блок Adsgram — переменные репозитория CE_API и CE_ADSGRAM_BLOCK;
+    // пусто — игра без лимита и покупок, как раньше
+    __API__: JSON.stringify(process.env.CE_API ?? ''),
+    __ADS__: JSON.stringify(process.env.CE_ADSGRAM_BLOCK ?? ''),
+  },
 });
 const bundle = Object.keys(result.metafile.outputs).find((f) => f.endsWith('.js'));
 const bundleName = bundle.split('/').pop();

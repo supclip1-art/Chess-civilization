@@ -469,3 +469,28 @@ test('осаждавший разбит — осада снимается сра
   assert.equal(s.generals[foe.id], undefined);
   assert.equal(cap.siege, undefined, 'осада снята сразу');
 });
+
+test('карта «Италия»: Рим, Венеция и Сицилия — соперники ИИ, партия идёт', async () => {
+  const { italyMap, newGame, endTurn, aiEconomyTurn, aiMilitaryTurn, playerHalls, NATIONS } = await import('../src/index.ts');
+  const m = { ...italyMap(), randomSpawns: false, spawnNations: ['italy', 'venice', 'sicily'] as ('italy' | 'venice' | 'sicily')[] };
+  const s = newGame(m, [{ nation: 'italy' }, { nation: 'venice', ai: { aggression: 'moderate', ruler: NATIONS.venice.rulers.moderate } }, { nation: 'sicily', ai: { aggression: 'warlike', ruler: NATIONS.sicily.rulers.warlike } }], { elo: 1000, seed: 3 });
+  assert.equal(playerHalls(s, 'p2')[0].name, 'Venice');
+  assert.equal(playerHalls(s, 'p3')[0].name, 'Syracuse');
+  assert.ok(Object.values(s.halls).filter((h) => !s.players[h.owner]).length >= 10, 'вольные города между ними');
+  for (let t = 0; t < 45; t++) { const pid = s.order[s.current]; if (s.players[pid].ai) { aiEconomyTurn(s, pid); aiMilitaryTurn(s, pid); } endTurn(s); }
+  assert.ok(playerHalls(s, 'p2').length >= 1 && playerHalls(s, 'p3').length >= 1);
+});
+
+test('дорога между двумя городами строится один раз: обратно — нельзя', async () => {
+  const { buildRoad, roadLinked, playerHalls, capture, endTurn, distance } = await import('../src/index.ts');
+  const s = game();
+  const cap = playerHalls(s, 'p1')[0];
+  const other = Object.values(s.halls).filter((h) => h.owner !== 'p1' && !s.players[h.owner]).sort((a, b) => distance(a.hex, cap.hex) - distance(b.hex, cap.hex))[0];
+  capture(s, other.id, 'p1');
+  s.players.p1.res.wood = 999; other.builders = 2; cap.builders = 2;
+  assert.ok(buildRoad(s, 'p1', cap.id, other.id).ok);
+  assert.ok(!buildRoad(s, 'p1', other.id, cap.id).ok, 'обратную дорогу во время стройки нельзя');
+  for (let i = 0; i < 8; i++) endTurn(s);
+  assert.ok(roadLinked(s, other.id, cap.id));
+  assert.ok(!buildRoad(s, 'p1', other.id, cap.id).ok, 'и после постройки тоже');
+});

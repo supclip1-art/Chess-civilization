@@ -6,9 +6,11 @@ import { flagSvg } from './flags.ts';
 import { portraitSvg } from './portraits.ts';
 import { pieceHtml } from './pieces.ts';
 import { tr } from '../i18n.ts';
+import { MONETIZED, access, fmtLeft, onAccess, startClock, stopClock } from '../access.ts';
+import { timeUpDialog } from '../shop.ts';
 import { startTutorial } from './tutorial.ts';
 import {
-  canAfford, armyValue, WALLS, MARKET, TOWER, TOWER_TERRAIN, ROAD_WOOD_PER_CELL, ROAD_MAX, marketLevel, tradeQuote, trade, buildWalls, upgradeMarket, buildTower, roadPath, roadCost, buildRoad, cancelJob, WONDERS, WONDER, WONDER_IDS, wonderStatus, wonderBlocked, startWonder, type WonderId, seaRouteTargets, buildSeaRoute, seaRouteGold, coastal, routesOf, activeSeaRoutes, SEA_ROUTE, tradeRate, isCapital, demolish, demolishRefund, canPillage, pillage, pillageLoot, isOutlaw, setAuto, autoDevelop, type AutoFocus,   BARRACKS, BUILD_TURNS, BUILDING_TERRAIN, GENERAL_HIRE_GOLD, HIRE_LEVEL, NATIONS, PIECE_PRICE, RESEARCH, RESOURCE_COST,
+  canAfford, armyValue, WALLS, MARKET, TOWER, TOWER_TERRAIN, ROAD_WOOD_PER_CELL, ROAD_MAX, marketLevel, tradeQuote, trade, buildWalls, upgradeMarket, buildTower, roadPath, roadCost, roadLinked, buildRoad, cancelJob, WONDERS, WONDER, WONDER_IDS, wonderStatus, wonderBlocked, startWonder, type WonderId, seaRouteTargets, buildSeaRoute, seaRouteGold, coastal, routesOf, activeSeaRoutes, SEA_ROUTE, tradeRate, isCapital, demolish, demolishRefund, canPillage, pillage, pillageLoot, isOutlaw, setAuto, autoDevelop, type AutoFocus,   BARRACKS, BUILD_TURNS, BUILDING_TERRAIN, GENERAL_HIRE_GOLD, HIRE_LEVEL, NATIONS, PIECE_PRICE, RESEARCH, RESOURCE_COST,
   RESOURCE_OUTPUT, TAVERN, TOWN_HALL_FOUND, TOWN_HALL_UPGRADE, BUILDER_HIRE_FOOD, BUILDER_UPKEEP_FOOD, GENERAL_UPKEEP_FOOD, cityUpgradeCost, tavernCost, PIECES, barracksCost, buildOptions, buildingOutput, maxLevelAt, piecePrice, researchCost, researchTurns, resourceCost, aiEconomyTurn, aiMilitaryTurn, attack, endTurn, say,
   foundTownHall, freeBuilders, hireBuilder, hireGeneral, hirePiece, income, key, maxBuilders, move, playerGenerals,
   reachable, recruitElo, resolveBattle, startResearch, upgrade, upgradeBarracks, upgradeTavern, upgradeTownHall,
@@ -96,7 +98,7 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
       <button id="end" class="end">End turn</button>
     </header>
     <div class="mapwrap"><canvas id="map"></canvas><button id="tactics" class="tacbtn"></button>
-      <div class="soon" id="soon" hidden></div><button class="goalpill" id="goalpill" hidden></button><button id="vassalsbtn" class="tacbtn vasbtn" hidden></button><div class="rmenu"><button id="gensbtn" class="tacbtn"></button><button id="citiesbtn" class="tacbtn"></button></div></div>
+      <div class="soon" id="soon" hidden></div><button class="goalpill" id="goalpill" hidden></button><span class="timechip notr" id="timechip" hidden></span><button id="vassalsbtn" class="tacbtn vasbtn" hidden></button><div class="rmenu"><button id="gensbtn" class="tacbtn"></button><button id="citiesbtn" class="tacbtn"></button></div></div>
     <section class="sheet" id="sheet"></section>
     <div class="toast" id="toast" hidden></div><div class="aibanner" id="aibanner" hidden></div>
     <div class="veil" id="veil" hidden><div class="veilcard"><p class="veilturn" id="veilturn"></p><div class="veilflags" id="veilflags"></div><p id="veilmsg"></p><div class="veilbar"><i></i></div></div></div>
@@ -108,7 +110,7 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
   let warnedTurn = 0; // на этом ходу уже напомнили про армию, которая не ходила
   let busy = false;
 
-  const exit = () => { document.body.classList.remove('game'); app.className = 'stack'; setBack(null); onExit(); };
+  const exit = () => { stopClock(); offAccess(); document.body.classList.remove('game'); app.className = 'stack'; setBack(null); onExit(); };
   setBack(exit);
 
   /** Сообщение сверху. Пока оно на экране, кнопки карты (технологии, генералы, города) уезжают под него. */
@@ -532,9 +534,25 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
   };
 
   // ---------- действия ----------
+  /** Пояснение к способности генерала: пузырь над кнопкой на пару секунд (на телефоне подсказок при наведении нет). */
+  let bubbleTimer = 0;
+  const hintBubble = (b: HTMLElement, text: string) => {
+    document.querySelector('.gbubble')?.remove();
+    const r = b.getBoundingClientRect();
+    const el = document.createElement('div');
+    el.className = 'gbubble';
+    el.textContent = tr(text);
+    document.body.appendChild(el);
+    const w = el.offsetWidth;
+    el.style.left = `${Math.max(8, Math.min(window.innerWidth - w - 8, r.left + r.width / 2 - w / 2))}px`;
+    el.style.top = `${Math.max(8, r.top - el.offsetHeight - 8)}px`;
+    clearTimeout(bubbleTimer);
+    bubbleTimer = window.setTimeout(() => el.remove(), 2600);
+  };
   app.querySelector('#sheet')!.addEventListener('click', (ev) => {
     const b = (ev.target as HTMLElement).closest<HTMLButtonElement>('button[data-a]');
     if (!b || busy) return;
+    if (b.classList.contains('gcmd') && b.title) hintBubble(b, b.title);
     void handleAction(b.dataset.a!, b.querySelector('b')?.textContent ?? 'this');
   });
 
@@ -613,7 +631,7 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
     const others = playerHalls(s, ME).filter((h) => h.id !== hallId);
     modal(`<h2>⛙ Road from ${esc(s.halls[hallId].name)}</h2><p class="muted">Armies on a road go one cell further each turn. The road runs over your land or free land.</p>
       <div class="acts">${others.map((h) => { const path = roadPath(s, ME, hallId, h.id); const n = path ? path.length - 1 : 0;
-        return btn(`to:${h.id}`, `To ${esc(h.name)}`, !path ? 'no way through' : n > ROAD_MAX ? `${n} cells — too far` : path.every((x) => s.cells[key(x)].road) ? 'already connected' : `${n} cells · ${cost(roadCost(s, path))}`); }).join('')}${btn('close', 'Close', '')}</div>`);
+        return btn(`to:${h.id}`, `To ${esc(h.name)}`, !path ? 'no way through' : n > ROAD_MAX ? `${n} cells — too far` : roadLinked(s, hallId, h.id) || path.every((x) => s.cells[key(x)].road) ? 'already connected' : `${n} cells · ${cost(roadCost(s, path))}`); }).join('')}${btn('close', 'Close', '')}</div>`);
     const c = await ask();
     modal(null);
     if (c.startsWith('to:')) act(buildRoad(s, ME, hallId, c.slice(3)));
@@ -1480,5 +1498,24 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
     void brief.then(eventCard).then(offerCard).then(annexPrompt);
   });
   app.querySelector<HTMLButtonElement>('#goalpill')!.onclick = () => { if (!busy) { tap(); void briefing(true); } };
+  // бесплатные 30 минут в день: часы идут, пока партия на экране; кончились — окно с рекламой и короной
+  const timeChip = () => {
+    const el = app.querySelector<HTMLElement>('#timechip');
+    if (!el) return;
+    const a = access();
+    el.hidden = !MONETIZED || a.premium || a.secondsLeft === null;
+    el.textContent = `⏳ ${fmtLeft(a.secondsLeft)}`;
+    el.classList.toggle('low', (a.secondsLeft ?? 999) < 300);
+  };
+  const offAccess = onAccess(timeChip);
+  timeChip();
+  const timeUp = async () => {
+    while (busy) await sleep(500); // бой не прерываем — окно после него
+    busy = true;
+    const goOn = await timeUpDialog(modal, ask);
+    busy = false;
+    if (goOn) { startClock(() => void timeUp()); timeChip(); } else { saveGame(s); exit(); }
+  };
+  startClock(() => void timeUp());
   (window as unknown as { __cc?: unknown }).__cc = { view, state: s, chest: chestScreen, api: { seaRouteTargets, buildSeaRoute, refresh: () => refresh() } }; // для автотестов в браузере
 };

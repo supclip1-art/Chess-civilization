@@ -40,6 +40,8 @@ const NATION_LOOK: Record<NationId, Look> = {
   mexico: { skin: SKIN.tan, hair: HAIR.black, hairStyle: 'long', beard: 'none', head: 'feathers', robe: '#0f6b4f', trim: '#e0b13c', bg: '#f5ead8' },
   usa: { skin: SKIN.light, hair: HAIR.white, hairStyle: 'wig', beard: 'none', head: 'none', robe: '#24304f', trim: '#f1f1f1', bg: '#e3e8f3', suit: true },
   brazil: { skin: SKIN.fair, hair: HAIR.brown, hairStyle: 'short', beard: 'sideburns', head: 'crown', robe: '#14633a', trim: '#f2d16b', bg: '#fbf3c8' },
+  venice: { skin: SKIN.light, hair: HAIR.white, hairStyle: 'short', beard: 'full', head: 'cap', robe: '#b8862b', trim: '#8b1e1e', bg: '#f6ead2' },
+  sicily: { skin: SKIN.tan, hair: HAIR.black, hairStyle: 'short', beard: 'full', head: 'laurel', robe: '#f2ead8', trim: '#c9a227', bg: '#fbefc8' },
   outlaws: { skin: SKIN.fair, hair: HAIR.black, hairStyle: 'long', beard: 'full', head: 'wrap', robe: '#3b302a', trim: '#9a1f1f', bg: '#e3ddd4' },
 };
 

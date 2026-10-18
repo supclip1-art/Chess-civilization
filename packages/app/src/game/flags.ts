@@ -64,6 +64,13 @@ const FLAGS: Record<NationId, string> = {
   nigeria: v3('#008751', '#fff', '#008751'),
   mexico: `${v3('#006847', '#fff', '#ce1126')}<circle cx="15" cy="10" r="2.4" fill="#8c5a2b"/><path d="M12.8 11.6q2.2 1.6 4.4 0" stroke="#006847" stroke-width="0.7" fill="none"/>`,
   usa: usa(),
+  // Венеция: алое знамя со львом святого Марка (золотой лев-силуэт и нимб)
+  venice: `<rect width="30" height="20" fill="#9b1b1b"/><circle cx="13" cy="6.2" r="2.6" fill="none" stroke="#f2c94c" stroke-width="0.8"/>
+    <path d="M8 15.5c1.5-3 3-4.4 5-4.6l1.2-2.6 1.6 1.2c2 .2 3.6 1.2 4.6 2.8l2.6-1.6-.8 3.2 1.8 1.6H19.5l-1.2-1.4-3.5.4-1.6 1H8z" fill="#f2c94c"/>
+    <path d="M22 18h5M24.5 15.5v5" stroke="#f2c94c" stroke-width="0.6"/>`,
+  // Сицилия: красно-жёлтое знамя с тринакрией
+  sicily: `<path d="M0 0H30L0 20Z" fill="#c8102e"/><path d="M30 0V20H0Z" fill="#f7c600"/><circle cx="15" cy="10" r="3" fill="#f2d6b3" stroke="#6b3a1f" stroke-width="0.5"/>
+    <g stroke="#6b3a1f" stroke-width="1.1" stroke-linecap="round" fill="none"><path d="M15 7l-1-4.5 2 1M17.6 11.5l4.4 1.5-1.5 1.6M12.4 11.5l-3.6 3 .2-2.2"/></g>`,
   // разбойники: чёрное знамя, череп и скрещённые сабли
   outlaws: `<rect width="30" height="20" fill="#1c1a1a"/><g stroke="#e9e3d4" stroke-width="1.3" stroke-linecap="round"><path d="M8 16L22 5M22 16L8 5"/></g>
     <circle cx="15" cy="9" r="4.3" fill="#e9e3d4"/><rect x="12.6" y="11.6" width="4.8" height="2.8" rx="0.8" fill="#e9e3d4"/>

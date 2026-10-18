@@ -11,6 +11,10 @@ type TgWebApp = {
   BackButton: { show(): void; hide(): void; onClick(cb: () => void): void; offClick(cb: () => void): void };
   HapticFeedback?: { impactOccurred(style: 'light' | 'medium' | 'heavy'): void };
   initDataUnsafe?: { user?: { first_name?: string } };
+  /** Подписанные Telegram данные запуска — сервер по ним узнаёт игрока. */
+  initData?: string;
+  /** Окно оплаты по ссылке счёта (Stars). status: paid | cancelled | failed | pending. */
+  openInvoice?(url: string, cb?: (status: string) => void): void;
 };
 
 const tg = (): TgWebApp | undefined => (globalThis as { Telegram?: { WebApp?: TgWebApp } }).Telegram?.WebApp;
@@ -46,3 +50,13 @@ export const platformLabel = (): string => {
 };
 
 export const userName = (): string | undefined => tg()?.initDataUnsafe?.user?.first_name;
+
+/** Подписанные данные запуска (пусто вне Telegram). */
+export const initData = (): string => (inTelegram() ? tg()?.initData ?? '' : '');
+
+/** Открыть окно оплаты Telegram Stars; резолвится статусом: paid, cancelled, failed или pending. */
+export const openInvoice = (link: string): Promise<string> => new Promise((resolve) => {
+  const w = tg();
+  if (!w?.openInvoice) { resolve('failed'); return; }
+  w.openInvoice(link, (status) => resolve(status));
+});

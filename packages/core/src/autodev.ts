@@ -1,5 +1,6 @@
 // Авторазвитие города игрока: в начале хода город сам нанимает строителей, строит и улучшает здания и растёт.
-//   economy — ресурсы: фермы, лесопилки, рудники поровну, с упором на то, чего не хватает;
+//   economy — ровный доход: выравнивает приход дерева, еды (после содержания) и золота (×3 по ценности),
+//             строит то, чего приходит меньше всего; город растёт, как только места под здания почти кончились;
 //   army    — под армию: прежде всего казарма (до 5-го уровня) и таверна (до 4-го), затем рудники на золото;
 //             фермы — только когда еды не хватает на содержание.
 // Запаса не оставляет: тратит всё, на что хватает.
@@ -12,7 +13,7 @@ import {
   upgrade, upgradeBarracks, upgradeTownHall, upkeep,
 } from './economy.ts';
 import { distance, key } from './hex.ts';
-import { buildRoad, roadCost, roadPath } from './extras.ts';
+import { buildRoad, roadCost, roadLinked, roadPath } from './extras.ts';
 import { isCapital } from './map.ts';
 import { type GameState, say } from './state.ts';
 
@@ -61,20 +62,34 @@ export const autoDevelop = (s: GameState, pid: string): string[] => {
       const targets = Object.values(s.halls).filter((x) => x.owner === pid && x.id !== h.id).sort((a, b) => distance(a.hex, h.hex) - distance(b.hex, h.hex));
       for (const t of targets) {
         const path = roadPath(s, pid, h.id, t.id);
-        if (!path || path.every((c) => s.cells[key(c)].road)) continue;
+        if (!path || roadLinked(s, h.id, t.id) || path.every((c) => s.cells[key(c)].road)) continue;
         if (p.res.wood - roadCost(s, path).wood < ROAD_SPARE) break; // ближайшая дорога пока не по карману — ждём
         if (buildRoad(s, pid, h.id, t.id).ok) { done.push(`${h.name}: road to ${t.name}`); break; }
       }
     }
+    // город растёт раньше новых зданий: когда места почти кончились или ресурсов на рост хватает с запасом
+    const grow = () => {
+      const sl = citySlots(s, h.id);
+      const growCost = h.level < 3 ? cityUpgradeCost(s, pid, (h.level + 1) as 2 | 3) : null;
+      const rich = growCost && (['wood', 'food'] as const).every((r) => p.res[r] >= growCost[r] * 1.3 + RESERVE[r]);
+      if (growCost && (sl.used >= sl.max - 1 || rich) && !p.jobs.some((j) => j.kind === 'townhall' && j.hallId === h.id)
+        && affordable(p.res, growCost) && upgradeTownHall(s, pid, h.id).ok) done.push(`${h.name}: grows to level ${h.level + 1}`);
+    };
+    grow();
     // здания: лучшая выгода на единицу цены, пока есть свободные строители
     for (let guard = 0; guard < 4 && freeBuilders(s, pid, h.id) > 0; guard++) {
       const foodNet = income(s, pid).food - upkeep(s, pid);
       const weight = (k: ResourceBuilding): number => {
         const food = k === 'farm' || k === 'fishery';
         if (focus === 'army') return food ? (foodNet < 0 ? 3 : foodNet < 6 ? 0.8 : 0.25) : k === 'mine' ? 2.4 : 0.8; // армия: золото, еда — лишь бы хватало
-        if (food && foodNet < 5) return 3; // голод — сначала еда
-        const low = (r: keyof Res) => p.res[r] < 80;
-        return k === 'mine' ? (low('gold') ? 2 : 1.3) : food ? (low('food') ? 1.6 : 1) : low('wood') ? 1.6 : 1;
+        if (food && foodNet < 0) return 3; // голод — сначала еда
+        // ровный доход: чем меньше приходит ресурса (золото ×3 по ценности), тем выгоднее его здание
+        const inc = income(s, pid);
+        const flow = { wood: inc.wood, food: foodNet, gold: inc.gold * 3 };
+        const avg = (flow.wood + flow.food + flow.gold) / 3;
+        const r = k === 'mine' ? 'gold' : food ? 'food' : 'wood';
+        if (food && foodNet > 40 && foodNet > avg * 1.4) return 0; // еды и так с избытком — ферму не строим, ресурсы пойдут на рост и рудники
+        return Math.max(0.1, Math.min(5, ((Math.max(10, avg) + 10) / (Math.max(0, flow[r]) + 10)) ** 2));
       };
       const slots = citySlots(s, h.id);
       // свободные месторождения: под каждое держим место, рудник там рано или поздно встанет
@@ -94,7 +109,9 @@ export const autoDevelop = (s: GameState, pid: string): string[] => {
           const cost = resourceCost(s, pid, kind, level);
           if (!affordable(p.res, cost)) continue;
           const gain = RESOURCE_OUTPUT[kind][level - 1] - (RESOURCE_OUTPUT[kind][level - 2] ?? 0);
-          const score = (gain * weight(kind)) / (cost.wood + cost.food + 1);
+          const w = weight(kind);
+          if (w <= 0) continue;
+          const score = (gain * w) / (cost.wood + cost.food + 1);
           const hex = c.hex;
           if (!best || score > best.score) {
             best = { score, what: `${h.name}: ${kind} ${level > 1 ? `level ${level}` : 'built'}`, run: () => (level === 1 ? build(s, pid, hex, kind) : upgrade(s, pid, hex)).ok };
@@ -104,12 +121,7 @@ export const autoDevelop = (s: GameState, pid: string): string[] => {
       if (!best || !best.run()) break;
       done.push(best.what);
     }
-    // город растёт: как только места под здания почти кончились, а если ресурсов с запасом — и раньше
-    const sl = citySlots(s, h.id);
-    const growCost = h.level < 3 ? cityUpgradeCost(s, pid, (h.level + 1) as 2 | 3) : null;
-    const rich = growCost && (['wood', 'food'] as const).every((r) => p.res[r] >= growCost[r] * 2 + RESERVE[r]);
-    if (growCost && (sl.used >= sl.max - 1 || rich) && !p.jobs.some((j) => j.kind === 'townhall' && j.hallId === h.id)
-      && affordable(p.res, growCost) && upgradeTownHall(s, pid, h.id).ok) done.push(`${h.name}: grows to level ${h.level + 1}`);
+    grow(); // если строители освободились или ресурсов хватило только теперь
   }
   if (done.length) say(s, `auto-development: ${done.length} order${done.length > 1 ? 's' : ''} in your cities`, pid);
   return done;

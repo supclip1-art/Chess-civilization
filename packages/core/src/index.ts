@@ -14,6 +14,7 @@ export * from './maps/mediterranean.ts';
 export * from './maps/newworld.ts';
 export * from './maps/southamerica.ts';
 export * from './maps/africa.ts';
+export * from './maps/italy.ts';
 export * from './battle.ts';
 export * from './openings.ts';
 export * from './ai.ts';

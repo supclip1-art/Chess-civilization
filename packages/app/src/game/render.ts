@@ -285,10 +285,14 @@ export class MapView {
       if (!ha || !hb || !r.cells.some((k) => known.has(k))) continue;
       const pts = [this.toPixel(ha.hex), ...r.cells.map((k) => { const [q, rr] = k.split(',').map(Number); return this.toPixel({ q, r: rr }); }), this.toPixel(hb.hex)];
       const live = ha.owner === hb.owner;
+      // путь — от причала (край клетки города) по центрам морских клеток: линия не заходит на сушу
       const path = new Path2D();
-      path.moveTo(pts[0].x, pts[0].y);
-      for (let i = 1; i < pts.length - 1; i++) path.quadraticCurveTo(pts[i].x, pts[i].y, (pts[i].x + pts[i + 1].x) / 2, (pts[i].y + pts[i + 1].y) / 2);
-      path.lineTo(pts[pts.length - 1].x, pts[pts.length - 1].y);
+      const edge = (a: { x: number; y: number }, b: { x: number; y: number }) => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
+      const first = edge(pts[0], pts[1]), last = edge(pts[pts.length - 1], pts[pts.length - 2]);
+      path.moveTo(first.x, first.y);
+      for (let i = 1; i < pts.length - 1; i++) path.lineTo(pts[i].x, pts[i].y);
+      path.lineTo(last.x, last.y);
+      pts[0] = first; pts[pts.length - 1] = last;
       c.save(); c.lineCap = 'round';
       c.strokeStyle = 'rgba(10,40,70,.35)'; c.lineWidth = Math.max(3, S * 0.16); c.stroke(path);
       c.strokeStyle = live ? 'rgba(255,248,225,.9)' : 'rgba(255,255,255,.35)'; c.lineWidth = Math.max(1.5, S * 0.07);

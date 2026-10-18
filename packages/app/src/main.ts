@@ -17,6 +17,8 @@ import { LANGS, initI18n, lang, setLang } from './i18n.ts';
 import { initTelegram, platformLabel, setBack, tap, userName } from './tg.ts';
 import { applyLook, syncDynasty } from './dynasty.ts';
 import { dynastyButton, openDynasty } from './dynastyScreen.ts';
+import { MONETIZED, access, fmtLeft, refreshAccess } from './access.ts';
+import { openShop } from './shop.ts';
 
 declare const __BUILD__: string; // подставляет сборка: короткий хеш коммита
 
@@ -54,6 +56,8 @@ const home = () => {
       <button id="new" class="playbtn ${alive ? 'second' : ''}">New game</button>
       <button id="campaign" class="campbtn"><span class="campico">📜</span><span><b>Chronicles of Empires</b><small>Campaign · ${totalStars()} / 24 ★</small></span></button>
       ${dynastyButton()}
+      ${MONETIZED ? (access().premium ? '<button id="crown" class="crownbtn own"><span>👑</span><b>Imperial Crown</b><small>One purchase, yours forever</small></button>'
+        : `<button id="crown" class="crownbtn"><span>👑</span><b>Imperial Crown</b><small>all chapters and maps · no limit</small><i class="notr">⏳ ${fmtLeft(access().secondsLeft)}</i></button>`) : ''}
       <div class="homerow"><button id="howto" class="ghost">How to play</button><button id="settingsbtn" class="ghost" aria-expanded="false">Settings</button></div>
       <div class="settings" id="settings" hidden>
         <div class="row"><span>Language</span><div class="seg notr" id="langs">${LANGS.map(([l, n]) => `<button data-l="${l}" class="${l === lang ? 'on' : ''}">${n}</button>`).join('')}</div></div>
@@ -79,6 +83,7 @@ const home = () => {
   on('new', () => { page(); setup(); });
   on('campaign', () => { page(); onHome = false; openCampaign(app, home, (s) => { clearSave(); saveGame(s); openGame(app, s, home); }); });
   on('dynasty', () => { page(); onHome = false; openDynasty(app, home); });
+  on('crown', () => { page(); onHome = false; openShop(app, home); });
   for (const b of document.querySelectorAll<HTMLButtonElement>('#langs button')) b.addEventListener('click', () => { if (b.dataset.l !== lang) setLang(b.dataset.l as typeof lang); });
   on('music', () => { setMusic(!audioPrefs().music); home(); });
   on('sfx', () => { setSfx(!audioPrefs().sfx); home(); });
@@ -210,3 +215,5 @@ document.addEventListener('touchend', (e) => {
   lastTouch = now;
 }, { passive: false });
 home();
+// доступ (корона, бесплатное время) — с сервера; пришёл ответ — обновить главное меню
+void refreshAccess().then(() => { if (onHome) home(); });

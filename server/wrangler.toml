@@ -1,0 +1,20 @@
+# Сервер Checkmate Empires на Cloudflare Workers (бесплатный тариф).
+# Настройка и запуск — в server/README.md.
+name = "checkmate-empires"
+main = "src/index.ts"
+compatibility_date = "2025-06-01"
+
+[vars]
+GAME_URL = "https://supclip1-art.github.io/Chess-civilization/"
+ALLOWED_ORIGINS = "https://supclip1-art.github.io"
+CROWN_PRICE = "300"     # цена «Императорской короны» в Telegram Stars
+FREE_MINUTES = "30"     # бесплатной игры в день
+AD_MINUTES = "10"       # за одну просмотренную рекламу
+ADS_PER_DAY = "12"      # не больше реклам в день
+
+[[d1_databases]]
+binding = "DB"
+database_name = "checkmate-empires"
+database_id = "ВСТАВЬТЕ_ID_БАЗЫ"   # из вывода `wrangler d1 create checkmate-empires`
+
+# Секреты (не в этом файле!): wrangler secret put BOT_TOKEN, wrangler secret put WEBHOOK_SECRET
