@@ -1,4 +1,3 @@
-// Сервер Checkmate Empires одним файлом — для вставки в редактор Cloudflare (Workers → Edit code). Собран из src/index.ts.
 // src/index.ts
 var num = (v, d) => v && Number.isFinite(Number(v)) ? Number(v) : d;
 var now = () => Math.floor(Date.now() / 1e3);
@@ -77,7 +76,8 @@ var onUpdate = async (env, upd) => {
   if (msg.successful_payment) {
     const p = msg.successful_payment;
     const uid = msg.from.id;
-    await env.DB.prepare("INSERT OR IGNORE INTO payments (charge_id, user_id, amount, payload, at) VALUES (?, ?, ?, ?, ?)").bind(p.telegram_payment_charge_id, uid, p.total_amount, p.invoice_payload, now()).run();
+    const ins = await env.DB.prepare("INSERT OR IGNORE INTO payments (charge_id, user_id, amount, payload, at) VALUES (?, ?, ?, ?, ?)").bind(p.telegram_payment_charge_id, uid, p.total_amount, p.invoice_payload, now()).run();
+    if ((ins?.meta?.changes ?? ins?.changes ?? 1) > 0) await tellOwner(env, msg.from, p.total_amount);
     if (String(p.invoice_payload).startsWith("crown:")) {
       await loadUser(env, uid, 0);
       await env.DB.prepare("UPDATE users SET premium = 1 WHERE id = ?").bind(uid).run();
@@ -166,6 +166,21 @@ var index_default = {
       }
     }
     return json({ error: "unknown method" }, 404, h);
+  }
+};
+var tellOwner = async (env, from, amount) => {
+  try {
+    const owner = await env.DB.prepare("SELECT value FROM config WHERE key = 'owner'").first();
+    if (!owner?.value) return;
+    const t = await env.DB.prepare("SELECT COUNT(*) AS n, COALESCE(SUM(amount), 0) AS stars FROM payments WHERE refunded = 0").first();
+    const name = [from.first_name, from.last_name].filter(Boolean).join(" ") || `id ${from.id}`;
+    await bot(env, "sendMessage", {
+      chat_id: Number(owner.value),
+      text: `\u{1F451} \u041A\u043E\u0440\u043E\u043D\u0443 \u043A\u0443\u043F\u0438\u043B\u0438!
+${name}${from.username ? ` (@${from.username})` : ""} \u2014 ${amount} \u2B50
+\u0412\u0441\u0435\u0433\u043E \u043F\u043E\u043A\u0443\u043F\u043E\u043A: ${t?.n ?? 0}, \u0437\u0432\u0451\u0437\u0434: ${t?.stars ?? 0}`
+    });
+  } catch {
   }
 };
 export {

@@ -21,3 +21,8 @@ CREATE TABLE IF NOT EXISTS payments (
   at INTEGER NOT NULL,
   refunded INTEGER NOT NULL DEFAULT 0
 );
+-- Настройки сервера: owner — Telegram id владельца, ему приходят сообщения о покупках.
+CREATE TABLE IF NOT EXISTS config (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);

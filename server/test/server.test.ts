@@ -82,9 +82,13 @@ test('покупка короны: счёт в Stars, проверка пере�
   assert.deepEqual(calls.at(-1), { method: 'answerPreCheckoutQuery', body: { pre_checkout_query_id: 'pc1', ok: true } });
   await hook({ pre_checkout_query: { id: 'pc2', from: { id: 99 }, currency: 'XTR', total_amount: 1, invoice_payload: 'crown:99' } });
   assert.equal(calls.at(-1)!.body.ok, false, 'чужая сумма — отказ');
-  const pay = { message: { chat: { id: 99 }, from: { id: 99 }, successful_payment: { currency: 'XTR', total_amount: 300, invoice_payload: 'crown:99', telegram_payment_charge_id: 'ch1' } } };
+  await env.DB.prepare("INSERT INTO config (key, value) VALUES ('owner', '777')").run();
+  const pay = { message: { chat: { id: 99 }, from: { id: 99, first_name: 'Ann', username: 'ann' }, successful_payment: { currency: 'XTR', total_amount: 300, invoice_payload: 'crown:99', telegram_payment_charge_id: 'ch1' } } };
   await hook(pay);
   await hook(pay); // повтор того же обновления
+  const told = calls.filter((x) => x.method === 'sendMessage' && x.body.chat_id === 777);
+  assert.equal(told.length, 1, 'владельцу — одно сообщение о покупке, без повторов');
+  assert.match(told[0].body.text, /Ann \(@ann\) — 300 ⭐/);
   const me = await (await api('/api/me', { initData })).json();
   assert.equal(me.premium, true);
   assert.equal(me.secondsLeft, null, 'у короны нет лимита времени');

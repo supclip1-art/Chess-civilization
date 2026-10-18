@@ -116,8 +116,9 @@ export const onUpdate = async (env: Env, upd: Record<string, any>): Promise<void
   if (msg.successful_payment) {
     const p = msg.successful_payment;
     const uid = msg.from.id as number;
-    await env.DB.prepare('INSERT OR IGNORE INTO payments (charge_id, user_id, amount, payload, at) VALUES (?, ?, ?, ?, ?)')
-      .bind(p.telegram_payment_charge_id, uid, p.total_amount, p.invoice_payload, now()).run();
+    const ins = await env.DB.prepare('INSERT OR IGNORE INTO payments (charge_id, user_id, amount, payload, at) VALUES (?, ?, ?, ?, ?)')
+      .bind(p.telegram_payment_charge_id, uid, p.total_amount, p.invoice_payload, now()).run() as { changes?: number; meta?: { changes?: number } };
+    if ((ins?.meta?.changes ?? ins?.changes ?? 1) > 0) await tellOwner(env, msg.from, p.total_amount);
     if (String(p.invoice_payload).startsWith('crown:')) {
       await loadUser(env, uid, 0);
       await env.DB.prepare('UPDATE users SET premium = 1 WHERE id = ?').bind(uid).run();
@@ -210,4 +211,18 @@ export default {
     }
     return json({ error: 'unknown method' }, 404, h);
   },
+};
+
+/** Владельцу — сообщение о каждой новой покупке. Кто владелец, хранит таблица config (key = 'owner'), а не код. */
+const tellOwner = async (env: Env, from: { id: number; first_name?: string; last_name?: string; username?: string }, amount: number): Promise<void> => {
+  try {
+    const owner = await env.DB.prepare("SELECT value FROM config WHERE key = 'owner'").first<{ value: string }>();
+    if (!owner?.value) return;
+    const t = await env.DB.prepare('SELECT COUNT(*) AS n, COALESCE(SUM(amount), 0) AS stars FROM payments WHERE refunded = 0').first<{ n: number; stars: number }>();
+    const name = [from.first_name, from.last_name].filter(Boolean).join(' ') || `id ${from.id}`;
+    await bot(env, 'sendMessage', {
+      chat_id: Number(owner.value),
+      text: `👑 Корону купили!\n${name}${from.username ? ` (@${from.username})` : ''} — ${amount} ⭐\nВсего покупок: ${t?.n ?? 0}, звёзд: ${t?.stars ?? 0}`,
+    });
+  } catch { /* уведомление не должно мешать выдаче покупки */ }
 };
