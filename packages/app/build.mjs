@@ -24,7 +24,8 @@ const result = await build({
     __BUILD__: JSON.stringify((process.env.GITHUB_SHA ?? 'local').slice(0, 7)),
     // адрес сервера (оплата, лимит времени) и рекламный блок Adsgram — переменные репозитория CE_API и CE_ADSGRAM_BLOCK;
     // пусто — игра без лимита и покупок, как раньше
-    __API__: JSON.stringify(process.env.CE_API ?? ''),
+    // сервер игры (не секрет): переменная CE_API, иначе — боевой воркер; CE_API=off — собрать без оплаты и лимита
+    __API__: JSON.stringify(process.env.CE_API === 'off' ? '' : process.env.CE_API || 'https://checkmate-empires.supclip1.workers.dev'),
     __ADS__: JSON.stringify(process.env.CE_ADSGRAM_BLOCK ?? ''),
   },
 });

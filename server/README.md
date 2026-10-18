@@ -59,7 +59,7 @@ curl "https://api.telegram.org/bot<ТОКЕН>/setWebhook" \
 - `CE_ADSGRAM_BLOCK` = номер рекламного блока из кабинета Adsgram (можно добавить позже)
 
 После этого следующий пуш (или Actions → Build and publish → Run workflow) соберёт игру с оплатой и лимитом.
-Пока `CE_API` не задан, игра работает как раньше: всё открыто и без лимита.
+Если `CE_API` не задан, игра обращается к боевому серверу `https://checkmate-empires.supclip1.workers.dev` (вписан в `packages/app/build.mjs`). `CE_API=off` — сборка без оплаты и лимита.
 
 ## Настройки (wrangler.toml → [vars])
 
