@@ -15,6 +15,6 @@ ADS_PER_DAY = "12"      # не больше реклам в день
 [[d1_databases]]
 binding = "DB"
 database_name = "checkmate-empires"
-database_id = "ВСТАВЬТЕ_ID_БАЗЫ"   # из вывода `wrangler d1 create checkmate-empires`
+database_id = "346a733e-0b41-4440-b6ad-c1575819f5b6"
 
 # Секреты (не в этом файле!): wrangler secret put BOT_TOKEN, wrangler secret put WEBHOOK_SECRET
