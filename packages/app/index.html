@@ -703,6 +703,58 @@
     .timechip[hidden] { display: none; }
     .timeup { display: grid; gap: 10px; text-align: center; } .timeup h2 { margin: 0; font-family: 'Cinzel', Georgia, serif; } .timeup > p { margin: 0; }
     .tuico { font-size: 46px; } .timeup .ctiles { text-align: left; }
+    /* ---------- единый «конфетный» стиль: все окна, кнопки действий и карточки ---------- */
+    .dialog { border-radius: 24px 24px 0 0; max-height: 90dvh; overflow-y: auto; box-shadow: 0 -10px 30px rgba(0,0,0,.28);
+      background: radial-gradient(140% 40% at 50% 0%, color-mix(in srgb, #f6cf6a 13%, var(--bg)), var(--bg) 70%); }
+    .dialog::before { content: ''; align-self: center; width: 42px; height: 5px; border-radius: 99px; background: color-mix(in srgb, var(--muted) 40%, transparent); margin: -6px 0 2px; flex: none; }
+    .dialog h2 { font-family: 'Cinzel', Georgia, serif; font-size: 21px; margin: 2px 0; }
+    .dialog h3 { font-family: 'Cinzel', Georgia, serif; font-size: 16px; }
+    .acts { gap: 8px; }
+    button.act { border-radius: 15px; padding: 10px 12px; color: var(--ink);
+      background: linear-gradient(180deg, color-mix(in srgb, #f6cf6a 15%, var(--card)), var(--card));
+      border: 1.5px solid color-mix(in srgb, #c99b2e 45%, var(--line)); box-shadow: 0 2px 0 color-mix(in srgb, #c99b2e 35%, transparent); }
+    button.act:active { transform: translateY(1px); box-shadow: none; }
+    button.act b { color: var(--ink); font-weight: 700; font-size: 14.5px; }
+    button.act span { margin-top: 1px; }
+    button.act.danger { border-color: color-mix(in srgb, var(--bad) 55%, var(--line)); background: linear-gradient(180deg, color-mix(in srgb, #f08a6c 14%, var(--card)), var(--card)); }
+    button.act[data-a="close"], button.act[data-a="no"], button.act[data-a="cancel"], button.act[data-a="d:cancel"] { background: var(--card); box-shadow: none; border-color: var(--line); }
+    button.act[data-a="close"] b, button.act[data-a="no"] b, button.act[data-a="cancel"] b, button.act[data-a="d:cancel"] b { color: var(--muted); }
+    button.act[data-a="yes"], button.act[data-a="d:propose"], button.act[data-a="endgame"] { background: linear-gradient(#f6cf6a, #d89e2c); border-color: #b07b18; box-shadow: 0 3px 0 #a8741a; }
+    button.act[data-a="yes"] b, button.act[data-a="d:propose"] b, button.act[data-a="yes"] span, button.act[data-a="d:propose"] span { color: #3a2604; }
+    .card { border-radius: 18px; box-shadow: 0 6px 18px rgba(20, 20, 60, .1);
+      background: radial-gradient(120% 60% at 0% 0%, color-mix(in srgb, #f6cf6a 11%, var(--card)), var(--card) 65%); }
+    .techinfo { border-radius: 18px; border: 1.5px solid color-mix(in srgb, #c99b2e 35%, var(--line)); background: radial-gradient(120% 60% at 0% 0%, color-mix(in srgb, #f6cf6a 12%, var(--card)), var(--card) 65%); }
+    button.mini { border-radius: 999px; border-color: color-mix(in srgb, #c99b2e 50%, var(--line)); background: color-mix(in srgb, #f6cf6a 12%, var(--card)); }
+    .dres { padding: 6px 10px; border-radius: 14px; background: var(--card); border: 1px solid var(--line); }
+    .dialog .chips .chip, .chips button.chip { border-radius: 999px; }
+    .chips button.chip.on { color: #3a2604; background: linear-gradient(#f6cf6a, #d89e2c); border-color: #b07b18; font-weight: 700; }
+    .diplo .diprow { border-radius: 14px; border: 1.5px solid color-mix(in srgb, #c99b2e 30%, var(--line)); padding: 9px 12px; }
+    .stance { border-radius: 999px; }
+    .evcard { padding: 14px 12px 6px; border-radius: 20px; background: radial-gradient(120% 80% at 50% 0%, color-mix(in srgb, #f6cf6a 22%, var(--card)), var(--card) 70%); box-shadow: 0 6px 18px rgba(20, 20, 60, .12); }
+    .evcard h2 { font-family: 'Cinzel', Georgia, serif; }
+    .sheet > .muted:only-child { padding: 12px 14px; border-radius: 16px; background: color-mix(in srgb, #f6cf6a 10%, var(--card)); border: 1px dashed color-mix(in srgb, #c99b2e 45%, var(--line)); }
+    .cellhead b { font-family: 'Cinzel', Georgia, serif; font-size: 17px; }
+    /* бриф главы */
+    .brief h2 { font-size: 24px; } .brief .chflag svg { border-radius: 10px; box-shadow: 0 0 0 3px #e6b84a, 0 6px 14px rgba(0,0,0,.3); }
+    .brief .goalbox { border: 1px solid color-mix(in srgb, #c99b2e 50%, var(--line)); border-radius: 18px; padding: 12px 14px; }
+    button.playbtn.tobattle { width: 100%; }
+    .dialog > * { flex-shrink: 0; } /* окно прокручивается, а не сжимает содержимое (дерево технологий) */
+    button.act span .ico, button.act b .ico { display: inline-block; vertical-align: -3px; }
+    button.act span .amt { display: inline-flex; align-items: center; gap: 2px; }
+    .tmini { color: var(--ink); background: color-mix(in srgb, #e3b341 22%, var(--card)); border-color: color-mix(in srgb, #c99b2e 55%, transparent); }
+    .brow .bname { min-width: 0; }
+    /* обучение, «Конец хода», заголовки экранов, бонусы, кнопки на карте */
+    .tutorial { z-index: 9; border: 1.5px solid #d6a838; border-radius: 18px; padding: 12px 14px; box-shadow: 0 8px 22px rgba(0,0,0,.35);
+      background: radial-gradient(120% 90% at 0% 0%, color-mix(in srgb, #f6cf6a 22%, var(--bg)), var(--bg) 70%); }
+    .tutorial .tbtn { border-radius: 999px; font-weight: 700; color: #3a2604; background: linear-gradient(#f6cf6a, #d89e2c); box-shadow: 0 2px 0 #a8741a; border: 0; }
+    .tutorial .tbtn.ghost { color: var(--muted); background: transparent; box-shadow: none; border: 1px solid var(--line); font-weight: 500; }
+    button.end { border-radius: 14px; font-weight: 800; color: #3a2604; background: linear-gradient(#f8d77a, #d89e2c); border: 1px solid #b07b18; box-shadow: 0 3px 0 #a8741a, 0 4px 10px rgba(160, 105, 20, .3); }
+    button.end:active { transform: translateY(2px); box-shadow: 0 1px 0 #a8741a; }
+    h1 { font-family: 'Cinzel', Georgia, serif; }
+    .bonus { border-radius: 16px; border: 1.5px solid color-mix(in srgb, #c99b2e 40%, var(--line)); padding: 10px 12px; box-shadow: 0 2px 0 color-mix(in srgb, #c99b2e 25%, transparent);
+      background: radial-gradient(120% 80% at 0% 0%, color-mix(in srgb, #f6cf6a 14%, var(--card)), var(--card) 70%); }
+    .bonuses { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+    .tacbtn { border: 1px solid color-mix(in srgb, #c99b2e 45%, transparent) !important; }
   </style>
   <script>
     // Автообновление: если вышла новая версия, а Telegram показал старую страницу из кеша — перезагрузить

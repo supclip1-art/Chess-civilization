@@ -1,7 +1,8 @@
 // Экран боя: ручная партия игрока против генерала-соперника и просмотр сыгранной партии (реплей).
 
+import { tr } from '../i18n.ts';
 import { pieceHtml } from './pieces.ts';
-import { MAX_PLIES, battleFen, battleSides, repertoireFor, type GameState } from '../../../core/src/index.ts';
+import { battleFen, battleSides, repertoireFor, type GameState } from '../../../core/src/index.ts';
 import { tap } from '../tg.ts';
 import { type BattleRecord, type HumanAction, type Turn, runBattle } from './battle.ts';
 import { BoardView, armyGlyphs, isWhite, moveText, parseFen } from './board.ts';
@@ -60,7 +61,7 @@ export const playManual = (
     board.render(fen, { last: moves[moves.length - 1], check: lastCheck, ...marks });
     el.querySelector('#mtop')!.innerHTML = armyGlyphs(fen, !meWhite);
     el.querySelector('#mbot')!.innerHTML = armyGlyphs(fen, meWhite);
-    el.querySelector('#fply')!.textContent = `Half-move ${moves.length} / ${MAX_PLIES}`;
+    el.querySelector('#fply')!.textContent = tr(`Move ${Math.floor(moves.length / 2) + 1}`);
     el.querySelector('#fmoves')!.textContent = fens.length > 1 ? moveList(fens, moves) : '';
   };
 
@@ -158,7 +159,7 @@ export const showReplay = (app: HTMLElement, rec: BattleRecord, white: Side, bla
     board.render(fen, { last: i > 0 ? rec.moves[i - 1] : undefined });
     el.querySelector('#mtop')!.innerHTML = armyGlyphs(fen, flipped);
     el.querySelector('#mbot')!.innerHTML = armyGlyphs(fen, !flipped);
-    el.querySelector('#fply')!.textContent = `Half-move ${i} / ${rec.moves.length}`;
+    el.querySelector('#fply')!.textContent = tr(`Move ${Math.max(1, Math.ceil(i / 2))} / ${Math.ceil(rec.moves.length / 2)}`);
     el.querySelector('#fmoves')!.textContent = i ? moveList(rec.fens, rec.moves.slice(0, i)) : 'Starting position';
     el.querySelector('#fstatus')!.textContent = i <= rec.bookPlies && i > 0 ? 'Opening book' : '';
     el.querySelector<HTMLElement>('[data-f="play"] b')!.textContent = timer ? '⏸' : '▶';

@@ -926,7 +926,7 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
         ${h.walls ? '<span class="bstate">✓</span>' : up(`walls:${h.id}`, 'Build', WALLS.cost, state((j) => j.kind === 'walls' && j.hallId === h.id))}</div>`,
       `<div class="brow"><span class="bico">⚖</span><span class="bname"><b>Market</b> · ${h.market ? `level ${h.market}` : 'none'}</span><span class="bout">${tradeRate(s, ME) ? `<button class="ghost tradeb" data-a="trade">⇄ Trade · ${tradeRate(s, ME)}:1</button>` : 'trade resources'}</span>
         ${(h.market ?? 0) < 3 ? up(`market:${h.id}`, h.market ? `→ ${h.market + 1}` : 'Build', MARKET[((h.market ?? 0) + 1) as 1 | 2 | 3].cost, state((j) => j.kind === 'market' && j.hallId === h.id)) : '<span class="bstate">top level</span>'}</div>`,
-      ...(isCapital(s, h) ? [`<div class="brow"><span class="bico">✦</span><span class="bname"><b>Wonder of the world</b> · ${Object.entries(s.wonders ?? {}).filter(([, w]) => w.hallId === h.id).map(([id]) => WONDERS[id as WonderId].name).join(', ') || (p.wonder ? `building the ${WONDERS[p.wonder as WonderId].name}` : 'none')}</span><span class="bout">one per game, in the capital</span>
+      ...(isCapital(s, h) ? [`<div class="brow"><span class="bico">✦</span><span class="bname"><b>Wonder</b> · ${Object.entries(s.wonders ?? {}).filter(([, w]) => w.hallId === h.id).map(([id]) => WONDERS[id as WonderId].name).join(', ') || (p.wonder ? `building the ${WONDERS[p.wonder as WonderId].name}` : 'none')}</span><span class="bout">one per game, in the capital</span>
         <button class="ghost upb" data-a="wonders">All wonders</button></div>`] : []),
       ...(coastal(s, h.id) ? [`<div class="brow"><span class="bico">⛵</span><span class="bname"><b>Sea routes</b> · ${routesOf(s, h.id).length}/${SEA_ROUTE.perCity}</span><span class="bout">${routesOf(s, h.id).map((r) => `${esc(s.halls[r.a === h.id ? r.b : r.a]?.name ?? '')} +${seaRouteGold(r.cells.length)}`).join(' · ') || 'gold from trade by sea'}</span>
         ${routesOf(s, h.id).length < SEA_ROUTE.perCity ? `<button class="ghost upb" data-a="searoute:${h.id}">New</button>` : '<span class="bstate">✓</span>'}</div>`] : []),
@@ -1129,7 +1129,7 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
         <div class="chestbox">${CHEST_SVG}</div>
         <div class="chestprize"><span class="prizeico">${icon}</span><b>${esc(chestText(r)[0].toUpperCase() + chestText(r).slice(1))}</b>
           <small>${r.rarity === 'epic' ? 'Epic find' : r.rarity === 'rare' ? 'Rare find' : 'Spoils of war'}</small></div>
-      </div><div class="acts">${btn('close', 'Take it', '')}</div>`);
+      </div><button class="playbtn tobattle" data-a="close">Take it</button>`);
     chestOpen(r.rarity);
     await ask();
     modal(null);
@@ -1235,7 +1235,7 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
       <div class="goalbox"><span>🎯 <b>${esc(ch.goalText)}</b>${ch.goal.kind === 'hold' || ch.goal.kind === 'strongest' ? '' : ` — by turn ${ch.limit}`}</span>
         <span>Progress: <b>${esc(progress(s, ME))}</b></span>
         <span>★ the goal · ★★ ${esc(ch.star2.text)} · ★★★ never lose a city${s.campaign?.lostCity ? ' (already lost)' : ''}</span></div></div>
-      <div class="acts">${btn('close', again ? 'Back to the map' : 'To battle!', '')}${again ? btn('quit', 'Abandon the chapter', 'the game ends without stars') : ''}</div>`);
+      ${again ? `<div class="acts">${btn('close', 'Back to the map', '')}${btn('quit', 'Abandon the chapter', 'the game ends without stars').replace('class="act"', 'class="act danger"')}</div>` : '<button class="playbtn tobattle" data-a="close">To battle!</button>'}`);
     const c = await ask();
     modal(null);
     if (!again && s.campaign) { s.campaign.briefed = true; saveGame(s); }
@@ -1517,5 +1517,5 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
     if (goOn) { startClock(() => void timeUp()); timeChip(); } else { saveGame(s); exit(); }
   };
   startClock(() => void timeUp());
-  (window as unknown as { __cc?: unknown }).__cc = { view, state: s, chest: chestScreen, api: { seaRouteTargets, buildSeaRoute, refresh: () => refresh() } }; // для автотестов в браузере
+  (window as unknown as { __cc?: unknown }).__cc = { view, state: s, chest: chestScreen, api: { seaRouteTargets, buildSeaRoute, refresh: () => refresh(), event: () => eventCard(), offer: () => offerCard(), fight: (a: string, d: string, def: boolean) => fightBattle(a, d, def) } }; // для автотестов в браузере
 };

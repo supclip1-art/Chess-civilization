@@ -10,7 +10,7 @@ type Step = { text: (s: GameState, me: string) => string; done?: (s: GameState, 
 
 const STEPS: Step[] = [
   {
-    text: (s, me) => `Welcome, ruler of <b>${NATIONS[s.players[me].nation].name}</b>! This is your capital, <b>${playerHalls(s, me)[0]?.name}</b>. The land inside your coloured border is yours — you build only there.`,
+    text: (s, me) => `Welcome! Your nation is <b>${NATIONS[s.players[me].nation].name}</b>. This is your capital, <b>${playerHalls(s, me)[0]?.name}</b>. The land inside your coloured border is yours — you build only there.`,
   },
   {
     text: () => 'The top bar shows your <b>wood</b>, <b>food</b> and <b>gold</b> and how much each grows per turn. Food also feeds your army — if it runs out, pieces desert.',
