@@ -26,3 +26,10 @@ CREATE TABLE IF NOT EXISTS config (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL
 );
+-- Статистика: одна строка на игрока, день (UTC) и событие (open, battle, limit, ad, shop, buy).
+CREATE TABLE IF NOT EXISTS events (
+  user_id INTEGER NOT NULL,
+  day TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  PRIMARY KEY (user_id, day, kind)
+);

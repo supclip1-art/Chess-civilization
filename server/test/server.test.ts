@@ -101,3 +101,40 @@ test('/start присылает кнопку игры', async () => {
   await hook({ message: { chat: { id: 5 }, from: { id: 5 }, text: '/start' } });
   assert.equal(calls.at(-1)!.body.reply_markup.inline_keyboard[0][0].web_app.url, 'https://game');
 });
+
+test('бот отвечает на языке игрока', async () => {
+  await hook({ message: { chat: { id: 6 }, from: { id: 6, language_code: 'ru' }, text: '/start' } });
+  assert.match(calls.at(-1)!.body.text, /стройте империю/);
+  assert.equal(calls.at(-1)!.body.reply_markup.inline_keyboard[0][0].text, '▶ Играть');
+  await hook({ message: { chat: { id: 6 }, from: { id: 6, language_code: 'es' }, text: '/terms' } });
+  assert.match(calls.at(-1)!.body.text, /Corona imperial/);
+  await hook({ message: { chat: { id: 6 }, from: { id: 6, language_code: 'de' }, text: '/paysupport' } });
+  assert.match(calls.at(-1)!.body.text, /Payment questions/);
+  const r = await api('/api/invoice', { initData: sign({ id: 61, language_code: 'ru' }) });
+  assert.equal(r.status, 200);
+  assert.equal(calls.at(-1)!.body.title, 'Императорская корона');
+});
+
+test('статистика: события пишутся один раз в день, /stats — только владельцу', async () => {
+  const initData = sign({ id: 300 });
+  await api('/api/me', { initData });
+  await api('/api/me', { initData });
+  await api('/api/event', { initData, kind: 'battle' });
+  await api('/api/event', { initData, kind: 'hack' }); // чужие события не пишутся
+  const ev = await env.DB.prepare('SELECT kind FROM events WHERE user_id = 300 ORDER BY kind').all<{ kind: string }>();
+  assert.deepEqual(ev.results.map((x) => x.kind), ['battle', 'open']);
+  const before = calls.length;
+  await hook({ message: { chat: { id: 5 }, from: { id: 5 }, text: '/stats' } });
+  assert.equal(calls.length, before, 'чужому — ничего');
+  await hook({ message: { chat: { id: 777 }, from: { id: 777 }, text: '/stats' } });
+  const txt = calls.at(-1)!.body.text as string;
+  assert.match(txt, /Игроков всего: \d+/);
+  assert.match(txt, /дошли до битвы — \d+%/);
+});
+
+test('/setup — только с ключом, ставит описания на трёх языках', async () => {
+  assert.equal((await worker.fetch(new Request('https://srv/setup?key=bad'), env)).status, 403);
+  const r = await worker.fetch(new Request('https://srv/setup?key=whs'), env);
+  assert.equal(await r.text(), 'OK: default, en, ru, es');
+  assert.ok(calls.some((c) => c.method === 'setMyDescription' && c.body.language_code === 'ru' && /шахматы/.test(c.body.description)));
+});

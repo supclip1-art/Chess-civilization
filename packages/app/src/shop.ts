@@ -1,6 +1,6 @@
 // «Императорская корона»: что даёт, цена в Telegram Stars, покупка. Плюс окно «время на сегодня вышло» для партии.
 
-import { MONETIZED, access, adsAvailable, autoLocked, buyCrown, canBuy, fmtLeft, refreshAccess, watchAd } from './access.ts';
+import { MONETIZED, access, adsAvailable, autoLocked, buyCrown, track, canBuy, fmtLeft, refreshAccess, watchAd } from './access.ts';
 import { setBack, tap } from './tg.ts';
 
 const PERKS: [string, string, string][] = [
@@ -17,6 +17,7 @@ const NO_AD = 'No ad is available right now. Try again in a minute.';
 /** Карточка короны (общая для экрана лавки и окна «время вышло»). */
 export const crownCard = (): string => {
   const a = access();
+  if (!a.premium) track('shop');
   return `<div class="crowncard"><span class="crownico">👑</span><h2>Imperial Crown</h2><p class="muted">One purchase, yours forever</p>
     <div class="perks">${PERKS.map(([i, b, s]) => `<div class="perk"><span>${i}</span><div><b>${b}</b><small>${s}</small></div></div>`).join('')}</div>
     ${a.premium ? '<p class="crownown">👑 The crown is yours. Thank you!</p>'

@@ -6,6 +6,7 @@
 // Вне Telegram (обычный браузер) подписи нет: лимит считается в браузере, а купить корону можно только в Telegram.
 
 import { initData, inTelegram, openInvoice } from './tg.ts';
+import { lang } from './i18n.ts';
 
 declare const __API__: string;
 declare const __ADS__: string;
@@ -56,7 +57,7 @@ const call = async (path: string, body: Record<string, unknown> = {}): Promise<A
   try {
     const r = await fetch(`${API}${path}`, {
       method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ initData: initData(), tz: -new Date().getTimezoneOffset(), ...body }),
+      body: JSON.stringify({ initData: initData(), tz: -new Date().getTimezoneOffset(), lang, ...body }),
     });
     if (!r.ok) return null;
     return (await r.json()) as Access;
@@ -85,6 +86,14 @@ export const refreshAccess = async (): Promise<void> => {
     return;
   }
   apply(await call('/api/me'));
+};
+
+/** Шаг игрока для статистики сервера (первая битва, магазин, «купить»). Раз в день на вид события; ошибки не важны. */
+const tracked = new Set<string>();
+export const track = (kind: 'battle' | 'shop' | 'buy'): void => {
+  if (!MONETIZED || !initData() || tracked.has(kind)) return;
+  tracked.add(kind);
+  void call('/api/event', { kind });
 };
 
 // ---------- часы игры ----------
@@ -154,9 +163,10 @@ export const watchAd = async (): Promise<boolean> => {
 /** Купить корону: счёт Stars → окно оплаты Telegram → ждём, пока сервер получит платёж. */
 export const buyCrown = async (): Promise<'paid' | 'cancelled' | 'failed'> => {
   if (!canBuy()) return 'failed';
+  track('buy');
   let link = '';
   try {
-    const r = await fetch(`${API}/api/invoice`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ initData: initData() }) });
+    const r = await fetch(`${API}/api/invoice`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ initData: initData(), lang }) });
     if (r.status === 409) { await refreshAccess(); return 'paid'; }
     link = ((await r.json()) as { link?: string }).link ?? '';
   } catch { return 'failed'; }

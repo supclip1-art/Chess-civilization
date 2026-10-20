@@ -6,7 +6,7 @@ import { flagSvg } from './flags.ts';
 import { portraitSvg } from './portraits.ts';
 import { pieceHtml } from './pieces.ts';
 import { tr } from '../i18n.ts';
-import { MONETIZED, access, autoLocked, fmtLeft, onAccess, startClock, stopClock } from '../access.ts';
+import { MONETIZED, access, autoLocked, fmtLeft, track, onAccess, startClock, stopClock } from '../access.ts';
 import { crownDialog, timeUpDialog } from '../shop.ts';
 import { startTutorial } from './tutorial.ts';
 import {
@@ -1032,6 +1032,7 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
 
   /** Бой с участием игрока: атака (игрок белыми) или защита от ИИ (игрок чёрными). */
   const fightBattle = async (attackerId: string, defenderId: string, defending: boolean): Promise<void> => {
+    track('battle');
     const att = s.generals[attackerId], def = s.generals[defenderId];
     const city = Object.values(s.halls).find((h) => key(h.hex) === key(def.hex));
     const title = city ? `Battle for ${city.name}` : 'Battle';

@@ -99,6 +99,41 @@ const bot = async <T = unknown>(env: Env, method: string, body: unknown): Promis
 
 const CROWN_PAYLOAD = (uid: number) => `crown:${uid}`;
 
+// ---------- тексты бота на языке игрока (язык Telegram: ru, es, иначе английский) ----------
+type Lang = 'en' | 'ru' | 'es';
+export const langOf = (code: unknown): Lang => { const c = String(code ?? '').slice(0, 2).toLowerCase(); return c === 'ru' || c === 'uk' || c === 'be' ? 'ru' : c === 'es' ? 'es' : 'en'; };
+const T = {
+  start: {
+    en: '♛ Checkmate Empires — build an empire where every war is a real chess game.\n\nGrow cities, hire generals, raise an army of chess pieces and checkmate your rivals.',
+    ru: '♛ Checkmate Empires — стройте империю, где каждая война — настоящая шахматная партия.\n\nРазвивайте города, нанимайте генералов, собирайте армию из шахматных фигур и ставьте мат соседям.',
+    es: '♛ Checkmate Empires — construye un imperio donde cada guerra es una partida de ajedrez real.\n\nHaz crecer tus ciudades, contrata generales, reúne un ejército de piezas y da jaque mate a tus rivales.',
+  },
+  play: { en: '▶ Play', ru: '▶ Играть', es: '▶ Jugar' },
+  thanks: {
+    en: '👑 The Imperial Crown is yours! All chapters, maps, city auto-development and the Outlaws are open, and the day has no limit. Thank you!',
+    ru: '👑 Императорская корона ваша! Открыты все главы, карты, авторазвитие городов и игра за разбойников, а лимита времени больше нет. Спасибо!',
+    es: '👑 ¡La Corona imperial es tuya! Tienes todos los capítulos, mapas, el desarrollo automático de ciudades y los Forajidos, y el día no tiene límite. ¡Gracias!',
+  },
+  support: {
+    en: 'Payment questions: describe the problem in a message here and we will answer. Purchases are refunded in Telegram Stars.',
+    ru: 'Вопросы об оплате: опишите проблему сообщением здесь, мы ответим. Покупки возвращаются в Telegram Stars.',
+    es: 'Preguntas sobre pagos: describe el problema en un mensaje aquí y te responderemos. Las compras se reembolsan en Telegram Stars.',
+  },
+  terms: {
+    en: 'The Imperial Crown is a one-time purchase in Telegram Stars. It unlocks chapters 3–8 of the campaign, all maps (opened through dynasty levels), city auto-development, playing as the Outlaws and unlimited play time.',
+    ru: 'Императорская корона — разовая покупка за Telegram Stars. Она открывает главы 3–8 кампании, все карты (по уровню династии), авторазвитие городов, игру за разбойников и игру без лимита времени.',
+    es: 'La Corona imperial es una compra única en Telegram Stars. Desbloquea los capítulos 3–8 de la campaña, todos los mapas (según el nivel de la dinastía), el desarrollo automático de ciudades, jugar como los Forajidos y tiempo de juego ilimitado.',
+  },
+  changed: { en: 'This offer has changed. Please open the shop again.', ru: 'Предложение изменилось. Откройте магазин ещё раз.', es: 'La oferta ha cambiado. Abre la tienda de nuevo.' },
+  crown: { en: 'Imperial Crown', ru: 'Императорская корона', es: 'Corona imperial' },
+  crownDesc: {
+    en: 'Chapters 3–8 of the campaign, all maps, city auto-development, the Outlaws and no daily time limit.',
+    ru: 'Главы 3–8 кампании, все карты, авторазвитие городов, разбойники и игра без лимита времени.',
+    es: 'Capítulos 3–8 de la campaña, todos los mapas, desarrollo automático de ciudades, los Forajidos y sin límite diario.',
+  },
+} satisfies Record<string, Record<Lang, string>>;
+const tx = (k: keyof typeof T, l: Lang) => T[k][l];
+
 /** Ответ на обновление бота (вебхук). */
 export const onUpdate = async (env: Env, upd: Record<string, any>): Promise<void> => {
   const price = num(env.CROWN_PRICE, 300);
@@ -107,11 +142,12 @@ export const onUpdate = async (env: Env, upd: Record<string, any>): Promise<void
     const q = upd.pre_checkout_query;
     const ok = q.currency === 'XTR' && q.total_amount === price && q.invoice_payload === CROWN_PAYLOAD(q.from.id);
     await bot(env, 'answerPreCheckoutQuery', ok ? { pre_checkout_query_id: q.id, ok: true }
-      : { pre_checkout_query_id: q.id, ok: false, error_message: 'This offer has changed. Please open the shop again.' });
+      : { pre_checkout_query_id: q.id, ok: false, error_message: tx('changed', langOf(q.from.language_code)) });
     return;
   }
   const msg = upd.message;
   if (!msg) return;
+  const lang = langOf(msg.from?.language_code);
   // оплата прошла: записываем платёж (повтор того же платежа ничего не выдаст второй раз) и открываем корону
   if (msg.successful_payment) {
     const p = msg.successful_payment;
@@ -122,7 +158,7 @@ export const onUpdate = async (env: Env, upd: Record<string, any>): Promise<void
     if (String(p.invoice_payload).startsWith('crown:')) {
       await loadUser(env, uid, 0);
       await env.DB.prepare('UPDATE users SET premium = 1 WHERE id = ?').bind(uid).run();
-      await bot(env, 'sendMessage', { chat_id: msg.chat.id, text: '👑 The Imperial Crown is yours! All chapters, maps and the Outlaws are open, and the day has no limit. Thank you!' });
+      await bot(env, 'sendMessage', { chat_id: msg.chat.id, text: tx('thanks', lang) });
     }
     return;
   }
@@ -130,13 +166,17 @@ export const onUpdate = async (env: Env, upd: Record<string, any>): Promise<void
   if (text.startsWith('/start')) {
     await bot(env, 'sendMessage', {
       chat_id: msg.chat.id,
-      text: '♛ Checkmate Empires — build an empire where every war is a real chess game.',
-      reply_markup: { inline_keyboard: [[{ text: '▶ Play', web_app: { url: env.GAME_URL } }]] },
+      text: tx('start', lang),
+      reply_markup: { inline_keyboard: [[{ text: tx('play', lang), web_app: { url: env.GAME_URL } }]] },
     });
   } else if (text.startsWith('/paysupport')) {
-    await bot(env, 'sendMessage', { chat_id: msg.chat.id, text: 'Payment questions: describe the problem in a message here and we will answer. Purchases are refunded in Telegram Stars.' });
+    await bot(env, 'sendMessage', { chat_id: msg.chat.id, text: tx('support', lang) });
   } else if (text.startsWith('/terms')) {
-    await bot(env, 'sendMessage', { chat_id: msg.chat.id, text: 'The Imperial Crown is a one-time purchase in Telegram Stars that unlocks chapters 3–8 of the campaign, all maps (opened through achievements), playing as the Outlaws and unlimited play time.' });
+    await bot(env, 'sendMessage', { chat_id: msg.chat.id, text: tx('terms', lang) });
+  } else if (text.startsWith('/stats')) {
+    // сводка — только владельцу (его id в таблице config)
+    const owner = await env.DB.prepare("SELECT value FROM config WHERE key = 'owner'").first<{ value: string }>();
+    if (owner && String(msg.from?.id) === owner.value) await bot(env, 'sendMessage', { chat_id: msg.chat.id, text: await statsText(env) });
   }
 };
 
@@ -162,17 +202,31 @@ export default {
       return new Response('ok');
     }
 
+    if (url.pathname === '/setup') {
+      if (!env.WEBHOOK_SECRET || url.searchParams.get('key') !== env.WEBHOOK_SECRET) return new Response('forbidden', { status: 403 });
+      try { return new Response(`OK: ${(await setupBot(env)).join(', ')}`); } catch (e) { return new Response(`error: ${(e as Error).message}`, { status: 500 }); }
+    }
+
     if (!url.pathname.startsWith('/api/') || req.method !== 'POST') return new Response('Checkmate Empires server', { status: 200 });
-    let body: { initData?: string; tz?: number; seconds?: number };
+    let body: { initData?: string; tz?: number; seconds?: number; kind?: string; lang?: string };
     try { body = await req.json(); } catch { return json({ error: 'bad json' }, 400, h); }
     const uid = await verifyInitData(body.initData ?? '', env.BOT_TOKEN);
     if (!uid) return json({ error: 'not signed by Telegram' }, 401, h);
     let u = await loadUser(env, uid, Number(body.tz ?? 0));
     const t = now();
+    const lang = langOf(body.lang ?? userLang(body.initData ?? ''));
 
     switch (url.pathname) {
       case '/api/me':
+        await track(env, uid, 'open');
         return json(status(env, u), 200, h);
+
+      case '/api/event': {
+        // шаги игрока для статистики: первая битва, открыл магазин, нажал «купить»
+        const kind = String(body.kind ?? '');
+        if (EVENTS.includes(kind)) await track(env, uid, kind);
+        return json({ ok: true }, 200, h);
+      }
 
       case '/api/tick': {
         // засчитываем не больше, чем прошло на самом деле с прошлого отчёта (и не больше двух минут за раз)
@@ -182,6 +236,7 @@ export default {
           const add = Math.min(claimed, real);
           await env.DB.prepare('UPDATE users SET used = used + ?, last_tick = ? WHERE id = ?').bind(add, t, uid).run();
           u = { ...u, used: u.used + add, last_tick: t };
+          if (status(env, u).secondsLeft === 0) await track(env, uid, 'limit');
         }
         return json(status(env, u), 200, h);
       }
@@ -192,6 +247,7 @@ export default {
           const add = num(env.AD_MINUTES, 10) * 60;
           await env.DB.prepare('UPDATE users SET bonus = bonus + ?, ads = ads + 1, last_ad = ? WHERE id = ?').bind(add, t, uid).run();
           u = { ...u, bonus: u.bonus + add, ads: u.ads + 1, last_ad: t };
+          await track(env, uid, 'ad');
         }
         return json(status(env, u), 200, h);
       }
@@ -200,11 +256,11 @@ export default {
         if (u.premium) return json({ error: 'already yours' }, 409, h);
         const price = num(env.CROWN_PRICE, 300);
         const link = await bot<string>(env, 'createInvoiceLink', {
-          title: 'Imperial Crown',
-          description: 'Chapters 3–8 of the campaign, all maps (opened through achievements), playing as the Outlaws and no daily time limit.',
+          title: tx('crown', lang),
+          description: tx('crownDesc', lang),
           payload: CROWN_PAYLOAD(uid),
           currency: 'XTR', // Telegram Stars
-          prices: [{ label: 'Imperial Crown', amount: price }],
+          prices: [{ label: tx('crown', lang), amount: price }],
         });
         return json({ link }, 200, h);
       }
@@ -225,4 +281,89 @@ const tellOwner = async (env: Env, from: { id: number; first_name?: string; last
       text: `👑 Корону купили!\n${name}${from.username ? ` (@${from.username})` : ''} — ${amount} ⭐\nВсего покупок: ${t?.n ?? 0}, звёзд: ${t?.stars ?? 0}`,
     });
   } catch { /* уведомление не должно мешать выдаче покупки */ }
+};
+
+// ---------- статистика ----------
+// events: одна строка на игрока, день (UTC) и вид события — «был в игре», «первая битва», «упёрся в лимит»…
+const EVENTS = ['battle', 'shop', 'buy'];
+const utcDay = (sec: number) => new Date(sec * 1000).toISOString().slice(0, 10);
+const track = async (env: Env, uid: number, kind: string): Promise<void> => {
+  try { await env.DB.prepare('INSERT OR IGNORE INTO events (user_id, day, kind) VALUES (?, ?, ?)').bind(uid, utcDay(now()), kind).run(); } catch { /* статистика не должна мешать игре */ }
+};
+/** Язык Telegram игрока из initData (подпись уже проверена). */
+const userLang = (initData: string): string => { try { return JSON.parse(new URLSearchParams(initData).get('user') ?? '{}').language_code ?? ''; } catch { return ''; } };
+
+/** Сводка для владельца (/stats): игроки, удержание, воронка, деньги. */
+export const statsText = async (env: Env): Promise<string> => {
+  const n = async (sql: string, ...v: unknown[]) => (await env.DB.prepare(sql).bind(...v).first<{ n: number }>())?.n ?? 0;
+  const today = utcDay(now()), week = utcDay(now() - 6 * 86400);
+  const total = await n('SELECT COUNT(*) AS n FROM users');
+  const newToday = await n('SELECT COUNT(*) AS n FROM users WHERE created >= ?', Math.floor(Date.parse(today) / 1000));
+  const newWeek = await n('SELECT COUNT(*) AS n FROM users WHERE created >= ?', Math.floor(Date.parse(week) / 1000));
+  const dau = await n("SELECT COUNT(*) AS n FROM events WHERE kind = 'open' AND day = ?", today);
+  const wau = await n("SELECT COUNT(DISTINCT user_id) AS n FROM events WHERE kind = 'open' AND day >= ?", week);
+  // удержание 1-го дня: новички за 7 дней до вчера включительно, кто пришёл на следующий день
+  const d1base = await n("SELECT COUNT(*) AS n FROM users WHERE created >= ? AND created < ?", Math.floor(Date.parse(week) / 1000) - 86400, Math.floor(Date.parse(today) / 1000));
+  const d1 = await n(`SELECT COUNT(*) AS n FROM users u WHERE u.created >= ? AND u.created < ?
+    AND EXISTS (SELECT 1 FROM events e WHERE e.user_id = u.id AND e.kind = 'open' AND e.day = date(u.created, 'unixepoch', '+1 day'))`,
+  Math.floor(Date.parse(week) / 1000) - 86400, Math.floor(Date.parse(today) / 1000));
+  const ever = (kind: string) => n('SELECT COUNT(DISTINCT e.user_id) AS n FROM events e JOIN users u ON u.id = e.user_id WHERE e.kind = ? AND u.created >= ?', kind, Math.floor(Date.parse(week) / 1000));
+  const [battle, limit, shop, buy] = [await ever('battle'), await ever('limit'), await ever('shop'), await ever('buy')];
+  const ads = await n("SELECT COALESCE(SUM(ads), 0) AS n FROM users WHERE day = ?", today);
+  const adUsers = await n("SELECT COUNT(DISTINCT user_id) AS n FROM events WHERE kind = 'ad' AND day >= ?", week);
+  const buys = await n('SELECT COUNT(*) AS n FROM payments WHERE refunded = 0');
+  const stars = await n('SELECT COALESCE(SUM(amount), 0) AS n FROM payments WHERE refunded = 0');
+  const buysWeek = await n('SELECT COUNT(*) AS n FROM payments WHERE refunded = 0 AND at >= ?', Math.floor(Date.parse(week) / 1000));
+  const pct = (a: number, b: number) => (b ? `${Math.round((a / b) * 100)}%` : '—');
+  return [
+    '📊 Checkmate Empires',
+    '',
+    `👥 Игроков всего: ${total}`,
+    `🆕 Новых: сегодня ${newToday}, за 7 дней ${newWeek}`,
+    `🎮 Играли: сегодня ${dau}, за 7 дней ${wau}`,
+    `🔁 Вернулись на 2-й день: ${pct(d1, d1base)} (${d1} из ${d1base})`,
+    '',
+    `Новички за 7 дней (${newWeek}):`,
+    `⚔️ дошли до битвы — ${pct(battle, newWeek)}`,
+    `⏳ упёрлись в лимит — ${pct(limit, newWeek)}`,
+    `🛒 открыли магазин — ${pct(shop, newWeek)}`,
+    `💳 нажали «Купить» — ${pct(buy, newWeek)}`,
+    '',
+    `▶️ Реклама: сегодня ${ads} просмотров, за 7 дней смотрели ${adUsers} игроков`,
+    `👑 Покупок: ${buys} (за 7 дней ${buysWeek}), звёзд: ${stars} ⭐`,
+  ].join('\n');
+};
+
+// ---------- одноразовая настройка бота: описания и команды на трёх языках ----------
+// Открыть в браузере: https://<сервер>/setup?key=<WEBHOOK_SECRET>
+const DESCR: Record<Lang, { about: string; long: string; cmds: [string, string][] }> = {
+  en: {
+    about: 'A 4X strategy where every battle is a real game of chess. Build an empire and checkmate your rivals ♟',
+    long: '♟ Checkmate Empires is a strategy game where every battle is a real game of chess.\n\n🏰 Build cities, farms and mines, hire generals and raise an army of chess pieces.\n⚔️ Attack your neighbours — play the battle yourself or leave it to your general.\n🌍 26 nations, maps of Europe, Asia, the Mediterranean, Africa and the Americas, and an 8-chapter campaign.\n👑 Dynasty, achievements and wonders of the world.\n\nTap "Play" — your first game starts in a minute.',
+    cmds: [['start', 'Play Checkmate Empires'], ['terms', 'About the Imperial Crown'], ['paysupport', 'Help with a payment']],
+  },
+  ru: {
+    about: 'Стратегия-4X, где каждая битва — настоящая партия в шахматы. Стройте империю и ставьте мат соседям ♟',
+    long: '♟ Checkmate Empires — стратегия, где каждая битва — настоящая партия в шахматы.\n\n🏰 Стройте города, фермы и шахты, нанимайте генералов и собирайте армию из шахматных фигур.\n⚔️ Нападайте на соседей — играйте бой сами или доверьте его генералу.\n🌍 26 народов, карты Европы, Азии, Средиземноморья, Африки и Америки, кампания «Хроники империй» из 8 глав.\n👑 Династия, достижения и чудеса света.\n\nНажмите «Играть» — партия начнётся за минуту.',
+    cmds: [['start', 'Играть в Checkmate Empires'], ['terms', 'Об Императорской короне'], ['paysupport', 'Помощь с оплатой']],
+  },
+  es: {
+    about: 'Estrategia 4X donde cada batalla es una partida de ajedrez real. Construye un imperio y da jaque mate ♟',
+    long: '♟ Checkmate Empires es un juego de estrategia donde cada batalla es una partida de ajedrez real.\n\n🏰 Construye ciudades, granjas y minas, contrata generales y reúne un ejército de piezas de ajedrez.\n⚔️ Ataca a tus vecinos: juega la batalla tú mismo o déjasela a tu general.\n🌍 26 naciones, mapas de Europa, Asia, el Mediterráneo, África y América, y una campaña de 8 capítulos.\n👑 Dinastía, logros y maravillas del mundo.\n\nPulsa «Jugar»: tu primera partida empieza en un minuto.',
+    cmds: [['start', 'Jugar a Checkmate Empires'], ['terms', 'Sobre la Corona imperial'], ['paysupport', 'Ayuda con un pago']],
+  },
+};
+export const setupBot = async (env: Env): Promise<string[]> => {
+  const done: string[] = [];
+  for (const [l, d] of Object.entries(DESCR) as [Lang, (typeof DESCR)[Lang]][]) {
+    for (const code of l === 'en' ? ['', 'en'] : [l]) { // английский — и для всех остальных языков
+      const lc = code ? { language_code: code } : {};
+      await bot(env, 'setMyDescription', { description: d.long, ...lc });
+      await bot(env, 'setMyShortDescription', { short_description: d.about, ...lc });
+      await bot(env, 'setMyCommands', { commands: d.cmds.map(([command, description]) => ({ command, description })), ...lc });
+      done.push(code || 'default');
+    }
+  }
+  await bot(env, 'setChatMenuButton', { menu_button: { type: 'web_app', text: '♟ Play', web_app: { url: env.GAME_URL } } });
+  return done;
 };
