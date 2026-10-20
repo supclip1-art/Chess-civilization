@@ -12,6 +12,8 @@ const PERKS: [string, string, string][] = [
 ];
 const FREE: string[] = ['Chapters 1–2 of the Chronicles', 'The Europe map', 'Dynasty and achievements', '30 minutes of play a day (+10 for an ad)'];
 
+const NO_AD = 'No ad is available right now. Try again in a minute.';
+
 /** Карточка короны (общая для экрана лавки и окна «время вышло»). */
 export const crownCard = (): string => {
   const a = access();
@@ -47,7 +49,7 @@ export const openShop = (app: HTMLElement, back: () => void): void => {
       if (r === 'failed') alertBox(app, 'The payment did not go through. Try again in a minute.');
       draw();
     }
-    if (a === 'ad') { b.disabled = true; await watchAd(); draw(); }
+    if (a === 'ad') { b.disabled = true; const ok = await watchAd(); draw(); if (!ok) alertBox(app, NO_AD); }
   };
   void refreshAccess().then(draw);
 };
@@ -62,17 +64,19 @@ const alertBox = (app: HTMLElement, text: string) => {
 
 /** Окно «время на сегодня вышло»: реклама (+10 минут), корона или в меню. Возвращает true, если можно играть дальше. */
 export const timeUpDialog = async (modal: (html: string | null) => void, ask: () => Promise<string>): Promise<boolean> => {
+  let note = '';
   for (;;) {
     const a = access();
     if (a.premium || (a.secondsLeft ?? 1) > 0) { modal(null); return true; }
     modal(`<div class="timeup"><span class="tuico">⏳</span><h2>Today's free time is over</h2>
       <p class="muted">${a.freeMinutes} minutes a day are free. Watch an ad for ${a.adMinutes} more minutes, or take the crown and play without limits.</p>
+      ${note ? `<p class="adnote">${note}</p>` : ''}
       <div class="ctiles">${adsAvailable() ? `<button class="ctile ctop" data-a="ad"><span class="cico">▶</span><span class="ctext"><b>Watch an ad</b><small>+${a.adMinutes} minutes</small></span></button>` : ''}
         <button class="ctile" data-a="menu"><span class="cico">⌂</span><span class="ctext"><b>To the menu</b><small>the game is saved</small></span></button></div>
       ${crownCard()}</div>`);
     const c = await ask();
     if (c === 'menu') { modal(null); return false; }
-    if (c === 'ad') { await watchAd(); continue; }
+    if (c === 'ad') { note = (await watchAd()) ? '' : NO_AD; continue; }
     if (c === 'buy') { await buyCrown(); continue; }
   }
 };

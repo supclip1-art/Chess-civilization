@@ -26,7 +26,7 @@ const result = await build({
     // пусто — игра без лимита и покупок, как раньше
     // сервер игры (не секрет): переменная CE_API, иначе — боевой воркер; CE_API=off — собрать без оплаты и лимита
     __API__: JSON.stringify(process.env.CE_API === 'off' ? '' : process.env.CE_API || 'https://checkmate-empires.supclip1.workers.dev'),
-    __ADS__: JSON.stringify(process.env.CE_ADSGRAM_BLOCK ?? ''),
+    __ADS__: JSON.stringify(process.env.CE_ADSGRAM_BLOCK || '55190'), // блок Adsgram «+10 minutes» (Reward)
   },
 });
 const bundle = Object.keys(result.metafile.outputs).find((f) => f.endsWith('.js'));
