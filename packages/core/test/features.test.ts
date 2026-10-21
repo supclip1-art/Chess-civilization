@@ -494,3 +494,19 @@ test('дорога между двумя городами строится од�
   assert.ok(roadLinked(s, other.id, cap.id));
   assert.ok(!buildRoad(s, 'p1', other.id, cap.id).ok, 'и после постройки тоже');
 });
+
+test('глава 1 (Италия): без разбойников и с 7 вольными городами', async () => {
+  const { italyMap, newGame, endTurn, aiEconomyTurn, aiMilitaryTurn, NATIONS } = await import('../src/index.ts');
+  const base = italyMap();
+  const m = { ...base, noBandits: base.cells.map((c) => `${c.q},${c.r}`), neutralCount: 7, randomSpawns: false, spawnNations: ['italy', 'venice', 'sicily'] as ('italy' | 'venice' | 'sicily')[] };
+  const s = newGame(m, [{ nation: 'italy' }, { nation: 'venice', ai: { aggression: 'moderate', ruler: NATIONS.venice.rulers.moderate } }, { nation: 'sicily', ai: { aggression: 'warlike', ruler: NATIONS.sicily.rulers.warlike } }], { elo: 1000, seed: 5, bandits: 0 });
+  assert.equal(Object.values(s.halls).filter((h) => !s.players[h.owner]).length, 7);
+  let seen = 0;
+  for (let t = 0; t < 90; t++) {
+    const pid = s.order[s.current];
+    if (s.players[pid].ai) { aiEconomyTurn(s, pid); aiMilitaryTurn(s, pid); }
+    endTurn(s);
+    seen += Object.values(s.generals).filter((g) => g.owner === 'bandits').length;
+  }
+  assert.equal(seen, 0, 'шайки не появляются');
+});

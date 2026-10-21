@@ -3,7 +3,7 @@
 
 import { VARIANTS, tileSprite } from './tiles.ts';
 import { iconImage } from './icons.ts';
-import { type GameState, type Hex, type Job, type WonderId, WONDERS, key, neighbors } from '../../../core/src/index.ts';
+import { type GameState, type Hex, type Job, type WonderId, WONDERS, allied, key, neighbors } from '../../../core/src/index.ts';
 
 export const PLAYER_COLORS = ['#2f6fd6', '#d64a3c', '#e0a020', '#8a52d6', '#1f9e86', '#d65f9c', '#6b8f2a', '#c76a1f'];
 export const NEUTRAL_COLOR = '#8c8a84';
@@ -719,9 +719,11 @@ export const attackTargets = (s: GameState, gid: string): Set<string> => {
   if (g.army.p + g.army.n + g.army.b + g.army.r + g.army.q === 0) return out;
   for (const n of neighbors(g.hex)) {
     const k = key(n);
-    const enemyArmy = Object.values(s.generals).some((x) => key(x.hex) === k && x.owner !== g.owner &&
+    // свои вассалы, сюзерен и союзники — не цели: их не подсвечиваем и атаковать не предлагаем
+    const foe = (owner: string) => owner !== g.owner && !allied(s, g.owner, owner);
+    const enemyArmy = Object.values(s.generals).some((x) => key(x.hex) === k && foe(x.owner) &&
       (x.settler || x.army.p + x.army.n + x.army.b + x.army.r + x.army.q > 0));
-    const enemyHall = Object.values(s.halls).some((h) => key(h.hex) === k && h.owner !== g.owner);
+    const enemyHall = Object.values(s.halls).some((h) => key(h.hex) === k && foe(h.owner));
     if (enemyArmy || enemyHall) out.add(k);
   }
   return out;

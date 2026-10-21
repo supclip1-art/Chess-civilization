@@ -120,14 +120,16 @@ export const startChapter = (ch: Chapter): GameState => {
     if (i >= 0) spawns = [spawns[i], ...spawns.filter((_, j) => j !== i).sort(() => Math.random() - 0.5)];
   }
   const outlaw = ch.nation === 'outlaws';
+  // глава 1 — обучающая: без разбойников (вся Италия — «тихий» край) и с меньшим числом вольных городов
+  const calm = ch.id === 1 ? { noBandits: base.cells.map((c) => `${c.q},${c.r}`), neutralCount: 7 } : {};
   const map: MapDef = ch.fixedSpawns
-    ? { ...base, randomSpawns: false, spawnNations: ['italy', 'venice', 'sicily'] } // свои места: Рим, Венеция, Сиракузы
+    ? { ...base, ...calm, randomSpawns: false, spawnNations: ['italy', 'venice', 'sicily'] } // свои места: Рим, Венеция, Сиракузы
     : { ...base, spawns, randomSpawns: !ch.spawn, spawnNations: undefined };
   const AGGR = ['warlike', 'moderate', 'peaceful'] as const;
   const s = newGame(map, [
     { nation: ch.nation, ...(outlaw ? { outlaw: true } : {}) },
     ...ch.rivals.map((n, i) => { const aggression = AGGR[i % 3]; return { nation: n, ai: { aggression, ruler: NATIONS[n].rulers[aggression] } }; }),
-  ], { elo: ch.elo, seed: Math.floor(Math.random() * 1e9), bandits: ch.map === 'italy' ? 2 : 8, difficulty: ch.difficulty });
+  ], { elo: ch.elo, seed: Math.floor(Math.random() * 1e9), bandits: ch.id === 1 ? 0 : 8, difficulty: ch.difficulty });
   const cap = playerHalls(s, ME)[0];
   if (cap && ch.capitalName) cap.name = ch.capitalName;
   ch.setup?.(s);
