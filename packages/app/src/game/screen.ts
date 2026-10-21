@@ -367,7 +367,7 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
     } else if (sel.gid && sel.target === 'goto') {
       const path = findPath(s, sel.gid, sel.hex);
       const mv = armyMove(s, ME);
-      const prey = Object.values(s.generals).find((x) => key(x.hex) === k && x.owner !== ME && !x.settler && huntable(x.owner));
+      const prey = seen ? Object.values(s.generals).find((x) => key(x.hex) === k && x.owner !== ME && !x.settler && huntable(x.owner)) : undefined; // армию под туманом не видно — и не преследуем
       const fort = Object.values(s.halls).find((h) => key(h.hex) === k && huntable(h.owner));
       if (prey && s.generals[sel.gid].owner === ME) parts.push(bigAct(`hunt:chase:${prey.id}`, '🎯', 'Pursue this army', 'follows it while it is in sight and attacks when he catches it', 'war'));
       else if (fort && s.generals[sel.gid].owner === ME) parts.push(bigAct(`hunt:assault:${fort.id}`, '🏰', `Assault ${esc(fort.name)}`, 'marches on the city and attacks or besieges it', 'war'));
@@ -672,6 +672,7 @@ export const openGame = (app: HTMLElement, s: GameState, onExit: () => void): vo
   const huntOrder = async (kind: 'chase' | 'assault', id: string) => {
     const goal = kind === 'chase' ? s.generals[id]?.hex : s.halls[id]?.hex;
     if (!goal) return;
+    if (kind === 'chase' && !visible(s, ME).has(key(goal))) { toast('This army is out of sight.'); return; }
     const set = (gid: string) => {
       const g = s.generals[gid];
       g.order = kind === 'chase' ? { kind: 'chase', target: id } : { kind: 'assault', hall: id };

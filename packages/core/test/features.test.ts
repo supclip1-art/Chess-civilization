@@ -439,10 +439,11 @@ test('погоня: генерал идёт за армией на виду и �
   if (distance(g.hex, foe.hex) === 1) assert.ok(ev.some((e) => e.attack), 'догнал — бьёт');
   // цель скрылась из виду — погоня окончена
   foe.hex = { ...Object.values(s.cells).find((c) => distance(c.hex, g.hex) >= 9 && free(c.hex))!.hex };
-  g.moveLeft = 2;
-  const ev2 = runOrders(s, 'p1');
+  // ещё до двух ходов идёт к последней точке, потом погоня окончена
+  const texts: string[] = [];
+  for (let i = 0; i < 4 && g.order; i++) { g.moveLeft = 2; texts.push(...runOrders(s, 'p1').map((e) => e.text)); }
   assert.equal(g.order, undefined);
-  assert.ok(ev2.some((e) => /lost sight/.test(e.text)));
+  assert.ok(texts.some((t) => /lost sight/.test(t)));
   // штурм вражеской столицы
   const enemyCap = playerHalls(s, 'p2')[0];
   g.order = { kind: 'assault', hall: enemyCap.id };
@@ -509,4 +510,21 @@ test('глава 1 (Италия): без разбойников и с 7 вол�
     seen += Object.values(s.generals).filter((g) => g.owner === 'bandits').length;
   }
   assert.equal(seen, 0, 'шайки не появляются');
+});
+
+test('преследование: враг скрылся — генерал ещё два хода идёт туда, где его видели', async () => {
+  const { europeMap, newGame, runOrders, playerGenerals, distance, visible, key } = await import('../src/index.ts');
+  const s = newGame(europeMap(), [{ nation: 'france' }, { nation: 'germany', ai: { aggression: 'warlike', ruler: 'x' } }], { elo: 1200, seed: 1 });
+  s.diplo = { 'p1|p2': { state: 'war', since: 1, warFrom: 0 } };
+  const me = playerGenerals(s, 'p1')[0], foe = playerGenerals(s, 'p2')[0];
+  const near = Object.values(s.cells).find((c) => distance(c.hex, me.hex) === 3 && visible(s, 'p1').has(key(c.hex)) && ['field', 'forest'].includes(c.terrain) && c.owner !== 'p1' && !Object.values(s.generals).some((g) => key(g.hex) === key(c.hex)))!;
+  foe.hex = { ...near.hex };
+  me.order = { kind: 'chase', target: foe.id, last: { ...near.hex } };
+  // враг «исчез» из виду далеко: генерал идёт к последней точке, приказ жив
+  const far = Object.values(s.cells).find((c) => distance(c.hex, me.hex) >= 9 && ['field', 'forest'].includes(c.terrain) && !visible(s, 'p1').has(key(c.hex)))!;
+  foe.hex = { ...far.hex };
+  const before = distance(me.hex, near.hex);
+  runOrders(s, 'p1');
+  assert.ok(s.generals[me.id].order?.kind === 'chase', 'приказ не снят сразу');
+  assert.ok(distance(me.hex, near.hex) < before, 'идёт к последней точке');
 });

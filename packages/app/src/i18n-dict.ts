@@ -1150,4 +1150,5 @@ export const DICT: [string, string, string][] = [
   ['City auto-development', 'Desarrollo automático de ciudades', 'Авторазвитие городов'],
   ['cities build farms, mines and barracks on their own every turn', 'las ciudades construyen granjas, minas y cuarteles solas cada turno', 'города сами строят фермы, шахты и казармы каждый ход'],
   ['No ad is available right now. Try again in a minute.', 'Ahora no hay anuncios. Inténtalo dentro de un minuto.', 'Сейчас рекламы нет. Попробуйте через минуту.'],
+  ['This army is out of sight.', 'Este ejército está fuera de la vista.', 'Эта армия вне поля зрения.'],
 ];

@@ -228,8 +228,16 @@ const huntStep = (s: GameState, g: General, pid: string): { text?: string; attac
   if (o?.kind === 'chase') {
     const t = s.generals[o.target];
     if (!t) { g.order = undefined; return { text: 'the enemy is gone — the pursuit is over' }; }
-    if (!visible(s, pid).has(key(t.hex))) { g.order = undefined; return { text: 'lost sight of the enemy — the pursuit is over' }; }
-    goal = t.hex;
+    if (visible(s, pid).has(key(t.hex))) { o.last = { ...t.hex }; o.lost = 0; goal = t.hex; }
+    else {
+      // враг скрылся: ещё два хода идём туда, где его видели последний раз
+      o.lost = (o.lost ?? 0) + 1;
+      if (!o.last || o.lost > 2) { g.order = undefined; return { text: 'lost sight of the enemy — the pursuit is over' }; }
+      goal = o.last;
+      if (key(g.hex) === key(goal) || distance(g.hex, goal) === 0) { g.order = undefined; return { text: 'lost sight of the enemy — the pursuit is over' }; }
+      approach(s, g, goal);
+      return {};
+    }
   } else if (o?.kind === 'assault') {
     const h = s.halls[o.hall];
     if (!h || h.owner === pid) { g.order = undefined; return { text: 'the city is ours — the assault is over' }; }
